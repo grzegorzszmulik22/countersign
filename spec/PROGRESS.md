@@ -9,7 +9,7 @@ Statuses: `TODO`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-CR-NNN`, `SKIPPED-E
 | M0.2 | Hermetic cluster | TODO | 0 | | |
 | M0.3 | Fixture services | TODO | 0 | | |
 | M0.4 | Scripted agent | TODO | 0 | | |
-| M0.5 | Check, sabotage and evidence tooling | TODO | 0 | | |
+| M0.5 | Check, sabotage and evidence tooling | DONE | 2 | evidence/M0.5/20261114T161922Z | lane foundation; re-verified by supervisor, frozen-file sabotages caught |
 | M1.1 | Records and envelope | TODO | 0 | | |
 | M1.2 | Signing, keys, emitter chains | TODO | 0 | | |
 | M1.3 | Merkle log and checkpoints | TODO | 0 | | |
