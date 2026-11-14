@@ -32,6 +32,7 @@ chk kubectl       "$KUBECTL_VERSION"              "$("$TOOLS/bin/kubectl" versio
 chk helm          "$HELM_VERSION"                 "$("$TOOLS/bin/helm" version 2>&1)"
 chk golangci-lint "${GOLANGCI_LINT_VERSION#v} "   "$("$TOOLS/bin/golangci-lint" version 2>&1)"
 chk python        "Python $PYTHON_VERSION"        "$("$TOOLS/python/bin/python3" --version 2>&1)"
+chk cffi          "$CFFI_VERSION"                 "$("$TOOLS/python/bin/python3" -c 'import cffi; print(cffi.__version__)' 2>&1)"
 chk cryptography  "$CRYPTOGRAPHY_VERSION"         "$("$TOOLS/python/bin/python3" -c 'import cryptography; print(cryptography.__version__)' 2>&1)"
 
 # The wheel file pin must match the file we install from (cache).
@@ -45,6 +46,19 @@ if [ -f "$cwheel" ]; then
     fi
 else
     echo "cryptography wheel not in cache ($cwheel)" >&2
+    fail=1
+fi
+
+fwheel="${CS_TOOLS_CACHE:-$HOME/.cache/countersign/tools}/$CFFI_WHEEL"
+if [ -f "$fwheel" ]; then
+    if echo "$CFFI_SHA256  $fwheel" | sha256sum -c --quiet; then
+        echo "version ok: cffi wheel sha256"
+    else
+        echo "sha256 MISMATCH: $CFFI_WHEEL" >&2
+        fail=1
+    fi
+else
+    echo "cffi wheel not in cache ($fwheel)" >&2
     fail=1
 fi
 
