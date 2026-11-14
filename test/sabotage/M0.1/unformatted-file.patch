@@ -1,0 +1,12 @@
+diff --git a/internal/names/badfmt.go b/internal/names/badfmt.go
+new file mode 100644
+index 0000000..f30ac48
+--- /dev/null
++++ b/internal/names/badfmt.go
+@@ -0,0 +1,6 @@
++// Copyright 2026 The Countersign Authors
++// SPDX-License-Identifier: Apache-2.0
++
++package names
++
++const   sabotageBadlyFormatted    =    "this file is not gofmt-clean"
