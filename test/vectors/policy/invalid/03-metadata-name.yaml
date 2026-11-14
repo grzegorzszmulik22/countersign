@@ -1,0 +1,10 @@
+# field: metadata.name
+# rule: metadata.name is required
+apiVersion: "countersign.dev/v1alpha1"
+kind: "SessionPolicy"
+metadata: {}
+spec:
+  mode: "enforce"
+  scenario: "agent"
+  grants:
+    - {id: g1, match: {hosts: ["api.example.com"]}}
