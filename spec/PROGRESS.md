@@ -14,7 +14,7 @@ Statuses: `TODO`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-CR-NNN`, `SKIPPED-E
 | M1.2 | Signing, keys, emitter chains | TODO | 0 | | |
 | M1.3 | Merkle log and checkpoints | TODO | 0 | | |
 | M1.4 | Ledger storage, bundle, csverify | TODO | 0 | | |
-| M1.5 | Python reference verifier | TODO | 0 | | |
+| M1.5 | Python reference verifier | BLOCKED | 1 | lane/evidence-py bf9be33 | C1.5.2 needs csverify and golden bundles (M1.4). Supervisor review: lane marked DONE with C1.5.2 BLOCKED (not allowed by 06 §2); its suite misses an index/record count mismatch (supervisor sabotage). Resume after M1.4 lands |
 | M1.6 | Mutation suite and measurements | TODO | 0 | | |
 | **G1** | **Human gate: freeze the evidence format** | TODO | | | |
 | M2.1 | Proxy listener and sessions | TODO | 0 | | |
