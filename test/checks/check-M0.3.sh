@@ -113,6 +113,26 @@ fi
 # --- C0.3.5: /__state semantics for every fixture ----------------------------
 gotest C0.3.5 '^TestC035State' ./test/fixtures/...
 
+# --- fixtures-tagged lint: repo lint gate runs untagged, so the suite lints --
+# the fixture build itself to keep this code inside the lint invariant.
+lintfx() {
+    command -v golangci-lint >/dev/null 2>&1 || {
+        echo "golangci-lint not on PATH"
+        return 1
+    }
+    local log="$WORK/lint.fixtures.log"
+    if golangci-lint run --build-tags fixtures ./test/fixtures/... >"$log" 2>&1; then
+        return 0
+    fi
+    tail -5 "$log"
+    return 1
+}
+if out=$(lintfx); then
+    pass lint.fixtures
+else
+    bad lint.fixtures "$out"
+fi
+
 # --- binary smoke: the fixture commands run as local processes ---------------
 # (the cluster packaging on oci-free-a1 is out of scope for this host)
 smoke() {
