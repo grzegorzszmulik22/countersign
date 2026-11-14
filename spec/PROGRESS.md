@@ -5,7 +5,7 @@ Statuses: `TODO`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-CR-NNN`, `SKIPPED-E
 
 | chunk | title | status | attempts | last evidence folder | note |
 |---|---|---|---|---|---|
-| M0.1 | Repository and toolchain | TODO | 0 | | |
+| M0.1 | Repository and toolchain | DONE | 1 | evidence/M0.1/20261114T161541Z | lane foundation; re-verified by supervisor on oci-free-a1 and agent-vpc |
 | M0.2 | Hermetic cluster | TODO | 0 | | |
 | M0.3 | Fixture services | TODO | 0 | | |
 | M0.4 | Scripted agent | TODO | 0 | | |
