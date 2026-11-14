@@ -268,7 +268,7 @@ work=$(mktemp -d)
 ours_volumes="$work/ours-volumes"
 : > "$ours_volumes"
 for cn in $(docker ps -aq --filter "label=io.x-k8s.kind.cluster=$CLUSTER" 2>/dev/null); do
-    docker inspect -f '{{range .Mounts}}{{if eq .Type "volume"}}{{.Name}}{{"\n"}}{{end}}' "$cn" >> "$ours_volumes" 2>/dev/null || true
+    docker inspect -f '{{range .Mounts}}{{if eq .Type "volume"}}{{.Name}}{{"\n"}}{{end}}{{end}}' "$cn" >> "$ours_volumes" 2>/dev/null || true
 done
 sort -u -o "$ours_volumes" "$ours_volumes"
 # cluster-down can only delete objects, so the isolation assertion is that
