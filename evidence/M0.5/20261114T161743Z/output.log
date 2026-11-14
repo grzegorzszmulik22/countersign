@@ -1,0 +1,5 @@
+CHECK C0.5.1 FAIL — check-DUMMY1=0 sabotage-DUMMY1=2: UNCAUGHT sabotage: corrupt-greeting (suite error) make[1]: *** [Makefile:38: sabotage-DUMMY1] Error 1 make[1]: Leaving directory '/home/opc/src/cs-foundation' 
+CHECK C0.5.2 PASS
+CHECK C0.5.3 FAIL — regress still failing after restore: regress: FAIL make[1]: *** [Makefile:32: regress] Error 1 make[1]: Leaving directory '/home/opc/src/cs-foundation' 
+CHECK C0.5.4 PASS
+M0.5 suite: FAILURES
