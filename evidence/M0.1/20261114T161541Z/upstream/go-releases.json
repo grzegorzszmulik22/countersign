@@ -1,0 +1,110 @@
+[
+ {
+  "version": "go1.27.4",
+  "stable": true,
+  "files": [
+   {
+    "filename": "go1.27.4.src.tar.gz",
+    "os": "",
+    "arch": "",
+    "version": "go1.27.4",
+    "sha256": "73cfb8571aec0c01177687db87163d46aa20e9779672772891aa17654d9a6099",
+    "size": 35153471,
+    "kind": "source"
+   },
+   {
+    "filename": "go1.27.4.aix-ppc64.tar.gz",
+    "os": "aix",
+    "arch": "ppc64",
+    "version": "go1.27.4",
+    "sha256": "338a4830bfb09dcfc89d5ec80610d39f50305490ee0402826519cb3f5e3f783b",
+    "size": 69094228,
+    "kind": "archive"
+   },
+   {
+    "filename": "go1.27.4.darwin-amd64.tar.gz",
+    "os": "darwin",
+    "arch": "amd64",
+    "version": "go1.27.4",
+    "sha256": "2b799377704ef12db39bd254995d5c348c9cc8d86562ca817724390e56c38f43",
+    "size": 71756705,
+    "kind": "archive"
+   },
+   {
+    "filename": "go1.27.4.darwin-amd64.pkg",
+    "os": "darwin",
+    "arch": "amd64",
+    "version": "go1.27.4",
+    "sha256": "98b6668684006873a3befee5cf155a110f79c3156ac718ddf45f59e4043a16b9",
+    "size": 73214562,
+    "kind": "installer"
+   },
+   {
+    "filename": "go1.27.4.darwin-arm64.tar.gz",
+    "os": "darwin",
+    "arch": "arm64",
+    "version": "go1.27.4",
+    "sha256": "91a44a2b8a716600ad94a4f143e156116620db8828086a6e3602291be9bd0bb4",
+    "size": 68231011,
+    "kind": "archive"
+   },
+   {
+    "filename": "go1.27.4.darwin-arm64.pkg",
+    "os": "darwin",
+    "arch": "arm64",
+    "version": "go1.27.4",
+    "sha256": "2c13315bb6e702283547083be8f43803d178355ff74e9e7ff2692175b1655760",
+    "size": 69567457,
+    "kind": "installer"
+   },
+   {
+    "filename": "go1.27.4.dragonfly-amd64.tar.gz",
+    "os": "dragonfly",
+    "arch": "amd64",
+    "version": "go1.27.4",
+    "sha256": "0d8ba3b49cd49bc2b482512647d851aa157a2d2924ecf6c371185de8e5ec5a06",
+    "size": 70279268,
+    "kind": "archive"
+   },
+   {
+    "filename": "go1.27.4.freebsd-386.tar.gz",
+    "os": "freebsd",
+    "arch": "386",
+    "version": "go1.27.4",
+    "sha256": "a9ab56efddcbfbb27cf4a59264e8fe0ac1612884f9fa84155b833cad73f58529",
+    "size": 68463225,
+    "kind": "archive"
+   },
+   {
+    "filename": "go1.27.4.freebsd-amd64.tar.gz",
+    "os": "freebsd",
+    "arch": "amd64",
+    "version": "go1.27.4",
+    "sha256": "063e079bf195da4bc2a1f424be26f20a57d64e0b7cc951cab943e6341a4ec0d3",
+    "size": 70355907,
+    "kind": "archive"
+   },
+   {
+    "filename": "go1.27.4.freebsd-arm.tar.gz",
+    "os": "freebsd",
+    "arch": "arm",
+    "version": "go1.27.4",
+    "sha256": "3b1b4b0bf4848bf2d95ce02d3fba9fc2c4e7801ec8b1441d19d50b8c446cca76",
+    "size": 68507940,
+    "kind": "archive"
+   },
+   {
+    "filename": "go1.27.4.freebsd-arm64.tar.gz",
+    "os": "freebsd",
+    "arch": "arm64",
+    "version": "go1.27.4",
+    "sha256": "73a3ee5f5e17a67d3ae7ccd8d06c6d4e7d59cfd1bed86427bf2d42c0bd3a6701",
+    "size": 66822084,
+    "kind": "archive"
+   },
+   {
+    "filename": "go1.27.4.illumos-amd64.tar.gz",
+    "os": "illumos",
+    "arch": "amd64",
+    "version": "go1.27.4",
+    "sha256": "e0607e33048ba0ac36be1e423e502bcc2eafb4a4c

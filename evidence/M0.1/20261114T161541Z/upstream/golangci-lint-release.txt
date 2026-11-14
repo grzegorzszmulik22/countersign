@@ -1,0 +1,19 @@
+v2.15.0
+`golangci-lint` is a free and open-source project built by volunteers.
+
+If you value it, consider supporting us, the [maintainers](https://donate.golangci.org) and [linter authors](https://golangci-lint.run/docs/product/thanks/).
+
+We appreciate it! :heart:
+
+For key updates, see the [changelog](https://golangci-lint.run/docs/product/changelog/#2150).
+
+## Changelog
+* 36739822be66033e51470c20e355082854479afc build(deps): bump anchore/sbom-action/download-syft from 0.24.2 to 0.24.3 in the github-actions group (#6868)
+* 4aa532f4b21cddec2689a9fecc64a8909e54a595 build(deps): bump github.com/breml/bidichk from 0.3.3 to 0.3.4 (#6852)
+* cb307f16f1046ce351687b3aee5edd11fdcd7f57 build(deps): bump github.com/golangci/golines from 0.15.0 to 0.16.0 (#6838)
+* 2e624541515406487b5c5610c6a182857c6b7545 build(deps): bump github.com/jingyugao/rowserrcheck from c5f79b8a11ba to e0740d52dee8 (#6847)
+* bd2ed4f0028c5936ea7ab724bca4ab87d058241a build(deps): bump github.com/kisielk/errcheck from 1.20.0 to 1.30.0 (#6861)
+* 8ea3d53535f7ebb30b630f66acf81e53d0a57a5d build(deps): bump github.com/kunwardeep/paralleltest from 1.0.15 to 1.0.16 (#6854)
+* fa204ec4ba8c00163ee34c7e6fae7ca63c503d29 build(deps): bump github.com/lasiar/canonicalheader from a25c71c521f6 to e18e5c5a078f (#6832)
+* 415417736e30f68e9386fb808630ed1358959fb5 build(deps): bump github.com/mattn/go-colorable from 0.1.15 to 0.1.16 (#6849)
+* d9df2fa53265776945734b5c5902489edc386095 build(deps): bump github.com/mgechev/revive from 1.17.0 to 1.17.1

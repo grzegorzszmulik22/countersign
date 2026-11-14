@@ -1,0 +1,2 @@
+version: 50.0.2
+cryptography-50.0.2-cp311-abi3-manylinux_2_34_aarch64.whl 87e9ce85beb6b328ba370cc6e6aea483c92617b4c95b1d33a49297eb662bfb04
