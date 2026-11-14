@@ -137,10 +137,7 @@ func normHost(h string) string {
 	if len(h) >= 2 && h[0] == '[' && h[len(h)-1] == ']' {
 		h = h[1 : len(h)-1]
 	}
-	if strings.HasSuffix(h, ".") {
-		h = h[:len(h)-1]
-	}
-	return h
+	return strings.TrimSuffix(h, ".")
 }
 
 // hostMatch implements the host column of the defaults table: "*" alone

@@ -122,9 +122,6 @@ func validate(p *SessionPolicy) error {
 	if s.MaxIntentOpenSeconds != nil && *s.MaxIntentOpenSeconds <= 0 {
 		return errf("spec.maxIntentOpenSeconds", "must be > 0")
 	}
-	if s.CommandField == "" && s.ToolClasses == nil {
-		// commandField has a spec default ("command"); no rule either way.
-	}
 	for tool, class := range s.ToolClasses {
 		if tool == "" {
 			return errf("spec.toolClasses", "empty tool name")
