@@ -1,0 +1,31 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sabotage <sabotage@localhost>
+Date: Sat, 14 Nov 2026 00:00:00 +0000
+Subject: [PATCH] sabotage: skip the V5 per-emitter chain check
+
+Removes the eseq/eprev continuity check so a bundle with a gapped or
+relayed chain still verifies. Any derived vector expecting E_CHAIN must
+fail under this patch.
+---
+diff --git a/ref/python/refverify/verify.py b/ref/python/refverify/verify.py
+index 0310a1f..a0090db 100644
+--- a/ref/python/refverify/verify.py
++++ b/ref/python/refverify/verify.py
+@@ -161,17 +161,6 @@ def verify(members, trusted_keys):
+         else:
+             seen_ids[r.id] = r.pos
+         ch = chains.setdefault(r.emitter, [])
+-        if r.eseq != len(ch):
+-            err("E_CHAIN",
+-                f"{r.emitter}: eseq {r.eseq} at position {len(ch)} (gap or "
+-                "reorder)", r.pos)
+-        if r.eseq == 0:
+-            if r.eprev != "0" * 64:
+-                err("E_CHAIN", f"{r.emitter}: eprev at eseq 0 not 64 zeros",
+-                    r.pos)
+-        elif ch and r.eprev != ch[-1].rh:
+-            err("E_CHAIN", f"{r.emitter}: eprev does not match previous "
+-                "record hash", r.pos)
+         ch.append(r)
+ 
+     # ---------------------------------------------------------- V6

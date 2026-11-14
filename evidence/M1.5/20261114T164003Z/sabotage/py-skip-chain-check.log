@@ -1,0 +1,22 @@
+make[1]: Entering directory '/home/csbuild/src/cs-evidence-py/.check-work/sabotage-M1.5-py-skip-chain-check'
+C1.5.1: imports are stdlib + cryptography only
+CHECK C1.5.1 PASS  stdlib+cryptography imports only
+C1.5.2 BLOCKED: csverify binary or golden bundles absent
+CHECK C1.5.2 BLOCKED  csverify/golden bundles absent in this lane
+C1.5.3: no Go sources read or generated under ref/python/
+CHECK C1.5.3 PASS  no Go sources under ref/python
+  inclusion: 2080 proofs verified across sizes 1..64
+C1.5.4: RFC 6962 and C2SP vectors pass
+CHECK C1.5.4 PASS  RFC 6962 + C2SP vectors
+  verdict-invalid-beats-unsealed: verdict UNSEALED != INVALID; errors [] != ['E_CHAIN']
+  E_SCHEMA-unknown-type: errors ['E_SCHEMA'] != ['E_CHAIN', 'E_SCHEMA']
+  E_CHAIN-eseq-gap: errors ['E_SEAL'] != ['E_CHAIN', 'E_SEAL']
+  E_CHAIN-wrong-eprev: verdict CLEAN_WITH_DENIALS != INVALID; errors [] != ['E_CHAIN']; exit 0 != 1
+  E_CHAIN-eprev-nonzero-at-0: verdict CLEAN != INVALID; errors [] != ['E_CHAIN']; exit 0 != 1
+  E_CHAIN-eseq-out-of-order: verdict CLEAN_WITH_DENIALS != INVALID; errors [] != ['E_CHAIN']; exit 0 != 1
+C1.5.5: 6/61 vectors failed
+CHECK C1.5.5 FAIL  derived bundle vectors (stand-in for C1.5.2)
+check-M1.5: suite FAIL
+check-M1.5: FAIL (exit 1, evidence: evidence/M1.5/20261114T164004Z)
+make[1]: *** [Makefile:35: check-M1.5] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-evidence-py/.check-work/sabotage-M1.5-py-skip-chain-check'

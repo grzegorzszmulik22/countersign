@@ -1,0 +1,5 @@
+make[3]: Entering directory '/home/csbuild/src/cs-evidence-py/.check-work/sabotage-DUMMY2-corrupt-greeting'
+CHECK D2.1 PASS
+DUMMY2 suite: all checks passed
+check-DUMMY2: PASS (evidence: evidence/DUMMY2/20261114T164110Z)
+make[3]: Leaving directory '/home/csbuild/src/cs-evidence-py/.check-work/sabotage-DUMMY2-corrupt-greeting'

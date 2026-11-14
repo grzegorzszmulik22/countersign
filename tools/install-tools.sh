@@ -107,6 +107,13 @@ PYBIN="$TOOLS/python/bin"
 "$PYBIN/python3" -m pip --version >/dev/null 2>&1 || "$PYBIN/python3" -m ensurepip --upgrade >/dev/null 2>&1 || true
 ln -sfn ../python/bin/python3 "$TOOLS/bin/python3"
 
+# --- cffi wheel (pinned; runtime dep of cryptography, installed --no-deps) --
+if ! [ "$("$PYBIN/python3" -c 'import cffi; print(cffi.__version__)' 2>/dev/null)" = "$CFFI_VERSION" ]; then
+    whl=$(fetch "$CFFI_WHEEL_URL" "$CFFI_SHA256" "$CFFI_WHEEL")
+    "$PYBIN/python3" -m pip install --quiet --no-index --no-deps "$whl"
+    echo "installed cffi $CFFI_VERSION"
+fi
+
 # --- cryptography wheel (pinned file + sha256) -------------------------------
 if ! [ "$("$PYBIN/python3" -c 'import cryptography,sys; print(cryptography.__version__)' 2>/dev/null)" = "$CRYPTOGRAPHY_VERSION" ]; then
     whl=$(fetch "$CRYPTOGRAPHY_WHEEL_URL" "$CRYPTOGRAPHY_SHA256" "$CRYPTOGRAPHY_WHEEL")
