@@ -1,0 +1,10 @@
+CHECK C0.5.1 FAIL — check-DUMMY1=2 sabotage-DUMMY1=0: SABOTAGE corrupt-greeting: caught (exit 2) sabotage-DUMMY1: 1 caught, 0 uncaught (evidence: evidence/DUMMY1/20261114T161711Z/sabotage) make[1]: Leaving directory '/home/opc/src/cs-foundation' 
+CHECK C0.5.2 FAIL — sabotage-DUMMY2 returned green on an uncaught sabotage
+CHECK C0.5.3 PASS
+missing "command" in evidence/DUMMY1/20261114T161711Z//result.json
+missing "exit_code" in evidence/DUMMY1/20261114T161711Z//result.json
+missing "duration_ms" in evidence/DUMMY1/20261114T161711Z//result.json
+missing "git_commit" in evidence/DUMMY1/20261114T161711Z//result.json
+missing/nonempty output.log
+CHECK C0.5.4 FAIL — evidence incomplete in evidence/DUMMY1/20261114T161711Z/
+M0.5 suite: FAILURES

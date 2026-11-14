@@ -1,0 +1,7 @@
+diff --git a/test/dummy/greeting.txt b/test/dummy/greeting.txt
+index 2233ee5..7c381f8 100644
+--- a/test/dummy/greeting.txt
++++ b/test/dummy/greeting.txt
+@@ -1 +1 @@
+-hello countersign
++corrupted by sabotage

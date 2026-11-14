@@ -50,6 +50,11 @@ for patch in "$patchdir"/*.patch; do
     if [ "$code" -eq 0 ]; then
         echo "SABOTAGE $name: UNCAUGHT — check-$chunk stayed green" >&2
         uncaught+=("$name")
+    elif ! grep -q '^CHECK .* FAIL' "$log"; then
+        # Non-zero without a red CHECK line = the suite did not run (missing)
+        # or died another way; that is a harness error, not a catch.
+        echo "SABOTAGE $name: ERROR — suite produced no failing check (exit $code)" >&2
+        uncaught+=("$name (suite error)")
     else
         caught_count=$((caught_count + 1))
         caught_by=$(grep -oE '^CHECK [A-Za-z0-9_.-]+ FAIL' "$log" | awk '{print $2}' | sort -u | tr '\n' ' ')

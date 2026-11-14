@@ -1,0 +1,4 @@
+make[2]: Entering directory '/home/opc/src/cs-foundation/.check-work/sabotage-DUMMY2-corrupt-greeting'
+no check suite at test/checks/check-DUMMY2.sh
+make[2]: *** [Makefile:35: check-DUMMY2] Error 2
+make[2]: Leaving directory '/home/opc/src/cs-foundation/.check-work/sabotage-DUMMY2-corrupt-greeting'
