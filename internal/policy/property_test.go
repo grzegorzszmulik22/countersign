@@ -13,6 +13,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/countersign/countersign/internal/names"
 	"github.com/countersign/countersign/internal/policy"
 )
 
@@ -106,10 +107,10 @@ func mustJSON(t *testing.T, v any) []byte {
 // FuzzLoadPolicy is C3.1.5: the loader must never panic.
 func FuzzLoadPolicy(f *testing.F) {
 	seeds := []string{
-		"apiVersion: countersign.dev/v1alpha1\nkind: SessionPolicy\nmetadata: {name: x}\nspec: {mode: enforce, scenario: agent, grants: [{id: g, match: {hosts: [a.com]}}]}\n",
+		"apiVersion: " + names.APIGroup + "/v1alpha1\nkind: SessionPolicy\nmetadata: {name: x}\nspec: {mode: enforce, scenario: agent, grants: [{id: g, match: {hosts: [a.com]}}]}\n",
 		"not yaml at all\x00\x01",
 		"{{{",
-		"apiVersion: countersign.dev/v1alpha1\nkind: SessionPolicy\nmetadata: {name: x}\nspec:\n  grants:\n    - {id: a, action: deny, match: {hosts: ['*.x.com'], methods: [GET], paths: ['/**']}}\n",
+		"apiVersion: " + names.APIGroup + "/v1alpha1\nkind: SessionPolicy\nmetadata: {name: x}\nspec:\n  grants:\n    - {id: a, action: deny, match: {hosts: ['*.x.com'], methods: [GET], paths: ['/**']}}\n",
 		"\xff\xfe random \x00 bytes \xf0\x9f",
 	}
 	for _, s := range seeds {
@@ -151,7 +152,7 @@ func pick(r *rand.Rand, xs []string) string { return xs[r.Intn(len(xs))] }
 func genDoc(r *rand.Rand) *policy.SessionPolicy {
 	ng := 1 + r.Intn(5)
 	doc := &policy.SessionPolicy{
-		APIVersion: "countersign.dev/v1alpha1",
+		APIVersion: names.APIGroup + "/v1alpha1",
 		Kind:       "SessionPolicy",
 		Metadata:   policy.Metadata{Name: "gen"},
 		Spec: policy.Spec{

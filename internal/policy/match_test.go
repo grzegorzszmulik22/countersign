@@ -12,6 +12,7 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"gopkg.in/yaml.v3"
 
+	"github.com/countersign/countersign/internal/names"
 	"github.com/countersign/countersign/internal/policy"
 )
 
@@ -128,7 +129,7 @@ func TestSchemaConformance(t *testing.T) {
 		t.Fatalf("schema is not valid JSON: %v", err)
 	}
 	c := jsonschema.NewCompiler()
-	const schemaURL = "https://countersign.dev/schema/sessionpolicy.v1alpha1.schema.json"
+	const schemaURL = "https://" + names.APIGroup + "/schema/sessionpolicy.v1alpha1.schema.json"
 	if err := c.AddResource(schemaURL, doc); err != nil {
 		t.Fatalf("add schema: %v", err)
 	}
