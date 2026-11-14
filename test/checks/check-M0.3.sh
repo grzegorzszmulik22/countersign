@@ -18,9 +18,9 @@ GO="$ROOT/.tools/bin/go"
 MAKE=${MAKE:-make}
 fail=0
 
-WORK="$ROOT/.check-work/M0.3"
-rm -rf "$WORK"
-mkdir -p "$WORK"
+mkdir -p "$ROOT/.check-work"
+WORK=$(mktemp -d "$ROOT/.check-work/M0.3.XXXXXX")
+trap 'rm -rf "$WORK"' EXIT
 
 say() { printf 'CHECK %s %s%s\n' "$1" "$2" "${3:+ — $3}"; }
 pass() { say "$1" PASS; }
