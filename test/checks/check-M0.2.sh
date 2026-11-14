@@ -24,7 +24,7 @@ export PATH="$HOME/.local/bin:$HOME/.local/usr/bin:$PATH"
 cd "$(dirname "$0")/../.."
 ROOT=$PWD
 export PATH="$ROOT/.tools/bin:$PATH"
-export KUBECONFIG="$ROOT/.kube/countersign"
+export KUBECONFIG="${KUBECONFIG:-$HOME/.cache/countersign/kubeconfig}"
 MAKE=${MAKE:-make}
 INNER=${CS_M02_OFFLINE_INNER:-0}
 CLUSTER=countersign

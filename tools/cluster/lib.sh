@@ -14,7 +14,10 @@ export CLUSTER CLUSTER_STATE
 # Caller must have cd'd to the repository root before sourcing.
 ROOT=$PWD
 export PATH="$ROOT/.tools/bin:$HOME/.local/bin:$HOME/.local/usr/bin:$PATH"
-export KUBECONFIG=${KUBECONFIG:-$ROOT/.kube/countersign}
+# The kubeconfig is cluster state, not repo state: keep it in the shared
+# state dir so sabotage work copies (.check-work/sabotage-*) reach the same
+# singleton cluster.
+export KUBECONFIG=${KUBECONFIG:-$CLUSTER_STATE/kubeconfig}
 
 # shellcheck source=../versions.env
 . tools/versions.env

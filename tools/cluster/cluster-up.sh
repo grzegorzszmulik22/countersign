@@ -33,6 +33,10 @@ else
         --kubeconfig "$KUBECONFIG"
 fi
 
+# (Re)emit the kubeconfig: sabotage work copies share the cluster but not the
+# repo's .kube dir, so the file may be missing even when the cluster exists.
+kind get kubeconfig --name "$CLUSTER" > "$KUBECONFIG"
+
 # Verify the pinned CNI manifest has not drifted, then install.
 echo "$CALICO_MANIFEST_SHA256  $CALICO_MANIFEST" | sha256sum -c --quiet
 kubectl apply -f "$CALICO_MANIFEST" >/dev/null
