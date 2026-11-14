@@ -7,6 +7,7 @@ package fakereg
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/countersign/countersign/test/fixtures/fxtest"
 )
@@ -31,9 +33,12 @@ func startReg(t *testing.T, env *fxtest.Env) string {
 }
 
 // run executes a subprocess against the fixture through the CONNECT proxy.
+// A stuck client fails the test after 2m rather than hanging the suite.
 func run(t *testing.T, env *fxtest.Env, dir, name string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command(name, args...)
+	ctx, cancel := context.WithTimeout(env.Ctx, 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
 	cmd.Env = env.SubEnv()
 	out, err := cmd.CombinedOutput()

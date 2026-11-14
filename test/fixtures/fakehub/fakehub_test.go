@@ -7,6 +7,7 @@ package fakehub
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/countersign/countersign/test/fixtures/fxlib"
 	"github.com/countersign/countersign/test/fixtures/fxtest"
@@ -41,7 +43,9 @@ func gitCmd(t *testing.T, env *fxtest.Env, dir string, args ...string) string {
 	t.Helper()
 	tok := fxlib.Canary("github-agent")
 	full := append([]string{"-c", "credential.helper="}, args...)
-	cmd := exec.Command("git", full...)
+	ctx, cancel := context.WithTimeout(env.Ctx, 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", full...)
 	cmd.Dir = dir
 	cmd.Env = append(env.SubEnv(),
 		"GIT_AUTHOR_NAME=T", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=T", "GIT_COMMITTER_EMAIL=t@t",
@@ -253,7 +257,9 @@ func TestC031Fakehub(t *testing.T) {
 	}
 	gitCmd(t, env, repoDir, "add", "-A")
 	gitCmd(t, env, repoDir, "commit", "-m", "blocked")
-	cmd := exec.Command("git", "-c", "credential.helper=", "push", "origin", "HEAD:refs/heads/blocked")
+	pctx, pcancel := context.WithTimeout(env.Ctx, 2*time.Minute)
+	defer pcancel()
+	cmd := exec.CommandContext(pctx, "git", "-c", "credential.helper=", "push", "origin", "HEAD:refs/heads/blocked")
 	cmd.Dir = repoDir
 	cmd.Env = env.SubEnv()
 	out, err := cmd.CombinedOutput()
