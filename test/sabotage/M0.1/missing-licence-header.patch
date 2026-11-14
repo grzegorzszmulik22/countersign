@@ -1,0 +1,10 @@
+diff --git a/internal/names/names.go b/internal/names/names.go
+index 0a44f09..8a1cc80 100644
+--- a/internal/names/names.go
++++ b/internal/names/names.go
+@@ -1,5 +1,3 @@
+-// Copyright 2026 The Countersign Authors
+-// SPDX-License-Identifier: Apache-2.0
+ 
+ // Package names holds the project-wide name constants (02-architecture.md §9).
+ // These strings appear in Go sources only here and in import paths; the M0.1

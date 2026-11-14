@@ -1,0 +1,12 @@
+diff --git a/tools/versions.env b/tools/versions.env
+index c706f17..564bcb9 100644
+--- a/tools/versions.env
++++ b/tools/versions.env
+@@ -14,7 +14,6 @@ KIND_VERSION=v0.33.0
+ KIND_SHA256=20022bee6cfcd5086cb7234d218e3454e6090022f2a8f55d1fa7fcf42c3867a2
+ 
+ KUBECTL_VERSION=v1.37.2
+-KUBECTL_SHA256=fcc16f63186659d9722014b7e02d5fdd2d4e669cb8c0ab66365d7d3b8ba03509
+ 
+ HELM_VERSION=v4.3.2
+ HELM_SHA256=df31cb61680ef728f82c770e5280dd565617bee6b039d37e85c677288be4bbb0
