@@ -48,7 +48,9 @@ func (s *Server) createRecord(ctx context.Context, args map[string]any) (map[str
 	}
 	defer func() { _ = res.Body.Close() }()
 	var issue map[string]any
-	_ = json.NewDecoder(res.Body).Decode(&issue)
+	if err := json.NewDecoder(res.Body).Decode(&issue); err != nil {
+		return nil, fmt.Errorf("fakehub issue response: %w", err)
+	}
 	s.mu.Lock()
 	s.records = append(s.records, issue)
 	s.mu.Unlock()

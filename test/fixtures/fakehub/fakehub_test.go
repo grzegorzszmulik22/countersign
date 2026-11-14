@@ -60,6 +60,26 @@ func gitCmd(t *testing.T, env *fxtest.Env, dir string, args ...string) string {
 	return string(out)
 }
 
+// gitCmdFail is gitCmd for operations expected to fail (404/401): it returns
+// the combined output and the error instead of stopping the test.
+func gitCmdFail(t *testing.T, env *fxtest.Env, dir string, args ...string) (string, error) {
+	t.Helper()
+	tok := fxlib.Canary("github-agent")
+	full := append([]string{"-c", "credential.helper="}, args...)
+	ctx, cancel := context.WithTimeout(env.Ctx, 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", full...)
+	cmd.Dir = dir
+	cmd.Env = append(env.SubEnv(),
+		"GIT_AUTHOR_NAME=T", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=T", "GIT_COMMITTER_EMAIL=t@t",
+	)
+	for i, a := range cmd.Args {
+		cmd.Args[i] = strings.ReplaceAll(a, "TOKEN", tok)
+	}
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
 func rest(t *testing.T, env *fxtest.Env, method, url string, body any, hdr map[string]string) (*http.Response, []byte) {
 	t.Helper()
 	var rd *bytes.Reader
@@ -117,6 +137,33 @@ func TestC031Fakehub(t *testing.T) {
 	if !s.refExists("acme/widgets", "agent-work") {
 		t.Fatal("push did not create refs/heads/agent-work")
 	}
+	// A fetch round-trips the remote again (more git-upload-pack requests).
+	gitCmd(t, env, repoDir, "fetch", "origin")
+
+	// Clone of a non-existent repository fails at the smart-HTTP layer but
+	// must still be observed — token and repo included.
+	if out, err := gitCmdFail(t, env, work, "clone",
+		"https://x:"+tok+"@github.com/acme/missing.git", "missing"); err == nil {
+		t.Fatalf("clone of non-existent repo unexpectedly succeeded:\n%s", out)
+	}
+
+	// A wrong token is rejected — and the presented credential is what lands
+	// in the record, for both REST and git smart-HTTP.
+	badTok := "not-the-agent-token"
+	reqBad, _ := http.NewRequestWithContext(env.Ctx, http.MethodGet, apiURL+"/repos/acme/widgets/issues", nil)
+	reqBad.Header.Set("Authorization", "Bearer "+badTok)
+	resBad, err := env.Named().Do(reqBad)
+	if err != nil {
+		t.Fatalf("bad-token REST: %v", err)
+	}
+	_ = resBad.Body.Close()
+	if resBad.StatusCode != 401 {
+		t.Fatalf("bad-token REST: status %d", resBad.StatusCode)
+	}
+	if out, err := gitCmdFail(t, env, work, "clone",
+		"https://x:"+badTok+"@github.com/acme/widgets.git", "w-bad"); err == nil {
+		t.Fatalf("clone with wrong token unexpectedly succeeded:\n%s", out)
+	}
 
 	// --- auth: requests without a token are rejected ---------------------------
 	res, _ := rest(t, env, http.MethodGet, apiURL+"/repos/acme/widgets/issues", nil, map[string]string{"Authorization": ""})
@@ -135,7 +182,9 @@ func TestC031Fakehub(t *testing.T) {
 		t.Fatal("issue create: no ETag")
 	}
 	var is Issue
-	_ = json.Unmarshal(body, &is)
+	if err := json.Unmarshal(body, &is); err != nil {
+		t.Fatalf("decode issue: %v", err)
+	}
 	issueURL := fmt.Sprintf("%s/repos/acme/widgets/issues/%d", apiURL, is.Number)
 
 	// PATCH with wrong ETag → 412; with correct → 200 and a new ETag.
@@ -150,7 +199,9 @@ func TestC031Fakehub(t *testing.T) {
 		t.Fatalf("good If-Match: status %d %s", res.StatusCode, body)
 	}
 	var patched Issue
-	_ = json.Unmarshal(body, &patched)
+	if err := json.Unmarshal(body, &patched); err != nil {
+		t.Fatalf("decode patched issue: %v", err)
+	}
 	if patched.State != "closed" {
 		t.Fatalf("patch state=%q", patched.State)
 	}
@@ -163,7 +214,9 @@ func TestC031Fakehub(t *testing.T) {
 		t.Fatalf("create comment: %d %s", res.StatusCode, body)
 	}
 	var c Comment
-	_ = json.Unmarshal(body, &c)
+	if err := json.Unmarshal(body, &c); err != nil {
+		t.Fatalf("decode comment: %v", err)
+	}
 	res, _ = rest(t, env, http.MethodDelete,
 		fmt.Sprintf("%s/repos/acme/widgets/issues/comments/%d", apiURL, c.ID),
 		nil, map[string]string{"If-Match": res.Header.Get("ETag")})
@@ -197,18 +250,59 @@ func TestC031Fakehub(t *testing.T) {
 		t.Fatalf("/debug/echo missing header: %s", body)
 	}
 
-	// Every request records token + repo.
+	// Every observed request through the authenticated route records the
+	// token the client actually presented — the property leak oracles read.
 	obs := env.Observed(base)
-	var sawTok bool
+	var sawUpload, sawReceive, sawMissing, sawREST, sawBadREST, sawBadGit int
 	for _, o := range obs {
-		if repo, _ := o.Extra["repo"].(string); repo == "acme/widgets" {
-			if tk, _ := o.Extra["token"].(string); tk == tok {
-				sawTok = true
+		tk, hasTok := o.Extra["token"].(string)
+		auth, _ := o.Extra["auth"].(string)
+		svc, _ := o.Extra["service"].(string)
+		repo, _ := o.Extra["repo"].(string)
+		_, isREST := o.Extra["rest"]
+		if repo == "" && !isREST && auth == "" {
+			continue // admin/unauthenticated lanes — outside the auth'd route
+		}
+		if !hasTok {
+			t.Fatalf("obs entry for %s %s records no token: %+v", o.Method, o.Path, o.Extra)
+		}
+		if auth == "rejected" {
+			isGitPath := strings.Contains(o.Path, ".git")
+			switch {
+			case !isGitPath && tk == badTok:
+				sawBadREST++
+			case isGitPath && repo == "acme/widgets" && tk == badTok:
+				sawBadGit++
+			case tk != "" && tk != badTok:
+				t.Fatalf("rejected request %s recorded unexpected token %q", o.Path, tk)
 			}
+			continue
+		}
+		if tk != tok {
+			t.Fatalf("request %s %s recorded token %q, client sent %q", o.Method, o.Path, tk, tok)
+		}
+		switch {
+		case svc == "git-upload-pack":
+			sawUpload++
+		case svc == "git-receive-pack":
+			sawReceive++
+		case repo == "acme/missing" && o.Extra["result"] == "404":
+			sawMissing++
+		case isREST:
+			sawREST++
 		}
 	}
-	if !sawTok {
-		t.Fatal("__observed does not record token+repo")
+	for name, n := range map[string]int{
+		"git-upload-pack (clone/fetch)":  sawUpload,
+		"git-receive-pack (push)":        sawReceive,
+		"non-existent repo 404":          sawMissing,
+		"REST endpoints":                 sawREST,
+		"rejected REST with wrong token": sawBadREST,
+		"rejected git with wrong token":  sawBadGit,
+	} {
+		if n == 0 {
+			t.Fatalf("no observed request covering %s", name)
+		}
 	}
 
 	// --- third-party admin API ------------------------------------------------

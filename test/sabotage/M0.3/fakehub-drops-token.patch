@@ -1,0 +1,11 @@
+--- a/test/fixtures/fakehub/git.go
++++ b/test/fixtures/fakehub/git.go
+@@ -33,7 +33,7 @@
+ 		return
+ 	}
+ 	body, _ := s.Obs.AddHTTP(r, "https", map[string]any{
+-		"token": tok, "repo": repo, "service": r.URL.Query().Get("service"),
++		"token": "", "repo": repo, "service": r.URL.Query().Get("service"),
+ 	})
+ 	status, hdr, out, err := gitHTTPBackend(s.Root, repo, r, body)
+ 	if err != nil {

@@ -181,7 +181,13 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 	tok := token(r)
 	if !s.Tokens[tok] {
 		w.Header().Set("WWW-Authenticate", `Basic realm="fakehub"`)
-		_, _ = s.Obs.AddHTTP(r, "https", map[string]any{"auth": "rejected"})
+		// Record the credential that was presented even on rejection — leak
+		// oracles need the attempted token, not just that auth failed.
+		entry := map[string]any{"auth": "rejected", "token": tok}
+		if i := strings.Index(r.URL.Path, ".git"); i > 0 {
+			entry["repo"] = r.URL.Path[1:i]
+		}
+		_, _ = s.Obs.AddHTTP(r, "https", entry)
 		fxlib.WriteJSON(w, 401, map[string]string{"message": "bad credentials"})
 		return
 	}

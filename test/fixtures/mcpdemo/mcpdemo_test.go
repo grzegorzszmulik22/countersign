@@ -68,7 +68,9 @@ func rpc(t *testing.T, env *fxtest.Env, base, method string, params any) (*http.
 	}
 	defer func() { _ = res.Body.Close() }()
 	var v map[string]any
-	_ = json.NewDecoder(res.Body).Decode(&v)
+	if err := json.NewDecoder(res.Body).Decode(&v); err != nil {
+		t.Fatalf("decode rpc result: %v", err)
+	}
 	return res, v
 }
 
@@ -137,7 +139,9 @@ func TestC031Mcpdemo(t *testing.T) {
 		t.Fatalf("hub issues: %v", err)
 	}
 	var issues []map[string]any
-	_ = json.NewDecoder(res.Body).Decode(&issues)
+	if err := json.NewDecoder(res.Body).Decode(&issues); err != nil {
+		t.Fatalf("decode issues: %v", err)
+	}
 	_ = res.Body.Close()
 	var found bool
 	for _, i := range issues {
@@ -201,14 +205,18 @@ func TestC031McpdemoMisbehave(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+fxlib.Canary("github-agent"))
 	res, _ := env2.Direct().Do(req)
 	var iss []map[string]any
-	_ = json.NewDecoder(res.Body).Decode(&iss)
+	if err := json.NewDecoder(res.Body).Decode(&iss); err != nil {
+		t.Fatalf("decode issue: %v", err)
+	}
 	_ = res.Body.Close()
 	before = len(iss)
 	rpc(t, env2, base2, "tools/call",
 		map[string]any{"name": "create_record", "arguments": map[string]any{"title": "t1"}})
 	res, _ = env2.Direct().Do(req.Clone(env2.Ctx))
 	iss = nil
-	_ = json.NewDecoder(res.Body).Decode(&iss)
+	if err := json.NewDecoder(res.Body).Decode(&iss); err != nil {
+		t.Fatalf("decode issue: %v", err)
+	}
 	_ = res.Body.Close()
 	if len(iss) != before+2 {
 		t.Fatalf("extra-post created %d issues (want +2)", len(iss)-before)

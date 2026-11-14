@@ -37,7 +37,9 @@ func post(t *testing.T, env *fxtest.Env, base, body, key string) (*http.Response
 	}
 	defer func() { _ = res.Body.Close() }()
 	var v map[string]any
-	_ = json.NewDecoder(res.Body).Decode(&v)
+	if err := json.NewDecoder(res.Body).Decode(&v); err != nil {
+		t.Fatalf("decode message: %v", err)
+	}
 	return res, v
 }
 
@@ -81,7 +83,9 @@ func TestC031Fakemsg(t *testing.T) {
 	var list struct {
 		Messages []Message `json:"messages"`
 	}
-	_ = json.NewDecoder(res.Body).Decode(&list)
+	if err := json.NewDecoder(res.Body).Decode(&list); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
 	_ = res.Body.Close()
 	count := 0
 	for _, m := range list.Messages {
@@ -102,7 +106,9 @@ func TestC031Fakemsg(t *testing.T) {
 		t.Fatalf("get: %v", err)
 	}
 	var m Message
-	_ = json.NewDecoder(res.Body).Decode(&m)
+	if err := json.NewDecoder(res.Body).Decode(&m); err != nil {
+		t.Fatalf("decode send: %v", err)
+	}
 	_ = res.Body.Close()
 	if m.Text != "deploy ok" {
 		t.Fatalf("message body: %+v", m)
