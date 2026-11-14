@@ -1,0 +1,9 @@
+make[1]: Entering directory '/home/opc/src/cs-foundation/.check-work/sabotage-M0.5-sabotage-runner-always-green'
+CHECK C0.5.1 PASS
+CHECK C0.5.2 FAIL — sabotage-DUMMY2 returned green on an uncaught sabotage
+CHECK C0.5.3 PASS
+CHECK C0.5.4 PASS
+M0.5 suite: FAILURES
+check-M0.5: FAIL (exit 1, evidence: evidence/M0.5/20261114T161841Z)
+make[1]: *** [Makefile:35: check-M0.5] Error 1
+make[1]: Leaving directory '/home/opc/src/cs-foundation/.check-work/sabotage-M0.5-sabotage-runner-always-green'
