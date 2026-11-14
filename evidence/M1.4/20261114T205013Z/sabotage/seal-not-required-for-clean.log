@@ -1,0 +1,12 @@
+make[1]: Entering directory '/home/csbuild/src/cs-evidence-go/.check-work/sabotage-M1.4-seal-not-required-for-clean'
+CHECK C1.4.1 PASS
+CHECK C1.4.2 PASS
+CHECK C1.4.3 FAIL —     --- PASS: TestC143_GoldenBundles/e_session (0.01s)     --- PASS: TestC143_GoldenBundles/e_sig (0.02s)     --- PASS: TestC143_GoldenBundles/e_structure (0.00s)     --- PASS: TestC143_GoldenBundles/multi-emitter (0.01s)     --- FAIL: TestC143_GoldenBundles/unsealed (0.00s) FAIL FAIL	github.com/countersign/countersign/internal/ledger	0.197s FAIL 
+CHECK C1.4.4 PASS
+CHECK C1.4.5 PASS
+CHECK C1.4.6 PASS
+CHECK C1.4.7 PASS
+M1.4 suite: FAILURES
+check-M1.4: FAIL (exit 1, evidence: evidence/M1.4/20261114T205026Z)
+make[1]: *** [Makefile:35: check-M1.4] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-evidence-go/.check-work/sabotage-M1.4-seal-not-required-for-clean'
