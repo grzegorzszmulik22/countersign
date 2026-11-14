@@ -1,0 +1,5 @@
+/.tools/
+/.check-work/
+/bin/
+__pycache__/
+*.pyc
