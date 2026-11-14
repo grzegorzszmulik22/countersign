@@ -80,6 +80,32 @@ func TestC141_CrashRecovery(t *testing.T) {
 	}
 }
 
+// C1.4.1 (cadence half): a sequential append returns only after the group
+// commit covering it; the 2 ms fsync cap means 60 sequential appends take
+// at least ~118 ms. An ack-before-fsync defect returns instantly.
+func TestC141_FsyncCadence(t *testing.T) {
+	dir := t.TempDir()
+	s := ldtest.New("countersign.dev/log/test")
+	l, err := ledger.Open(dir, "countersign.dev/log/test", s.LogSigner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = l.Close() }()
+	line, _, err := s.Emitters["broker"].Emit("observer.gap", ldtest.Body("observer.gap", nil), ldtest.TS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	for i := 0; i < 60; i++ {
+		if _, err := l.Append(line); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if d := time.Since(start); d < 100*time.Millisecond {
+		t.Fatalf("60 durable appends took %v — ack before fsync", d)
+	}
+}
+
 // TestC141Helper is the worker process (runs only under CS_HELPER=1).
 func TestC141Helper(t *testing.T) {
 	if os.Getenv("CS_HELPER") != "1" {
