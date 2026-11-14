@@ -1,0 +1,13 @@
+diff --git a/internal/mlog/tree.go b/internal/mlog/tree.go
+index 0c5101e..13583dd 100644
+--- a/internal/mlog/tree.go
++++ b/internal/mlog/tree.go
+@@ -84,7 +84,7 @@ func mthRange(leaves [][32]byte, lo, hi uint64) [32]byte {
+ // largestPow2Below returns the greatest power of two strictly below n (n≥2).
+ func largestPow2Below(n uint64) uint64 {
+ 	k := uint64(1)
+-	for k<<1 < n {
++	for k<<1 <= n {
+ 		k <<= 1
+ 	}
+ 	return k

@@ -1,0 +1,14 @@
+diff --git a/internal/mlog/checkpoint.go b/internal/mlog/checkpoint.go
+index 283535f..f3ab11c 100644
+--- a/internal/mlog/checkpoint.go
++++ b/internal/mlog/checkpoint.go
+@@ -116,9 +116,6 @@ func ParseCheckpoint(data []byte, m keys.Manifest) (*Checkpoint, error) {
+ 		if noteKeyHash(cp.Origin, pub) != keyHash {
+ 			continue
+ 		}
+-		if e.Role != "log" {
+-			return nil, fmt.Errorf("checkpoint key %s has role %q, want log", e.KeyID, e.Role)
+-		}
+ 		if !ed25519.Verify(pub, msg, sig) {
+ 			return nil, errors.New("checkpoint signature invalid")
+ 		}
