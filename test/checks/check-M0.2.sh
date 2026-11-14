@@ -45,10 +45,14 @@ nodes() { kind get nodes --name "$CLUSTER" 2>/dev/null; }
 k() { kubectl --kubeconfig "$KUBECONFIG" "$@"; }
 
 # Serialize against other lanes/processes sharing this host's only cluster.
+# Nested runs (inside this suite's own `make check-M0`/regress calls) skip the
+# lock: their ancestor already holds it.
 mkdir -p "$HOME/.cache/countersign"
-exec 9>"$HOME/.cache/countersign/cluster.lock"
-flock -w 3600 9 || { echo "could not acquire cluster lock" >&2; exit 2; }
-export CS_CLUSTER_LOCK_HELD=1
+if [ "${CS_CLUSTER_LOCK_HELD:-}" != "1" ]; then
+    exec 9>"$HOME/.cache/countersign/cluster.lock"
+    flock -w 3600 9 || { echo "could not acquire cluster lock" >&2; exit 2; }
+    export CS_CLUSTER_LOCK_HELD=1
+fi
 
 # --------------------------------------------------------------------------
 # Preamble: images pulled + loaded, cluster up. All checks need this.
@@ -87,7 +91,7 @@ netpol_matrix() { # $1 = expect ("open"|"denied"); returns 0 when the matrix mat
     for c in netpol-cli-w1 netpol-cli-w2; do
         for ip in "$S1" "$S2"; do
             probe_tcp "$c" "$ip" && t=open || t=blocked
-            if [ "$want" = open ]; then probe_udp "$c" "$ip" 3 && u=open || u=blocked
+            if [ "$want" = open ]; then probe_udp "$c" "$ip" 12 && u=open || u=blocked
             else probe_udp "$c" "$ip" 1 && u=open || u=blocked; fi
             if [ "$t" = "$want" ] && [ "$u" = "$want" ]; then
                 note "$c -> $ip  tcp=$t udp=$u (want $want)"

@@ -29,7 +29,7 @@ pull_and_tag() { # $1 digest-ref  $2 tag
         || docker tag "$(docker image inspect -f '{{.Id}}' "$1")" "$2" >/dev/null
 }
 
-echo "images: ${SKIP_PULL:+skip-pull }digest refs -> tags"
+if [ "$SKIP_PULL" = "1" ]; then echo "images: skip-pull; tagging local digests"; else echo "images: digest refs -> tags"; fi
 for i in "${!IMAGE_REFS[@]}"; do
     pull_and_tag "${IMAGE_REFS[$i]}" "${IMAGE_TAGS[$i]}"
     echo "  ${IMAGE_TAGS[$i]}"
