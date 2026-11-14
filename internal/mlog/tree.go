@@ -99,3 +99,6 @@ func (l *Log) Checkpoint() (*Checkpoint, error) {
 	}
 	return &Checkpoint{Origin: l.origin, Size: uint64(len(l.leaves)), Root: l.Root()}, nil
 }
+
+// RootOf computes MTH over an arbitrary slice of leaf hashes.
+func RootOf(leaves [][32]byte) [32]byte { return mthRange(leaves, 0, uint64(len(leaves))) }

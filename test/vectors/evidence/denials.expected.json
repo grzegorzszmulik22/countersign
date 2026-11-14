@@ -1,0 +1,13 @@
+{
+  "verdict": "CLEAN_WITH_DENIALS",
+  "world": "empty",
+  "errors": [],
+  "warnings": null,
+  "findings": [],
+  "stats": {
+    "emitters": 4,
+    "records": 7,
+    "session": "PNKXCBYDWRAF0Y3STZJR6QXG60",
+    "tree_size": 7
+  }
+}

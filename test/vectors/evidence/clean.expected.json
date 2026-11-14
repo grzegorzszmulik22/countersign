@@ -1,0 +1,13 @@
+{
+  "verdict": "CLEAN",
+  "world": "committed",
+  "errors": [],
+  "warnings": null,
+  "findings": [],
+  "stats": {
+    "emitters": 4,
+    "records": 36,
+    "session": "R14EM7WNK02MG4SRPYDR6QXG60",
+    "tree_size": 36
+  }
+}

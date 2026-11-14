@@ -1,0 +1,18 @@
+{
+  "verdict": "INVALID",
+  "world": "empty",
+  "errors": [
+    {
+      "code": "E_SEAL",
+      "detail": "seal head broker/MHPK02DQVS7S2E4M0EDT6QXG60 eseq 5 hash afda035d50e42ef6391d7d565a2a5182bccd25eb227ffc582e5878eb5749b250 ≠ chain 0 afda035d50e42ef6391d7d565a2a5182bccd25eb227ffc582e5878eb5749b250"
+    }
+  ],
+  "warnings": null,
+  "findings": [],
+  "stats": {
+    "emitters": 4,
+    "records": 6,
+    "session": "MV24RX5AYCY52Y6Z2EDT6QXG60",
+    "tree_size": 6
+  }
+}

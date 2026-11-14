@@ -1,0 +1,13 @@
+{
+  "verdict": "INVALID",
+  "world": "open",
+  "errors": [
+    {
+      "code": "E_BUNDLE",
+      "detail": "missing required member \"checkpoint.txt\""
+    }
+  ],
+  "warnings": [],
+  "findings": [],
+  "stats": {}
+}

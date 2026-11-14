@@ -1,0 +1,24 @@
+{
+  "verdict": "INVALID",
+  "world": "committed",
+  "errors": [
+    {
+      "code": "E_SIG",
+      "index": 1,
+      "detail": "E_SIG: signature on AP1WRDEG9XC2DEFJ8Z1S6QXG60 invalid"
+    },
+    {
+      "code": "E_INCLUSION",
+      "index": 1,
+      "detail": "inclusion proof root 2b1b595962a0bedfd61a77470d1dddfb32784079ce9bb37306900c808eb0e5bd ≠ expected 9d2ef7c52d95f4390ac510c0c58dd5130ee05c4f0234533d99c30a997478e9cd"
+    }
+  ],
+  "warnings": null,
+  "findings": [],
+  "stats": {
+    "emitters": 4,
+    "records": 36,
+    "session": "2PVTPVF4W8WJ3RMETX1S6QXG60",
+    "tree_size": 36
+  }
+}

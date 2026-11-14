@@ -173,3 +173,16 @@ func mustArr(b []byte) [32]byte {
 }
 
 func nodeBytes(h [32]byte) []byte { return h[:] }
+
+// InclusionOf returns the audit path of index in the tree formed by the
+// given leaf hashes.
+func InclusionOf(leaves [][32]byte, index uint64) ([][]byte, error) {
+	l := &Log{leaves: leaves}
+	return l.InclusionProof(index)
+}
+
+// ConsistencyOf returns PROOF(m, D[n]) over an arbitrary leaf-hash slice.
+func ConsistencyOf(leaves [][32]byte, m, n uint64) ([][]byte, error) {
+	l := &Log{leaves: leaves}
+	return l.ConsistencyProof(m, n)
+}

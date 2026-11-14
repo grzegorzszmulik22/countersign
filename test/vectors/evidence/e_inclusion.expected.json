@@ -1,0 +1,19 @@
+{
+  "verdict": "INVALID",
+  "world": "committed",
+  "errors": [
+    {
+      "code": "E_INCLUSION",
+      "index": 1,
+      "detail": "inclusion proof root e94b09dfb53eb664fb93d4fe02976f4c188aeaadf2581009e5f5aba69ce5cb46 ≠ expected 5ea0d4b51f70c0677453a99906ac3cd7455867e1f0fa51a2a035df5576a302d9"
+    }
+  ],
+  "warnings": null,
+  "findings": [],
+  "stats": {
+    "emitters": 4,
+    "records": 36,
+    "session": "22EZK26JYFM5QJ7W3ZSS6QXG60",
+    "tree_size": 36
+  }
+}
