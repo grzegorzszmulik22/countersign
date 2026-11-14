@@ -1,0 +1,13 @@
+diff --git a/internal/evidence/envelope.go b/internal/evidence/envelope.go
+index f3298d9..e4b815e 100644
+--- a/internal/evidence/envelope.go
++++ b/internal/evidence/envelope.go
+@@ -107,7 +107,7 @@ func UnmarshalEnvelope(line []byte) (*Envelope, error) {
+ 	if e.PayloadType != PayloadType {
+ 		return nil, fmt.Errorf("unsupported payloadType %q", e.PayloadType)
+ 	}
+-	if len(e.Signatures) != 1 {
++	if len(e.Signatures) < 1 {
+ 		return nil, fmt.Errorf("envelope must carry exactly one signature, got %d", len(e.Signatures))
+ 	}
+ 	if len(e.Signatures[0].Sig) != 64 {
