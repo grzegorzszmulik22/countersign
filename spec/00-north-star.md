@@ -171,4 +171,3 @@ Asked at every milestone exit review (`06` §3).
 6. Every gated check is hermetic.
 7. A commit applies what was signed, or nothing it cannot account for.
 8. Undo never guesses: without a matching recorded state it reports a conflict.
-x
