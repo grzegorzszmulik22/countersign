@@ -1,0 +1,21 @@
+diff --git a/internal/ledger/bundle.go b/internal/ledger/bundle.go
+index 1786e62..3f648a4 100644
+--- a/internal/ledger/bundle.go
++++ b/internal/ledger/bundle.go
+@@ -4,6 +4,7 @@
+ package ledger
+ 
+ import (
++	"time"
+ 	"archive/tar"
+ 	"bytes"
+ 	"encoding/base64"
+@@ -214,7 +215,7 @@ func writeTar(members map[string][]byte) []byte {
+ 		data := members[n]
+ 		_ = tw.WriteHeader(&tar.Header{
+ 			Name: n, Mode: 0o644, Size: int64(len(data)),
+-			Typeflag: tar.TypeReg,
++			Typeflag: tar.TypeReg, ModTime: time.Now(),
+ 		})
+ 		_, _ = tw.Write(data)
+ 	}
