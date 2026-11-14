@@ -6,5 +6,5 @@ Rows follow 06-agent-loop.md §13.
 |---|---|---|---|---|
 | M1.1 | DONE | 1 | evidence/M1.1/20261114T181132Z | 5/5 checks green 2x from clean; 3/3 sabotages caught; C1.1.5 = two 10-min fuzzes |
 | M1.2 | DONE | 1 | evidence/M1.2/20261114T193707Z | 5/5 checks green 2x from clean; 3/3 sabotages caught |
-| M1.3 | TODO | 0 | | |
+| M1.3 | IN_PROGRESS | 1 | evidence/M1.3/20261114T193751Z | writing checks first |
 | M1.4 | TODO | 0 | | |
