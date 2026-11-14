@@ -13,6 +13,7 @@ import (
 
 	"github.com/countersign/countersign/internal/keys"
 	"github.com/countersign/countersign/internal/mlog"
+	"github.com/countersign/countersign/internal/names"
 	tdmerkle "github.com/transparency-dev/merkle/proof"
 	"github.com/transparency-dev/merkle/rfc6962"
 	"golang.org/x/mod/sumdb/note"
@@ -23,7 +24,7 @@ import (
 func TestC131_Inclusion(t *testing.T) {
 	const maxN = 257
 	logSigner := keys.NewSigner(bytes.Repeat([]byte{7}, 32))
-	lg := mlog.NewLog("countersign.dev/log/testlog", logSigner)
+	lg := mlog.NewLog(names.APIGroup+"/log/testlog", logSigner)
 	var lines [][]byte
 	for n := 1; n <= maxN; n++ {
 		line := []byte(fmt.Sprintf("record-%04d", n-1))
@@ -50,7 +51,7 @@ func TestC131_Inclusion(t *testing.T) {
 func TestC132_Consistency(t *testing.T) {
 	const maxN = 64
 	logSigner := keys.NewSigner(bytes.Repeat([]byte{7}, 32))
-	lg := mlog.NewLog("countersign.dev/log/testlog", logSigner)
+	lg := mlog.NewLog(names.APIGroup+"/log/testlog", logSigner)
 	var roots [][32]byte
 	for n := 1; n <= maxN; n++ {
 		lg.AppendLeaf([]byte(fmt.Sprintf("record-%04d", n-1)))
@@ -77,7 +78,7 @@ func TestC132_Consistency(t *testing.T) {
 func TestC133_NoteInterop(t *testing.T) {
 	seed := bytes.Repeat([]byte{7}, 32)
 	logSigner := keys.NewSigner(seed)
-	lg := mlog.NewLog("countersign.dev/log/testlog", logSigner)
+	lg := mlog.NewLog(names.APIGroup+"/log/testlog", logSigner)
 	for i := 0; i < 10; i++ {
 		lg.AppendLeaf([]byte(fmt.Sprintf("record-%04d", i)))
 	}
@@ -98,8 +99,8 @@ func TestC133_NoteInterop(t *testing.T) {
 
 	// Direction 1: x/mod note.Open accepts it. Build the verifier key.
 	pub := logSigner.Public()
-	hash := sha256.Sum256(append(append([]byte("countersign.dev/log/testlog"), '\n'), append([]byte{1}, pub...)...))
-	vkey := fmt.Sprintf("countersign.dev/log/testlog+%08x+%s",
+	hash := sha256.Sum256(append(append([]byte(names.APIGroup+"/log/testlog"), '\n'), append([]byte{1}, pub...)...))
+	vkey := fmt.Sprintf(names.APIGroup+"/log/testlog+%08x+%s",
 		uint32(hash[0])<<24|uint32(hash[1])<<16|uint32(hash[2])<<8|uint32(hash[3]),
 		base64.StdEncoding.EncodeToString(append([]byte{1}, pub...)))
 	v, err := note.NewVerifier(vkey)
@@ -110,13 +111,13 @@ func TestC133_NoteInterop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("note.Open rejected our checkpoint: %v", err)
 	}
-	wantText := fmt.Sprintf("countersign.dev/log/testlog\n10\n%s\n", base64.StdEncoding.EncodeToString(rootBytes(lg.Root())))
+	wantText := fmt.Sprintf(names.APIGroup+"/log/testlog\n10\n%s\n", base64.StdEncoding.EncodeToString(rootBytes(lg.Root())))
 	if n.Text != wantText {
 		t.Fatalf("note text:\n%s\nwant:\n%s", n.Text, wantText)
 	}
 
 	// Direction 2: a note.Sign checkpoint verifies with ours.
-	skey := fmt.Sprintf("PRIVATE+KEY+countersign.dev/log/testlog+%08x+%s",
+	skey := fmt.Sprintf("PRIVATE+KEY+"+names.APIGroup+"/log/testlog+%08x+%s",
 		uint32(hash[0])<<24|uint32(hash[1])<<16|uint32(hash[2])<<8|uint32(hash[3]),
 		base64.StdEncoding.EncodeToString(append([]byte{1}, seed...)))
 	ns, err := note.NewSigner(skey)
@@ -131,7 +132,7 @@ func TestC133_NoteInterop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("our parser rejected note.Sign output: %v", err)
 	}
-	if got.Size != 10 || got.Root != lg.Root() || got.Origin != "countersign.dev/log/testlog" {
+	if got.Size != 10 || got.Root != lg.Root() || got.Origin != names.APIGroup+"/log/testlog" {
 		t.Fatalf("parsed %+v", got)
 	}
 }
@@ -169,7 +170,7 @@ func mustHex(s string, t *testing.T) []byte {
 // checkpoint verification.
 func TestC135_LogKeySeparation(t *testing.T) {
 	signer := keys.NewSigner(bytes.Repeat([]byte{7}, 32))
-	lg := mlog.NewLog("countersign.dev/log/testlog", signer)
+	lg := mlog.NewLog(names.APIGroup+"/log/testlog", signer)
 	lg.AppendLeaf([]byte("record"))
 	cp, err := lg.Checkpoint()
 	if err != nil {

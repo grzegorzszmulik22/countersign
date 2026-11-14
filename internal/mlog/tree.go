@@ -40,7 +40,7 @@ type Log struct {
 }
 
 // NewLog starts a log. origin is the checkpoint origin
-// (countersign.dev/log/<log ID>); signer is the dedicated `log` key.
+// (names.APIGroup + "/log/<log ID>"); signer is the dedicated `log` key.
 func NewLog(origin string, signer keys.Signer) *Log {
 	return &Log{origin: origin, signer: signer}
 }

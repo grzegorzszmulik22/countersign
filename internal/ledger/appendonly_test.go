@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/countersign/countersign/internal/names"
 	"golang.org/x/sys/unix"
 )
 
@@ -15,7 +16,7 @@ import (
 // rewriting API — the only mutator is Append — and the open files carry
 // O_APPEND so a write can never land anywhere but the tail.
 func TestC146_AppendOnly(t *testing.T) {
-	l, err := Open(t.TempDir(), "countersign.dev/log/test", nil)
+	l, err := Open(t.TempDir(), names.APIGroup+"/log/test", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

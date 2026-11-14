@@ -23,9 +23,10 @@ import (
 	"github.com/countersign/countersign/internal/keys"
 	"github.com/countersign/countersign/internal/ledger"
 	"github.com/countersign/countersign/internal/ledger/ldtest"
+	"github.com/countersign/countersign/internal/names"
 )
 
-const origin = "countersign.dev/log/test"
+const origin = names.APIGroup + "/log/test"
 
 type recipe struct {
 	name    string

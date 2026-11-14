@@ -22,6 +22,7 @@ import (
 	"github.com/countersign/countersign/internal/keys"
 	"github.com/countersign/countersign/internal/ledger"
 	"github.com/countersign/countersign/internal/ledger/ldtest"
+	"github.com/countersign/countersign/internal/names"
 )
 
 // C1.4.1 Append returns only after the record is on disk. A helper process
@@ -66,7 +67,7 @@ func TestC141_CrashRecovery(t *testing.T) {
 		_ = cmd.Wait()
 		<-done
 
-		l, err := ledger.Open(dir, "countersign.dev/log/test", nil)
+		l, err := ledger.Open(dir, names.APIGroup+"/log/test", nil)
 		if err != nil {
 			t.Fatalf("trial %d: reopen: %v", trial, err)
 		}
@@ -85,8 +86,8 @@ func TestC141_CrashRecovery(t *testing.T) {
 // at least ~118 ms. An ack-before-fsync defect returns instantly.
 func TestC141_FsyncCadence(t *testing.T) {
 	dir := t.TempDir()
-	s := ldtest.New("countersign.dev/log/test")
-	l, err := ledger.Open(dir, "countersign.dev/log/test", s.LogSigner)
+	s := ldtest.New(names.APIGroup + "/log/test")
+	l, err := ledger.Open(dir, names.APIGroup+"/log/test", s.LogSigner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,8 +113,8 @@ func TestC141Helper(t *testing.T) {
 		t.Skip("helper")
 	}
 	dir := os.Getenv("CS_HELPER_DIR")
-	s := ldtest.New("countersign.dev/log/test")
-	l, err := ledger.Open(dir, "countersign.dev/log/test", s.LogSigner)
+	s := ldtest.New(names.APIGroup + "/log/test")
+	l, err := ledger.Open(dir, names.APIGroup+"/log/test", s.LogSigner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,8 +155,8 @@ func TestC141Helper(t *testing.T) {
 // C1.4.2 Two exports of the same session are byte-identical.
 func TestC142_DeterministicExport(t *testing.T) {
 	dir := t.TempDir()
-	s := ldtest.New("countersign.dev/log/test")
-	l, err := ledger.Open(dir, "countersign.dev/log/test", s.LogSigner)
+	s := ldtest.New(names.APIGroup + "/log/test")
+	l, err := ledger.Open(dir, names.APIGroup+"/log/test", s.LogSigner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +174,7 @@ func TestC142_DeterministicExport(t *testing.T) {
 		t.Fatal("two exports of one session differ")
 	}
 	// Reopen and export again: still identical (no process state leaks).
-	l, err = ledger.Open(dir, "countersign.dev/log/test", s.LogSigner)
+	l, err = ledger.Open(dir, names.APIGroup+"/log/test", s.LogSigner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,8 +209,8 @@ func TestC145_KeyDiffers(t *testing.T) {
 func cleanBundle(t *testing.T) ([]byte, keys.Manifest) {
 	t.Helper()
 	dir := t.TempDir()
-	s := ldtest.New("countersign.dev/log/test")
-	l, err := ledger.Open(dir, "countersign.dev/log/test", s.LogSigner)
+	s := ldtest.New(names.APIGroup + "/log/test")
+	l, err := ledger.Open(dir, names.APIGroup+"/log/test", s.LogSigner)
 	if err != nil {
 		t.Fatal(err)
 	}
