@@ -57,9 +57,13 @@ else
 fi
 
 # --- C0.5.4: evidence holds command, exit, duration, git commit, output -----
-ev=$(ls -dt evidence/DUMMY1/*/ 2>/dev/null | head -1)
-if [ -z "$ev" ]; then
-    bad C0.5.4 "no evidence dir for DUMMY1"
+# Inspect the evidence dir the C0.5.1 check-DUMMY1 run actually reported.
+# (ls -dt picks the newest DUMMY1 dir by mtime, but sabotage-DUMMY1 also
+# writes evidence/DUMMY1/<ts>/sabotage — a race made this flaky.)
+ev=$(echo "$o1" | grep -oE 'evidence/DUMMY1/[0-9A-Z]+' | head -1)
+[ -n "$ev" ] && ev="$ev/"
+if [ -z "$ev" ] || [ ! -d "$ev" ]; then
+    bad C0.5.4 "no evidence dir for DUMMY1 (from check-DUMMY1 output)"
 else
     ok=1
     for field in '"command"' '"exit_code"' '"duration_ms"' '"git_commit"'; do
