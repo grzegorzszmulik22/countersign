@@ -1,0 +1,357 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://countersign.dev/schema/records/effect.http.json",
+  "title": "countersign record effect.http (03 §4)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "id",
+    "session",
+    "emitter",
+    "eseq",
+    "eprev",
+    "ts",
+    "body"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "type": {
+      "const": "effect.http"
+    },
+    "id": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "session": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "emitter": {
+      "$ref": "_common.json#/$defs/emitter"
+    },
+    "eseq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "eprev": {
+      "$ref": "_common.json#/$defs/hex64"
+    },
+    "ts": {
+      "$ref": "_common.json#/$defs/ts"
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "effect_id",
+        "actor",
+        "purpose",
+        "for",
+        "conn_id",
+        "client",
+        "request",
+        "request_digest",
+        "class",
+        "decision",
+        "attribution",
+        "taint",
+        "budget",
+        "inspect"
+      ],
+      "properties": {
+        "effect_id": {
+          "type": "string"
+        },
+        "actor": {
+          "type": "string",
+          "enum": [
+            "sandbox",
+            "world"
+          ]
+        },
+        "purpose": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "sync",
+                "apply",
+                "prestate",
+                "poststate",
+                "compensate",
+                "probe"
+              ]
+            }
+          ]
+        },
+        "for": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "conn_id": {
+          "type": "string"
+        },
+        "client": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ip",
+            "port"
+          ],
+          "properties": {
+            "ip": {
+              "type": "string"
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 65535
+            }
+          }
+        },
+        "request": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "scheme",
+            "authority",
+            "path",
+            "query_sha256",
+            "query_len",
+            "header_names",
+            "body_sha256",
+            "body_len",
+            "body_deferred"
+          ],
+          "properties": {
+            "method": {
+              "type": "string"
+            },
+            "scheme": {
+              "type": "string",
+              "enum": [
+                "http",
+                "https"
+              ]
+            },
+            "authority": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "query_sha256": {
+              "$ref": "_common.json#/$defs/hex64"
+            },
+            "query_len": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "header_names": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "body_sha256": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "_common.json#/$defs/hex64"
+                }
+              ]
+            },
+            "body_len": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              ]
+            },
+            "body_deferred": {
+              "type": "boolean"
+            }
+          }
+        },
+        "request_digest": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "_common.json#/$defs/hex64"
+            }
+          ]
+        },
+        "class": {
+          "type": "string",
+          "enum": [
+            "control",
+            "safe",
+            "staged",
+            "compensable",
+            "irreversible"
+          ]
+        },
+        "decision": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "action",
+            "reason",
+            "requires",
+            "grant",
+            "credentials",
+            "would_deny"
+          ],
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": [
+                "allow",
+                "deny",
+                "hold",
+                "stage"
+              ]
+            },
+            "reason": {
+              "type": "string"
+            },
+            "requires": {
+              "type": "string",
+              "enum": [
+                "allow",
+                "intent",
+                "review",
+                "deny"
+              ]
+            },
+            "grant": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "credentials": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "would_deny": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        "attribution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "level",
+            "intents",
+            "lineage",
+            "owner"
+          ],
+          "properties": {
+            "level": {
+              "type": "string",
+              "enum": [
+                "CONTROL",
+                "EXACT",
+                "WINDOW",
+                "STANDING",
+                "NONE"
+              ]
+            },
+            "intents": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "lineage": {
+              "type": "string",
+              "enum": [
+                "owned",
+                "unowned",
+                "unknown",
+                "off"
+              ]
+            },
+            "owner": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        "taint": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "leak_bytes",
+            "writes"
+          ],
+          "properties": {
+            "leak_bytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "writes": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "inspect": {
+          "type": "string",
+          "enum": [
+            "none",
+            "inference",
+            "mcp"
+          ]
+        }
+      }
+    }
+  }
+}

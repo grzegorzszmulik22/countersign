@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://countersign.dev/schema/records/stage.entry.json",
+  "title": "countersign record stage.entry (03 §4)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "id",
+    "session",
+    "emitter",
+    "eseq",
+    "eprev",
+    "ts",
+    "body"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "type": {
+      "const": "stage.entry"
+    },
+    "id": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "session": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "emitter": {
+      "$ref": "_common.json#/$defs/emitter"
+    },
+    "eseq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "eprev": {
+      "$ref": "_common.json#/$defs/hex64"
+    },
+    "ts": {
+      "$ref": "_common.json#/$defs/ts"
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entry_id",
+        "journal_seq",
+        "via_effect",
+        "via_session",
+        "via_record_hash",
+        "entry",
+        "entry_sha256",
+        "supersedes"
+      ],
+      "properties": {
+        "entry_id": {
+          "type": "string"
+        },
+        "journal_seq": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "via_effect": {
+          "type": "string"
+        },
+        "via_session": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "_common.json#/$defs/ulid"
+            }
+          ]
+        },
+        "via_record_hash": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "_common.json#/$defs/hex64"
+            }
+          ]
+        },
+        "entry": {},
+        "entry_sha256": {
+          "$ref": "_common.json#/$defs/hex64"
+        },
+        "supersedes": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

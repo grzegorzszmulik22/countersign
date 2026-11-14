@@ -1,0 +1,262 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://countersign.dev/schema/records/session.open.json",
+  "title": "countersign record session.open (03 §4)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "id",
+    "session",
+    "emitter",
+    "eseq",
+    "eprev",
+    "ts",
+    "body"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "type": {
+      "const": "session.open"
+    },
+    "id": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "session": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "emitter": {
+      "$ref": "_common.json#/$defs/emitter"
+    },
+    "eseq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "eprev": {
+      "$ref": "_common.json#/$defs/hex64"
+    },
+    "ts": {
+      "$ref": "_common.json#/$defs/ts"
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "parent_session",
+        "parent_seal_hash",
+        "principal",
+        "sandbox",
+        "mode",
+        "policy_digest",
+        "contract_digests",
+        "ca_cert_sha256",
+        "log_origin",
+        "world",
+        "start",
+        "tape",
+        "replay"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "agent",
+            "mcp-server",
+            "undo",
+            "replay"
+          ]
+        },
+        "parent_session": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "_common.json#/$defs/ulid"
+            }
+          ]
+        },
+        "parent_seal_hash": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "_common.json#/$defs/hex64"
+            }
+          ]
+        },
+        "principal": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "subject",
+            "issuer",
+            "method"
+          ],
+          "properties": {
+            "subject": {
+              "type": "string"
+            },
+            "issuer": {
+              "type": "string"
+            },
+            "method": {
+              "type": "string"
+            }
+          }
+        },
+        "sandbox": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "namespace",
+            "pod",
+            "pod_uid",
+            "node",
+            "runtime_class",
+            "image_digest"
+          ],
+          "properties": {
+            "namespace": {
+              "type": "string"
+            },
+            "pod": {
+              "type": "string"
+            },
+            "pod_uid": {
+              "type": "string"
+            },
+            "node": {
+              "type": "string"
+            },
+            "runtime_class": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "image_digest": {
+              "type": "string"
+            }
+          }
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "enforce",
+            "audit",
+            "learn"
+          ]
+        },
+        "policy_digest": {
+          "$ref": "_common.json#/$defs/hex64"
+        },
+        "contract_digests": {
+          "type": "array",
+          "items": {
+            "$ref": "_common.json#/$defs/hex64"
+          }
+        },
+        "ca_cert_sha256": {
+          "$ref": "_common.json#/$defs/hex64"
+        },
+        "log_origin": {
+          "type": "string"
+        },
+        "world": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "group"
+          ],
+          "properties": {
+            "id": {
+              "$ref": "_common.json#/$defs/ulid"
+            },
+            "group": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        "start": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "workspace"
+          ],
+          "properties": {
+            "workspace": {}
+          }
+        },
+        "tape": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "recipient_key_id"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "recipient_key_id": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        "replay": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "source_session",
+                "mode"
+              ],
+              "properties": {
+                "source_session": {
+                  "$ref": "_common.json#/$defs/ulid"
+                },
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "exact",
+                    "model",
+                    "intervene"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

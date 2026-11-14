@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://countersign.dev/schema/records/session.seal.json",
+  "title": "countersign record session.seal (03 §4)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "id",
+    "session",
+    "emitter",
+    "eseq",
+    "eprev",
+    "ts",
+    "body"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "type": {
+      "const": "session.seal"
+    },
+    "id": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "session": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "emitter": {
+      "$ref": "_common.json#/$defs/emitter"
+    },
+    "eseq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "eprev": {
+      "$ref": "_common.json#/$defs/hex64"
+    },
+    "ts": {
+      "$ref": "_common.json#/$defs/ts"
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reason",
+        "emitters",
+        "counts"
+      ],
+      "properties": {
+        "reason": {
+          "type": "string"
+        },
+        "emitters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "emitter",
+              "final_eseq",
+              "head_hash",
+              "clean"
+            ],
+            "properties": {
+              "emitter": {
+                "$ref": "_common.json#/$defs/emitter"
+              },
+              "final_eseq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "head_hash": {
+                "$ref": "_common.json#/$defs/hex64"
+              },
+              "clean": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "effects",
+            "intents",
+            "denials",
+            "entries",
+            "commits"
+          ],
+          "properties": {
+            "effects": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "intents": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "denials": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "entries": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "commits": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    }
+  }
+}

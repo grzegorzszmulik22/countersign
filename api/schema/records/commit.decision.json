@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://countersign.dev/schema/records/commit.decision.json",
+  "title": "countersign record commit.decision (03 §4)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "id",
+    "session",
+    "emitter",
+    "eseq",
+    "eprev",
+    "ts",
+    "body"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "type": {
+      "const": "commit.decision"
+    },
+    "id": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "session": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "emitter": {
+      "$ref": "_common.json#/$defs/emitter"
+    },
+    "eseq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "eprev": {
+      "$ref": "_common.json#/$defs/hex64"
+    },
+    "ts": {
+      "$ref": "_common.json#/$defs/ts"
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit_id",
+        "decision",
+        "by",
+        "selected",
+        "selected_root",
+        "review_sha256",
+        "expires_at",
+        "probation",
+        "webauthn",
+        "delegate"
+      ],
+      "properties": {
+        "commit_id": {
+          "type": "string"
+        },
+        "decision": {
+          "type": "string",
+          "enum": [
+            "commit",
+            "reject",
+            "timeout"
+          ]
+        },
+        "by": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "human",
+            "delegate"
+          ]
+        },
+        "selected": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "selected_root": {
+          "$ref": "_common.json#/$defs/hex64"
+        },
+        "review_sha256": {
+          "$ref": "_common.json#/$defs/hex64"
+        },
+        "expires_at": {
+          "$ref": "_common.json#/$defs/ts"
+        },
+        "probation": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "until",
+                "on_expiry"
+              ],
+              "properties": {
+                "until": {
+                  "$ref": "_common.json#/$defs/ts"
+                },
+                "on_expiry": {
+                  "type": "string",
+                  "enum": [
+                    "keep",
+                    "revert"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "webauthn": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "key_id",
+                "authenticator_data",
+                "client_data_json",
+                "signature"
+              ],
+              "properties": {
+                "key_id": {
+                  "type": "string"
+                },
+                "authenticator_data": {
+                  "type": "string"
+                },
+                "client_data_json": {
+                  "type": "string"
+                },
+                "signature": {
+                  "type": "string"
+                }
+              }
+            }
+          ]
+        },
+        "delegate": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "key_id",
+                "signature"
+              ],
+              "properties": {
+                "key_id": {
+                  "$ref": "_common.json#/$defs/hex32"
+                },
+                "signature": {
+                  "type": "string"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
