@@ -126,10 +126,19 @@ At a gate: write the exit review, set the milestone to `AWAITING-GATE` in `PROGR
 
 ## 11. Environment rules
 
-- All building and testing happens on the build host **`oci-free-a1`**: Ubuntu 24.04 on **ARM64 (aarch64)**, 2 cores, 11 GB RAM, user `opc` (no passwordless sudo; member of the `docker` group). The repository lives at `~/src/countersign`; the `spec/` folder is already copied in.
-- **ARM64 consequences.** Every tool binary pinned in `tools/versions.env` and every container image pinned by digest must have a `linux/arm64` build; choose versions that do and record the check in evidence. Performance numbers describe this machine only: record `make sysinfo` with each, and treat any [T] target missed purely for lack of cores as a change request with data, not a failure to hide.
-- **Resources are shared.** At most one kind cluster exists on the host. Other processes on the host (for example listeners on `127.0.0.1:4096` and `:37299`) belong to other applications: do not stop, inspect or reconfigure them.
-- Anything needing root (packages, sysctl, system services) is out of reach. If a check needs it, stop and write the exact command into `spec/BLOCKED.md` for the human.
+- **Two build hosts**, both ARM64 (aarch64), reached over Tailscale:
+
+  | Host | OS | Size | Account | May run |
+  |---|---|---|---|---|
+  | `oci-free-a1` | Ubuntu 24.04 | 2 cores, 11 GB | `opc`: no sudo, in the `docker` group | Everything, including Docker and the kind cluster |
+  | `agent-vpc` | Oracle Linux 9 | 4 cores, 22 GB | `csbuild`: no sudo, no Docker, no Podman | **Cluster-free work only**: libraries, CLIs, reference implementations, unit and differential tests |
+
+- `agent-vpc` runs another application and holds its data. On that host: never use `sudo`, `su` or any container tool; never read outside `/home/csbuild` except system paths needed to build; never open, connect to or probe the local services (PostgreSQL, the Python services, monitoring); and **stop if free space on `/` falls below 30 GB** (`df -h /`), writing the reading into `spec/BLOCKED.md`.
+- Every cluster-free chunk's `make check-<chunk>` must pass on `agent-vpc` without Docker. A check that needs Docker belongs to a chunk run on `oci-free-a1`.
+- **Toolchain on both hosts** is installed by `make tools` into `./.tools/` without root. The system Python on `agent-vpc` is 3.9, so the pinned Python 3.12+ must also be installed in user space (for example a standalone Python build fetched by `make tools`), never from the system package manager.
+- **ARM64 consequences.** Every pinned tool binary and every container image pinned by digest must have a `linux/arm64` build; choose versions that do and record the check in evidence. Performance numbers describe the host they ran on: record `make sysinfo` with each, and treat a [T] target missed only for lack of cores as a change request with data.
+- **Shared hosts.** At most one kind cluster exists, on `oci-free-a1`. Other processes on either host belong to other applications: do not stop, inspect or reconfigure them.
+- Anything needing root is out of reach. If a check needs it, stop and write the exact command into `spec/BLOCKED.md` for the human.
 - The kind cluster is named `countersign`. Do not touch any other cluster, container, image or volume on the machine. Never run a prune or delete command that is not scoped to that name.
 - Tool versions are pinned in `tools/versions.env` at M0.1 and installed by `make tools` into `./.tools/`. Do not rely on globally installed versions.
 - Checks are hermetic. Container images are pulled once by `make images`, pinned by digest, and loaded into kind. After that, checks must pass with the network disabled; M0.2 verifies this.
@@ -145,3 +154,13 @@ At a gate: write the exit review, set the milestone to `AWAITING-GATE` in `PROGR
 ## 13. `PROGRESS.md` row format
 
 `| chunk | status | attempts | last evidence folder | note |` with status one of `TODO`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-CR-NNN`, `SKIPPED-ENV`, `AWAITING-GATE`.
+
+## 14. Parallel sessions
+
+Several sessions may run at once, on either host. The human supervisor (or an agent acting for them) assigns each session a **lane**: a branch name and an explicit list of chunks.
+
+- Work only on your lane's chunks, in order, on your lane's branch (`lane/<name>`). Never commit to `main`, never merge, never rebase onto another lane.
+- Record progress in `spec/progress/<lane>.md` using the row format of §13. **Do not edit `spec/PROGRESS.md`**; the supervisor updates it when a lane is merged.
+- If a chunk needs something from a chunk outside your lane that is not yet on `main`, stop that chunk and record `BLOCKED` with the missing dependency.
+- Push your branch to `origin` after every `DONE` chunk and at least once an hour.
+- The supervisor merges a lane chunk into `main` only after re-running its checks and sabotages on `main`.
