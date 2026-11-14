@@ -74,10 +74,13 @@ probe_tcp() { # client-pod server-ip -> 0 when HTTP fetch succeeds
     k -n "$NS" exec "$1" -- wget -T 4 -q -O- "http://$2:8080/" >/dev/null 2>&1
 }
 probe_udp() { # client-pod server-ip [retries] -> 0 when the UDP echo replies
+    # agnhost netexec answers commands, not raw echo: send "echo <token>" and
+    # require the token back. A bare "punt!" string is busybox nc reporting an
+    # ICMP refusal, not a server reply, so it must not count as success.
     local out i n=${3:-1}
     for i in $(seq "$n"); do
-        out=$(k -n "$NS" exec "$1" -- sh -c "echo netpol-probe | timeout 8 nc -u -w 5 $2 8081" 2>/dev/null || true)
-        [ -n "$out" ] && return 0
+        out=$(k -n "$NS" exec "$1" -- sh -c "echo 'echo cs-udp-probe' | timeout 8 nc -u -w 5 $2 8081" 2>/dev/null || true)
+        case "$out" in *cs-udp-probe*) return 0;; esac
         sleep 1
     done
     return 1
@@ -268,12 +271,17 @@ for cn in $(docker ps -aq --filter "label=io.x-k8s.kind.cluster=$CLUSTER" 2>/dev
     docker inspect -f '{{range .Mounts}}{{if eq .Type "volume"}}{{.Name}}{{"\n"}}{{end}}' "$cn" >> "$ours_volumes" 2>/dev/null || true
 done
 sort -u -o "$ours_volumes" "$ours_volumes"
+# cluster-down can only delete objects, so the isolation assertion is that
+# every foreign object present before still exists after. Objects added or
+# re-pointed by other lanes' concurrent activity are reported as notes, not
+# failures. Images are compared by repo:tag name (a digest change means a
+# foreign rebuild, which cluster-down cannot cause).
 { docker ps -a --format '{{.Names}}'; } | grep -vE '^countersign-' | sort > "$work/before.containers"
 { docker network ls --format '{{.Name}}'; } | grep -vxF 'kind' | sort > "$work/before.networks"
 { docker volume ls --format '{{.Name}}'; } | grep -vxF -f "$ours_volumes" | sort > "$work/before.volumes"
-{ docker images --digests --format '{{.Repository}}:{{.Tag}} {{.Repository}}@{{.Digest}}'; } \
+{ docker images --format '{{.Repository}}:{{.Tag}}'; } \
     | grep -vE 'kindest/node|quay\.io/calico/|registry\.k8s\.io/e2e-test-images/agnhost|busybox' \
-    | sort > "$work/before.images"
+    | sort -u > "$work/before.images"
 
 t0=$(date +%s)
 "$MAKE" cluster-down >/tmp/m02-c025.log 2>&1 || true
@@ -285,23 +293,30 @@ left=$(kind get clusters 2>/dev/null | grep -xc "$CLUSTER" || true)
 { docker ps -a --format '{{.Names}}'; } | grep -vE '^countersign-' | sort > "$work/after.containers"
 { docker network ls --format '{{.Name}}'; } | grep -vxF 'kind' | sort > "$work/after.networks"
 { docker volume ls --format '{{.Name}}'; } | grep -vxF -f "$ours_volumes" | sort > "$work/after.volumes"
-{ docker images --digests --format '{{.Repository}}:{{.Tag}} {{.Repository}}@{{.Digest}}'; } \
+{ docker images --format '{{.Repository}}:{{.Tag}}'; } \
     | grep -vE 'kindest/node|quay\.io/calico/|registry\.k8s\.io/e2e-test-images/agnhost|busybox' \
-    | sort > "$work/after.images"
+    | sort -u > "$work/after.images"
 
 isolation_ok=1
 for kind_ in containers networks volumes images; do
-    if ! diff -u "$work/before.$kind_" "$work/after.$kind_" > "$work/diff.$kind_"; then
+    missing=$(comm -23 "$work/before.$kind_" "$work/after.$kind_")
+    added=$(comm -13 "$work/before.$kind_" "$work/after.$kind_")
+    if [ -n "$missing" ]; then
         isolation_ok=0
-        note "docker $kind_ changed by cluster-down:"
-        sed 's/^/    /' "$work/diff.$kind_" | head -15
+        note "docker $kind_ REMOVED by cluster-down:"
+        printf '%s\n' "$missing" | sed 's/^/    - /' | head -15
     fi
+    if [ -n "$added" ]; then
+        note "docker $kind_ added concurrently during check (tolerated):"
+        printf '%s\n' "$added" | sed 's/^/    + /' | head -10
+    fi
+    { printf 'missing after cluster-down:\n%s\nadded concurrently:\n%s\n' "$missing" "$added"; } > "$work/diff.$kind_"
 done
 cp "$work"/diff.* "$EVDIR/" 2>/dev/null || true
 if [ "$left" -eq 0 ] && [ "$isolation_ok" -eq 1 ]; then
-    pass C0.2.5 "no foreign docker object touched; cluster removed"
+    pass C0.2.5 "no foreign docker object removed; cluster removed"
 else
-    bad C0.2.5 "docker state differs across cluster-down (see diffs)"
+    bad C0.2.5 "foreign docker objects removed across cluster-down (see diffs)"
 fi
 rm -rf "$work"
 
