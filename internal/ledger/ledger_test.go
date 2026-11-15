@@ -173,7 +173,10 @@ func TestC142_DeterministicExport(t *testing.T) {
 	if !bytes.Equal(b1, b2) {
 		t.Fatal("two exports of one session differ")
 	}
-	// Reopen and export again: still identical (no process state leaks).
+	// Reopen and export again after crossing a one-second boundary, so
+	// tar mtime sources (1-second granularity) cannot hide: still
+	// identical (no process or wall-clock state leaks).
+	time.Sleep(1100 * time.Millisecond)
 	l, err = ledger.Open(dir, names.APIGroup+"/log/test", s.LogSigner)
 	if err != nil {
 		t.Fatal(err)

@@ -1,0 +1,10 @@
+make[1]: Entering directory '/home/csbuild/src/cs-evidence-go/.check-work/sabotage-M1.2-eprev-uses-payload-only'
+CHECK C1.2.1 PASS
+CHECK C1.2.2 FAIL —     emitter_test.go:59: line 3: broker/PVCNRHQ4Y1X3ZQCCTPXW51YG60: eprev mismatch at eseq 1 --- FAIL: TestC122_InterleavedChains (0.41s) FAIL FAIL	github.com/countersign/countersign/internal/keys	0.425s FAIL 
+CHECK C1.2.3 PASS
+CHECK C1.2.4 PASS
+CHECK C1.2.5 FAIL —     emitter_test.go:133: broker/J9DYQPH4AMWRR2QT6C6X51YG60: eprev mismatch at eseq 1 --- FAIL: TestC125_EmitterRestart (0.01s) FAIL FAIL	github.com/countersign/countersign/internal/keys	0.022s FAIL 
+M1.2 suite: FAILURES
+check-M1.2: FAIL (exit 1, evidence: evidence/M1.2/20261115T190313Z)
+make[1]: *** [Makefile:35: check-M1.2] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-evidence-go/.check-work/sabotage-M1.2-eprev-uses-payload-only'
