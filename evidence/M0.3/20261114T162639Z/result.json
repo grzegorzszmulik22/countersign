@@ -1,0 +1,9 @@
+{
+  "chunk": "M0.3",
+  "command": "make check-M0.3 (test/checks/check-M0.3.sh)",
+  "started_utc": "20261114T162639Z",
+  "duration_ms": 115,
+  "exit_code": 1,
+  "git_commit": "9e0aebcd9b16a814ea38a0285d6c4efd39ac03ed",
+  "git_dirty": "yes"
+}

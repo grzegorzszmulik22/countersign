@@ -1,0 +1,10 @@
+CHECK C0.5.1 PASS
+CHECK C0.5.2 PASS
+CHECK C0.5.3 FAIL — regress still failing after restore: regress: FAIL make[2]: *** [Makefile:32: regress] Error 1 make[2]: Leaving directory '/home/csbuild/src/cs-fixtures' 
+missing "command" in evidence/DUMMY1/20261114T165244Z//result.json
+missing "exit_code" in evidence/DUMMY1/20261114T165244Z//result.json
+missing "duration_ms" in evidence/DUMMY1/20261114T165244Z//result.json
+missing "git_commit" in evidence/DUMMY1/20261114T165244Z//result.json
+missing/nonempty output.log
+CHECK C0.5.4 FAIL — evidence incomplete in evidence/DUMMY1/20261114T165244Z/
+M0.5 suite: FAILURES

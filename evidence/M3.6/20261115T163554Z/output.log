@@ -1,0 +1,5 @@
+SABOTAGE git-any-service-on-info-refs: caught (exit 2) by C3.6.3 C3.6.4 
+SABOTAGE git-matcher-ignores-repo: caught (exit 2) by C3.6.2 C3.6.3 C3.6.4 lint.fixtures 
+SABOTAGE git-prefix-repo-match: caught (exit 2) by C3.6.3 C3.6.4 
+SABOTAGE git-read-allows-receive-pack: caught (exit 2) by C3.6.1 C3.6.3 C3.6.4 
+sabotage-M3.6: 4 caught, 0 uncaught (evidence: evidence/M3.6/20261115T163554Z/sabotage)

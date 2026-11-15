@@ -1,0 +1,33 @@
+{
+  "chunk": "M3.6",
+  "measurements": [
+    {
+      "id": "MM3.6",
+      "name": "git-smart-http decision-table rows (gitm-* in test/vectors/policy/matching.yaml)",
+      "target": ">= 30 matcher rows (C3.6.4)",
+      "command": "grep -c 'gitm-' test/vectors/policy/matching.yaml; TestDecisionTable runs them all",
+      "machine": {
+        "kernel": "6.12.0-204.92.4.4.3.el9uek.aarch64",
+        "arch": "aarch64",
+        "cpu_model": "Neoverse-N1",
+        "cores": 4,
+        "memory": "22945 MB",
+        "docker": "unavailable"
+      },
+      "runs": 3,
+      "unit": "matcher rows",
+      "raw_samples": [74, 74, 74],
+      "median": 74,
+      "coefficient_of_variation": 0.0,
+      "achieved": "74 rows",
+      "meets_target": true,
+      "evidence": "output.log and result.json in this folder; C3.6.4 PASS line"
+    }
+  ],
+  "supporting_results": {
+    "C3.6.1": "real git through gateproxy: clone+fetch OK @read; push NO_GRANT @read; push OK @write",
+    "C3.6.2": "push to attacker/loot under acme/widgets grant -> NO_GRANT; fakehub recorded no write (git ls-remote through the gate: no refs)",
+    "C3.6.3": "unknown service, extra segments, traversal, percent-encoding, case, .git, nested paths, repo-prefix cases -> no match (git_test.go vectors)",
+    "sabotage": "4/4 caught incl. two added beyond spec: see evidence/M3.6/20261115T163554Z/sabotage/"
+  }
+}

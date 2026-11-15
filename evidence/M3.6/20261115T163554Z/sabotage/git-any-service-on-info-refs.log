@@ -1,0 +1,10 @@
+make[1]: Entering directory '/home/csbuild/src/cs-matchers/.check-work/sabotage-M3.6-git-any-service-on-info-refs'
+CHECK C3.6.1 PASS
+CHECK C3.6.2 PASS
+CHECK C3.6.3 FAIL —         git_test.go:122: match GET /acme/widgets.git/info/refs?service=git-upload-pack%00 = {"repo" ""}, want grant "" FAIL FAIL	github.com/countersign/countersign/internal/policy	0.035s FAIL 
+CHECK C3.6.4 FAIL —     match_test.go:113: row gitm-s-010: got {grant:"repo-r" reason:""}, want {grant:"" reason:"NO_GRANT"} FAIL FAIL	github.com/countersign/countersign/internal/policy	0.124s FAIL 
+CHECK lint.fixtures PASS
+M3.6 suite: FAILURES
+check-M3.6: FAIL (exit 1, evidence: evidence/M3.6/20261115T163555Z)
+make[1]: *** [Makefile:36: check-M3.6] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-matchers/.check-work/sabotage-M3.6-git-any-service-on-info-refs'

@@ -1,0 +1,12 @@
+diff --git a/internal/policy/match.go b/internal/policy/match.go
+index aaef6c5..191b949 100644
+--- a/internal/policy/match.go
++++ b/internal/policy/match.go
+@@ -133,7 +133,6 @@ func (p *SessionPolicy) Match(r *Request) Result {
+ // normHost lowercases the name, drops surrounding IPv6 brackets and removes
+ // one trailing root dot (04 §1: host with trailing dot normalized).
+ func normHost(h string) string {
+-	h = strings.ToLower(h)
+ 	if len(h) >= 2 && h[0] == '[' && h[len(h)-1] == ']' {
+ 		h = h[1 : len(h)-1]
+ 	}

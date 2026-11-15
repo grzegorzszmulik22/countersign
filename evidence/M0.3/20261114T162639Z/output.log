@@ -1,0 +1,13 @@
+CHECK C0.3.1.echo FAIL — # ./test/fixtures/echo stat /home/csbuild/src/cs-fixtures/test/fixtures/echo: directory not found FAIL	./test/fixtures/echo [setup failed] FAIL 
+CHECK C0.3.1.sink FAIL — # ./test/fixtures/sink stat /home/csbuild/src/cs-fixtures/test/fixtures/sink: directory not found FAIL	./test/fixtures/sink [setup failed] FAIL 
+CHECK C0.3.1.fakehub FAIL — # ./test/fixtures/fakehub stat /home/csbuild/src/cs-fixtures/test/fixtures/fakehub: directory not found FAIL	./test/fixtures/fakehub [setup failed] FAIL 
+CHECK C0.3.1.fakereg FAIL — # ./test/fixtures/fakereg stat /home/csbuild/src/cs-fixtures/test/fixtures/fakereg: directory not found FAIL	./test/fixtures/fakereg [setup failed] FAIL 
+CHECK C0.3.1.fakemsg FAIL — # ./test/fixtures/fakemsg stat /home/csbuild/src/cs-fixtures/test/fixtures/fakemsg: directory not found FAIL	./test/fixtures/fakemsg [setup failed] FAIL 
+CHECK C0.3.1.mockllm FAIL — # ./test/fixtures/mockllm stat /home/csbuild/src/cs-fixtures/test/fixtures/mockllm: directory not found FAIL	./test/fixtures/mockllm [setup failed] FAIL 
+CHECK C0.3.1.mcpdemo FAIL — # ./test/fixtures/mcpdemo stat /home/csbuild/src/cs-fixtures/test/fixtures/mcpdemo: directory not found FAIL	./test/fixtures/mcpdemo [setup failed] FAIL 
+CHECK C0.3.2 FAIL — # ./test/fixtures/sink stat /home/csbuild/src/cs-fixtures/test/fixtures/sink: directory not found FAIL	./test/fixtures/sink [setup failed] FAIL 
+CHECK C0.3.3 FAIL — # ./test/fixtures/mockllm stat /home/csbuild/src/cs-fixtures/test/fixtures/mockllm: directory not found FAIL	./test/fixtures/mockllm [setup failed] FAIL 
+CHECK C0.3.4 FAIL — release build failed: go: warning: "./cmd/..." matched no packages go: no main packages to build 
+CHECK C0.3.5 FAIL — go: warning: "./test/fixtures/..." matched no packages no packages to test 
+CHECK C0.3.1.binaries FAIL — fixture build failed: pattern ./test/fixtures/cmd/...: lstat ./test/fixtures/cmd/: no such file or directory 
+M0.3 suite: FAILURES

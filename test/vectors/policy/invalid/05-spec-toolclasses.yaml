@@ -1,0 +1,11 @@
+# field: spec.toolClasses
+# rule: toolClasses values must be exec|http|mcp|local|other
+apiVersion: "countersign.dev/v1alpha1"
+kind: "SessionPolicy"
+metadata: {name: bad}
+spec:
+  mode: "enforce"
+  scenario: "agent"
+  toolClasses: {Bash: "magic"}
+  grants:
+    - {id: g1, match: {hosts: ["api.example.com"]}}
