@@ -1,0 +1,30 @@
+diff --git a/internal/policy/match.go b/internal/policy/match.go
+index aaef6c5..05c957e 100644
+--- a/internal/policy/match.go
++++ b/internal/policy/match.go
+@@ -72,7 +72,8 @@ func (p *SessionPolicy) Match(r *Request) Result {
+ 		}
+ 	}
+ 
+-	// §2.2 grant selection: document order, first match wins.
++	// §2.2 grant selection: document order.
++	var res Result
+ 	for _, g := range p.Spec.Grants {
+ 		m := g.Match
+ 		if m.Matcher != nil {
+@@ -123,9 +124,13 @@ func (p *SessionPolicy) Match(r *Request) Result {
+ 			continue
+ 		}
+ 		if g.Action == "deny" {
+-			return Result{Grant: g.ID, Reason: ReasonDenyGrant}
++			res = Result{Grant: g.ID, Reason: ReasonDenyGrant}
++		} else {
++			res = Result{Grant: g.ID}
+ 		}
+-		return Result{Grant: g.ID}
++	}
++	if res.Grant != "" {
++		return res
+ 	}
+ 	return Result{Reason: ReasonNoGrant}
+ }

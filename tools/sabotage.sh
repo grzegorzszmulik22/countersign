@@ -21,8 +21,18 @@ if [ ! -d "$patchdir" ] || ! ls "$patchdir"/*.patch >/dev/null 2>&1; then
 fi
 
 ts=$(date -u +%Y%m%dT%H%M%SZ)
-evdir="evidence/$chunk/$ts/sabotage"
+dir="evidence/$chunk/$ts"
+evdir="$dir/sabotage"
 mkdir -p "$evdir"
+
+# Record run-level evidence like check.sh does: C0.5.4-style consumers may
+# pick this directory as the chunk's newest evidence and require result.json
+# plus a non-empty output.log in it.
+git_commit=$(git rev-parse HEAD 2>/dev/null || echo unknown)
+git_dirty=no
+[ -n "$(git status --porcelain 2>/dev/null)" ] && git_dirty=yes
+start_ns=$(date +%s%N)
+exec > >(tee "$dir/output.log") 2>&1
 
 uncaught=()
 caught_count=0
@@ -63,8 +73,24 @@ for patch in "$patchdir"/*.patch; do
 done
 
 echo "sabotage-$chunk: $caught_count caught, ${#uncaught[@]} uncaught (evidence: $evdir)"
+code=0
 if [ "${#uncaught[@]}" -gt 0 ]; then
-    printf 'UNCAUGHT sabotage: %s\n' "${uncaught[@]}" >&2
-    exit 1
+    printf 'UNCAUGHT sabotage: %s\n' "${uncaught[@]}"
+    code=1
 fi
-exit 0
+
+end_ns=$(date +%s%N)
+cat > "$dir/result.json" <<EOF
+{
+  "chunk": "$chunk",
+  "command": "make sabotage-$chunk (tools/sabotage.sh)",
+  "started_utc": "$ts",
+  "duration_ms": $(( (end_ns - start_ns) / 1000000 )),
+  "exit_code": $code,
+  "git_commit": "$git_commit",
+  "git_dirty": "$git_dirty"
+}
+EOF
+tools/sysinfo.sh > "$dir/sysinfo.txt" 2>/dev/null || true
+
+exit "$code"

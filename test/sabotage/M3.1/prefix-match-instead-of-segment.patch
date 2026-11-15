@@ -1,0 +1,15 @@
+diff --git a/internal/policy/match.go b/internal/policy/match.go
+index aaef6c5..e51d2b3 100644
+--- a/internal/policy/match.go
++++ b/internal/policy/match.go
+@@ -273,6 +273,10 @@ func matchSegs(gs, ps []string) bool {
+ 		}
+ 		return false
+ 	}
++	if strings.Contains(gs[0], "*") {
++		// '*' matches any run of characters, including across segments
++		return segMatch(strings.Join(gs, "/"), strings.Join(ps, "/"))
++	}
+ 	return len(ps) > 0 && segMatch(gs[0], ps[0]) && matchSegs(gs[1:], ps[1:])
+ }
+ 

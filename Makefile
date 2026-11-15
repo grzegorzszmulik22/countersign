@@ -12,7 +12,8 @@ tools:
 
 lint:
 	@command -v golangci-lint >/dev/null || { echo "missing golangci-lint: run make tools" >&2; exit 1; }
-	golangci-lint run ./...
+	@mkdir -p .check-work/tmp
+	GOLANGCI_LINT_CACHE=$(CURDIR)/.check-work/golangci-lint-cache TMPDIR=$(CURDIR)/.check-work/tmp golangci-lint run ./...
 	tools/check-license.sh
 	tools/lint-progress.sh
 
