@@ -1,0 +1,9 @@
+{
+  "chunk": "DUMMY1",
+  "command": "make check-DUMMY1 (test/checks/check-DUMMY1.sh)",
+  "started_utc": "20261114T173617Z",
+  "duration_ms": 7,
+  "exit_code": 0,
+  "git_commit": "e435412dc0bdd9aad1185f847f7a2801c9ac3541",
+  "git_dirty": "yes"
+}

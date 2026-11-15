@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "name": "m04-parallel",
+  "model": "fixture-model-1",
+  "turns": [
+    {
+      "expect_user_contains": "parallel",
+      "response": {
+        "stop": "tool_use",
+        "text": "Fetching both timed streams.",
+        "calls": [
+          {"key": "e1", "tool": "WebFetch", "input": {"url": "https://echo.example.com/sse?n=3&interval_ms=300"}},
+          {"key": "e2", "tool": "WebFetch", "input": {"url": "https://echo.example.com/sse?n=3&interval_ms=300"}}
+        ]
+      }
+    },
+    {
+      "expect_results": {"e1": "\"of\":3", "e2": "\"of\":3"},
+      "response": {
+        "stop": "end_turn",
+        "text": "Both streams fetched."
+      }
+    }
+  ]
+}
