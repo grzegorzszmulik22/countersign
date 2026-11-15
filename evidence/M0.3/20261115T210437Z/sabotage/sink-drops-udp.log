@@ -1,0 +1,20 @@
+make[1]: Entering directory '/home/csbuild/src/cs-fixtures/.check-work/sabotage-M0.3-sink-drops-udp'
+CHECK C0.3.1.echo PASS
+CHECK C0.3.1.sink PASS
+CHECK C0.3.1.fakehub PASS
+CHECK C0.3.1.fakereg PASS
+CHECK C0.3.1.fakemsg PASS
+CHECK C0.3.1.mockllm PASS
+CHECK C0.3.1.mcpdemo PASS
+CHECK C0.3.2 FAIL — CS-ICMP-SKIPPED-ENV: icmp listener unavailable (no CAP_NET_RAW) --- FAIL: TestC032SinkExactBytes (5.04s)     sink_test.go:294: missing exact-byte captures: https:39B,http:37B,tcp:23B,dns-udp:37B,dns-tcp:36B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B,https:0B FAIL FAIL	github.com/countersign/countersign/test/fixtures/sink	5.109s FAIL 
+CHECK C0.3.2.icmp SKIPPED-ENV — no CAP_NET_RAW on this host (works in cluster packaging on oci-free-a1)
+CHECK C0.3.3 PASS
+CHECK C0.3.4 PASS
+CHECK C0.3.5 FAIL — ok  	github.com/countersign/countersign/test/fixtures/mockllm	0.106s --- FAIL: TestC035StateSink (3.05s)     sink_test.go:345: __state did not change after write FAIL FAIL	github.com/countersign/countersign/test/fixtures/sink	3.098s FAIL 
+CHECK lint.fixtures PASS
+CHECK tools.provision PASS
+CHECK C0.3.1.binaries PASS
+M0.3 suite: FAILURES
+check-M0.3: FAIL (exit 1, evidence: evidence/M0.3/20261115T210650Z)
+make[1]: *** [Makefile:35: check-M0.3] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-fixtures/.check-work/sabotage-M0.3-sink-drops-udp'
