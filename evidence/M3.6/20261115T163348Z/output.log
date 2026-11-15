@@ -1,0 +1,6 @@
+CHECK C3.6.1 PASS
+CHECK C3.6.2 PASS
+CHECK C3.6.3 PASS
+CHECK C3.6.4 PASS
+CHECK lint.fixtures FAIL — 			Proxy:               nil, ^ 3 issues: * gofmt: 3 
+M3.6 suite: FAILURES

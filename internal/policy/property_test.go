@@ -191,7 +191,8 @@ func genDoc(r *rand.Rand) *policy.SessionPolicy {
 		}
 		if r.Intn(12) == 0 {
 			m.Matcher = &policy.Matcher{GitSmartHTTP: &policy.GitSmartHTTP{
-				Repos: []string{"acme/widgets"}, Access: "read"}}
+				Repos:  []string{"acme/widgets", "acme/gadgets"}[:1+r.Intn(2)],
+				Access: []string{"read", "write"}[r.Intn(2)]}}
 			m.Methods = nil
 			m.Paths = nil
 		} else if r.Intn(2) == 0 {
@@ -243,6 +244,9 @@ func genRequest(r *rand.Rand, doc *policy.SessionPolicy) *policy.Request {
 		if r.Intn(3) == 0 && len(g.Match.Paths) > 0 {
 			glob := g.Match.Paths[r.Intn(len(g.Match.Paths))]
 			req.Path = pathFromGlob(r, glob)
+		}
+		if g.Match.Matcher != nil && g.Match.Matcher.GitSmartHTTP != nil && r.Intn(3) > 0 {
+			gitRequest(r, req, g.Match.Matcher.GitSmartHTTP)
 		}
 		if r.Intn(4) == 0 && len(g.Match.Ports) > 0 {
 			req.Port = g.Match.Ports[r.Intn(len(g.Match.Ports))]
@@ -298,6 +302,46 @@ func genRequest(r *rand.Rand, doc *policy.SessionPolicy) *policy.Request {
 		req.Connect = "other.example.com"
 	}
 	return req
+}
+
+// gitRequest shapes req into something a git smart-HTTP client or an
+// attacker imitating one might send: usually one of the four endpoint forms
+// for a listed repo (maybe mutated out of scope).
+func gitRequest(r *rand.Rand, req *policy.Request, git *policy.GitSmartHTTP) {
+	repo := git.Repos[r.Intn(len(git.Repos))]
+	switch r.Intn(9) {
+	case 0:
+		repo += "-evil"
+	case 1:
+		repo = "ACME/widgets"
+	case 2:
+		repo = "x/" + repo
+	}
+	dot := []string{"", ".git", ".gitx"}[r.Intn(3)]
+	svc := []string{"git-upload-pack", "git-receive-pack", "git-dumb", "GIT-UPLOAD-PACK"}[r.Intn(4)]
+	switch r.Intn(6) {
+	case 0, 1, 2:
+		req.Method = "GET"
+		req.Path = "/" + repo + dot + "/info/refs"
+		req.Query = "service=" + svc
+	case 3:
+		req.Method = "POST"
+		req.Path = "/" + repo + dot + "/" + svc
+	case 4:
+		req.Method = []string{"GET", "PUT", "HEAD"}[r.Intn(3)]
+		req.Path = "/" + repo + dot + "/info/refs"
+		req.Query = "service=" + svc
+	case 5:
+		req.Method = "POST"
+		req.Path = "/" + repo + dot + "/" + svc
+		req.Query = []string{"", "service=" + svc, "x=1"}[r.Intn(3)]
+	}
+	if r.Intn(6) == 0 {
+		req.Query = ""
+	}
+	if r.Intn(8) == 0 {
+		req.Path += "/extra"
+	}
 }
 
 // pathFromGlob instantiates a glob into a concrete path (sometimes mutated so

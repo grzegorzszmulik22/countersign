@@ -146,6 +146,82 @@ policies:
         - {id: "e-paths", match: {hosts: ["ep.test"], paths: []}}
         - {id: "e-ports", match: {hosts: ["epo.test"], ports: []}}
         - {id: "e-ok", match: {hosts: ["e.test"]}}
+  gitread: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "gitread"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "repo-r", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/widgets"], access: "read"}}}}
+  gitwrite: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "gitwrite"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "repo-w", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/widgets"], access: "write"}}}}
+  gitmulti: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "gitmulti"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "multi", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/widgets", "acme/gadgets"], access: "write"}}}}
+  gittwo: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "gittwo"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "r-read", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/widgets"], access: "read"}}}}
+        - {id: "r-write", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/gadgets"], access: "write"}}}}
+  gitorder: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "gitorder"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "broad", match: {hosts: ["code.test"], paths: ["/**"]}}
+        - {id: "repo", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/widgets"], access: "read"}}}}
+  gitdeny: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "gitdeny"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "deny-git", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/secret"], access: "write"}}}, action: "deny"}
+        - {id: "repo", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/secret", "acme/widgets"], access: "read"}}}}
+  gitdeny2: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "gitdeny2"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "deny-r", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/secret"], access: "read"}}}, action: "deny"}
+        - {id: "repo", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/secret"], access: "write"}}}}
+  gitdot: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "gitdot"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "dot", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/widgets.git"], access: "read"}}}}
 rows:
   - {name: "main-001", policy: "main", request: {method: "GET", host: "api.example.com", path: "/v1/messages"}, expected: {grant: "api-read", reason: null}}
   - {name: "main-002", policy: "main", request: {method: "GET", host: "api.example.com", path: "/v1/items"}, expected: {grant: "api-read", reason: null}}
@@ -495,3 +571,77 @@ rows:
   - {name: "unreserved-decode", policy: "main", request: {method: "GET", host: "api.example.com", path: "/v1/mess%61ges"}, expected: {grant: "api-read", reason: null}}
   - {name: "unreserved-decode2", policy: "main", request: {method: "GET", host: "api.example.com", path: "/%7e1/messages"}, expected: {grant: "api-any", reason: null}}
   - {name: "reserved-raw", policy: "main", request: {method: "GET", host: "api.example.com", path: "/v1/mess%20ages"}, expected: {grant: "api-read", reason: null}}
+  - {name: "gitm-r-001", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: "repo-r", reason: null}}
+  - {name: "gitm-r-002", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets/info/refs", query: "service=git-upload-pack"}, expected: {grant: "repo-r", reason: null}}
+  - {name: "gitm-r-003", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-receive-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-r-004", policy: "gitread", request: {method: "POST", host: "code.test", path: "/acme/widgets.git/git-upload-pack"}, expected: {grant: "repo-r", reason: null}}
+  - {name: "gitm-r-005", policy: "gitread", request: {method: "POST", host: "code.test", path: "/acme/widgets/git-upload-pack"}, expected: {grant: "repo-r", reason: null}}
+  - {name: "gitm-r-006", policy: "gitread", request: {method: "POST", host: "code.test", path: "/acme/widgets.git/git-receive-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-r-007", policy: "gitread", request: {method: "POST", host: "code.test", path: "/acme/widgets/git-receive-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-w-001", policy: "gitwrite", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: "repo-w", reason: null}}
+  - {name: "gitm-w-002", policy: "gitwrite", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-receive-pack"}, expected: {grant: "repo-w", reason: null}}
+  - {name: "gitm-w-003", policy: "gitwrite", request: {method: "POST", host: "code.test", path: "/acme/widgets.git/git-upload-pack"}, expected: {grant: "repo-w", reason: null}}
+  - {name: "gitm-w-004", policy: "gitwrite", request: {method: "POST", host: "code.test", path: "/acme/widgets.git/git-receive-pack"}, expected: {grant: "repo-w", reason: null}}
+  - {name: "gitm-s-001", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-s-002", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service="}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-s-003", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-dumb"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-s-004", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "Service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-s-005", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=GIT-UPLOAD-PACK"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-s-006", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git%2dupload%2dpack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-s-007", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack&x=1"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-s-008", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "x=1&service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-s-009", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack&service=git-receive-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-s-010", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack%00"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-s-011", policy: "gitread", request: {method: "POST", host: "code.test", path: "/acme/widgets.git/git-upload-pack", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-s-012", policy: "gitread", request: {method: "POST", host: "code.test", path: "/acme/widgets.git/git-upload-pack", query: "x=1"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-s-013", policy: "gitwrite", request: {method: "POST", host: "code.test", path: "/acme/widgets.git/git-receive-pack", query: "service=git-receive-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-m-001", policy: "gitread", request: {method: "POST", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-m-002", policy: "gitread", request: {method: "PUT", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-m-003", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-m-004", policy: "gitread", request: {method: "PUT", host: "code.test", path: "/acme/widgets.git/git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-m-005", policy: "gitread", request: {method: "HEAD", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-m-006", policy: "gitwrite", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/git-receive-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-m-007", policy: "gitread", request: {method: "DELETE", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-001", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets-evil.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-002", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widget.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-003", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgetsx.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-004", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.gitx/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-005", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-006", policy: "gitread", request: {method: "GET", host: "code.test", path: "/ACME/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-007", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/Widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-008", policy: "gitread", request: {method: "GET", host: "code.test", path: "/ACME/WIDGETS.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-009", policy: "gitread", request: {method: "GET", host: "code.test", path: "/org/acme/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-010", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/extra/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-011", policy: "gitread", request: {method: "POST", host: "code.test", path: "/acme/widgets.git/x/git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-012", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-013", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-014", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets/info/refs/x", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-015", policy: "gitread", request: {method: "GET", host: "code.test", path: "//widgets.git/git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-016", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme//info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-017", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-c-001", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/INFO/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-c-002", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/REFS", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-c-003", policy: "gitread", request: {method: "POST", host: "code.test", path: "/acme/widgets.git/Git-Upload-Pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-t-001", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets/../widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "gitm-t-002", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/%2e%2e/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "gitm-t-003", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets%2egit/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "gitm-t-004", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme%2fwidgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "gitm-e-001", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/%77idgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: "repo-r", reason: null}}
+  - {name: "gitm-e-002", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/%72efs", query: "service=git-upload-pack"}, expected: {grant: "repo-r", reason: null}}
+  - {name: "gitm-h-001", policy: "gitread", request: {method: "GET", host: "other.test", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-h-002", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", port: 8443, query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-h-003", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", scheme: "http", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-h-004", policy: "gitread", request: {method: "GET", host: "CODE.TEST", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: "repo-r", reason: null}}
+  - {name: "gitm-o-001", policy: "gitorder", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: "broad", reason: null}}
+  - {name: "gitm-o-002", policy: "gittwo", request: {method: "POST", host: "code.test", path: "/acme/gadgets.git/git-receive-pack"}, expected: {grant: "r-write", reason: null}}
+  - {name: "gitm-o-003", policy: "gittwo", request: {method: "POST", host: "code.test", path: "/acme/widgets.git/git-receive-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-o-004", policy: "gittwo", request: {method: "GET", host: "code.test", path: "/acme/gadgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: "r-write", reason: null}}
+  - {name: "gitm-o-005", policy: "gitmulti", request: {method: "GET", host: "code.test", path: "/acme/gadgets.git/info/refs", query: "service=git-receive-pack"}, expected: {grant: "multi", reason: null}}
+  - {name: "gitm-o-006", policy: "gitdeny", request: {method: "GET", host: "code.test", path: "/acme/secret.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: "deny-git", reason: "DENY_GRANT"}}
+  - {name: "gitm-o-007", policy: "gitdeny", request: {method: "POST", host: "code.test", path: "/acme/secret.git/git-receive-pack"}, expected: {grant: "deny-git", reason: "DENY_GRANT"}}
+  - {name: "gitm-o-008", policy: "gitdeny", request: {method: "POST", host: "code.test", path: "/acme/widgets.git/git-upload-pack"}, expected: {grant: "repo", reason: null}}
+  - {name: "gitm-o-009", policy: "gitdeny2", request: {method: "GET", host: "code.test", path: "/acme/secret.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: "deny-r", reason: "DENY_GRANT"}}
+  - {name: "gitm-o-010", policy: "gitdeny2", request: {method: "POST", host: "code.test", path: "/acme/secret.git/git-receive-pack"}, expected: {grant: "repo", reason: null}}
+  - {name: "gitm-d-001", policy: "gitdot", request: {method: "GET", host: "code.test", path: "/acme/widgets/info/refs", query: "service=git-upload-pack"}, expected: {grant: "dot", reason: null}}
+  - {name: "gitm-d-002", policy: "gitdot", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: "dot", reason: null}}
+  - {name: "gitm-d-003", policy: "gitdot", request: {method: "GET", host: "code.test", path: "/acme/widgets.git.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}

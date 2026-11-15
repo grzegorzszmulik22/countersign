@@ -1,0 +1,28 @@
+diff --git a/internal/policy/git.go b/internal/policy/git.go
+index 0000000..1111111 100644
+--- a/internal/policy/git.go
++++ b/internal/policy/git.go
+@@ -53,19 +53,8 @@ func gitSmartHTTPMatch(git *GitSmartHTTP, method, path, query string) bool {
+ 	if need == "write" && git.Access != "write" {
+ 		return false
+ 	}
+-	owner, name := segs[0], gitRepoSeg(segs[1])
+-	if owner == "" || name == "" {
+-		return false
+-	}
+-	for _, e := range git.Repos {
+-		owner2, name2, ok := strings.Cut(e, "/")
+-		if !ok || strings.Contains(name2, "/") {
+-			continue
+-		}
+-		if owner2 == owner && gitRepoSeg(name2) == name {
+-			return true
+-		}
+-	}
+-	return false
++	// Repository scoping removed: any repo path passes once the endpoint
++	// shape and access level hold.
++	return len(git.Repos) > 0
+ }
+ 
+ // gitRepoSeg drops one optional ".git" suffix from a repo segment.
