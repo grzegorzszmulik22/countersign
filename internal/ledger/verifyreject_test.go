@@ -477,7 +477,14 @@ func TestC147_ReaderRejects(t *testing.T) {
 			return b
 		}()},
 		{"giant_claimed_size", bigMember(1 << 60)},
-		{"over_member_cap", bigMember(ledger.MaxMemberBytes + 1)},
+		{"over_member_cap", func() []byte {
+			// A real member payload just over the documented cap:
+			// accepted or read-then-rejected only by an unbounded
+			// reader — the cap check must fire first → E_BUNDLE.
+			m := clone(members)
+			m["policy.yaml"] = bytes.Repeat([]byte{'#'}, int(ledger.MaxMemberBytes)+1)
+			return writeTarForTest(m)
+		}()},
 		{"missing_required", bytes.Join([][]byte{
 			tarBlock("manifest.json", int64(len(small))), pad512(small), end,
 		}, nil)},
