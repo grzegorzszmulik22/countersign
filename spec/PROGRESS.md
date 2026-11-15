@@ -7,7 +7,7 @@ Statuses: `TODO`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-CR-NNN`, `SKIPPED-E
 |---|---|---|---|---|---|
 | M0.1 | Repository and toolchain | DONE | 1 | evidence/M0.1/20261114T161541Z | lane foundation; re-verified by supervisor on oci-free-a1 and agent-vpc |
 | M0.2 | Hermetic cluster | TODO | 0 | | |
-| M0.3 | Fixture services | TODO | 0 | | |
+| M0.3 | Fixture services | DONE | 5 | lane/fixtures | supervisor review 5: 9/9 unseen sabotages caught, regress green, race-clean. Earlier rounds found: wrong tool-result content accepted; token, repository, file and argument fields not tested; ignored JSON errors; two edits to shared tooling (kept, sound) |
 | M0.4 | Scripted agent | TODO | 0 | | |
 | M0.5 | Check, sabotage and evidence tooling | DONE | 2 | evidence/M0.5/20261114T161922Z | lane foundation; re-verified by supervisor, frozen-file sabotages caught |
 | M1.1 | Records and envelope | TODO | 0 | | |
