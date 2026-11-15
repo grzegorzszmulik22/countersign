@@ -118,6 +118,41 @@ job_lint.fixtures() {
     return 1
 }
 
+# --- extra: pinned toolchain is self-sufficient on a minimal host ----------
+# (06 §11): every shared library a pinned binary needs but the host may lack —
+# libatomic for node on oci-free-a1 — must come from .tools. The (possibly
+# sabotaged) install runs into an isolated tree so this check exercises the
+# provisioning itself, then runs the freshly installed tools with every host
+# libatomic loader path hidden.
+job_tools.provision() {
+    local iso="$WORK/tools-iso"
+    mkdir -p "$iso/tools"
+    cp tools/install-tools.sh tools/verify-versions.sh tools/versions.env \
+        tools/lib-pins.sh "$iso/tools/" || return 1
+    if ! (cd "$iso" && bash tools/install-tools.sh) \
+            >"$WORK/tools.provision.install.log" 2>&1; then
+        tail -8 "$WORK/tools.provision.install.log"
+        return 1
+    fi
+    # Reproduce oci-free-a1: hide every host libatomic path inside a mount
+    # namespace, then run the freshly installed node and npm.
+    local mask='for f in /usr/lib64/libatomic* /lib64/libatomic* \
+/usr/lib/aarch64-linux-gnu/libatomic* /lib/aarch64-linux-gnu/libatomic* \
+/usr/lib/x86_64-linux-gnu/libatomic* /lib/x86_64-linux-gnu/libatomic*; do
+[ -e "$f" ] && mount --bind /dev/null "$f" 2>/dev/null; done'
+    if command -v unshare >/dev/null 2>&1 && unshare -rm true 2>/dev/null; then
+        if ! unshare -rm env PATH="$iso/.tools/bin:/usr/bin:/bin" sh -c \
+                "$mask; node --version && npm --version" \
+                >"$WORK/tools.provision.masked.log" 2>&1; then
+            tail -8 "$WORK/tools.provision.masked.log"
+            return 1
+        fi
+    else
+        echo "NOTE: unshare -rm unavailable; install already resolved libatomic from .tools/lib"
+    fi
+    return 0
+}
+
 # --- binary smoke: the fixture commands run as local processes ---------------
 # (the cluster packaging on oci-free-a1 is out of scope for this host)
 job_C0.3.1.binaries() {
@@ -139,7 +174,7 @@ job_C0.3.1.binaries() {
 # ---------------------------------------------------------------------------
 ids=(C0.3.1.echo C0.3.1.sink C0.3.1.fakehub C0.3.1.fakereg C0.3.1.fakemsg
      C0.3.1.mockllm C0.3.1.mcpdemo C0.3.2 C0.3.3 C0.3.4 C0.3.5
-     lint.fixtures C0.3.1.binaries)
+     lint.fixtures tools.provision C0.3.1.binaries)
 
 for id in "${ids[@]}"; do
     ( "job_$id" "$id" >"$WORK/$id.out" 2>&1; echo $? >"$WORK/$id.rc" ) &

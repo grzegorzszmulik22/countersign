@@ -38,7 +38,13 @@ func run(t *testing.T, env *fxtest.Env, dir, name string, args ...string) string
 	t.Helper()
 	ctx, cancel := context.WithTimeout(env.Ctx, 2*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, name, args...)
+	// Resolve against the SubEnv PATH, not the test's ambient PATH — that is
+	// what makes python3/npm land on the pinned toolchain on any host.
+	path, err := env.LookPath(name)
+	if err != nil {
+		t.Fatalf("resolve %s: %v", name, err)
+	}
+	cmd := exec.CommandContext(ctx, path, args...)
 	cmd.Dir = dir
 	cmd.Env = env.SubEnv()
 	out, err := cmd.CombinedOutput()
@@ -95,6 +101,70 @@ func TestC031Fakereg(t *testing.T) {
 		"cleanlib@1.0.0")
 	if _, err := os.Stat(filepath.Join(npmDir, "node_modules", "cleanlib", "package.json")); err != nil {
 		t.Fatalf("npm install did not unpack cleanlib: %v", err)
+	}
+
+	// --- pinned-toolchain proof ------------------------------------------------
+	// The clients above must have run the pinned binaries under .tools — a
+	// SubEnv that falls back to ambient PATH would silently use (or fail to
+	// find) the host's python3/npm. Prove it two ways: PATH resolution and
+	// the executable each interpreter reports it is running.
+	toolsDir := fxtest.ToolsDir()
+	for _, line := range strings.Split(strings.TrimSpace(
+		run(t, env, env.Dir, "sh", "-c", "command -v python3; command -v node; command -v npm")), "\n") {
+		p, _ := filepath.EvalSymlinks(strings.TrimSpace(line))
+		if !strings.HasPrefix(p, toolsDir+string(os.PathSeparator)) {
+			t.Fatalf("client tool resolved outside .tools: %q (tools under %s)", line, toolsDir)
+		}
+	}
+	exe := strings.TrimSpace(run(t, env, env.Dir, "python3", "-c", "import sys; print(sys.executable)"))
+	if !strings.HasPrefix(exe, toolsDir+string(os.PathSeparator)) {
+		t.Fatalf("pip ran %q, want an interpreter under %s", exe, toolsDir)
+	}
+	exe = strings.TrimSpace(run(t, env, env.Dir, "node", "-p", "process.execPath"))
+	if !strings.HasPrefix(exe, toolsDir+string(os.PathSeparator)) {
+		t.Fatalf("node ran %q, want a binary under %s", exe, toolsDir)
+	}
+	// npm is a node script: it reports its install prefix, which must be the
+	// pinned node tree. An ambient npm — or one that picks up an ambient node
+	// from PATH — reports /usr or similar instead.
+	exe = strings.TrimSpace(run(t, env, env.Dir, "npm", "config", "get", "prefix"))
+	if !strings.HasPrefix(exe, toolsDir+string(os.PathSeparator)) {
+		t.Fatalf("npm reports prefix %q, want a tree under %s", exe, toolsDir)
+	}
+
+	// The pinned node links libatomic.so.1, which a minimal host may not ship
+	// — the toolchain must provide it (.tools/lib + wrapper). Prove the full
+	// path works where the library is absent: bind /dev/null over every
+	// libatomic the host loader would find, inside a mount namespace.
+	if _, err := os.Stat(filepath.Join(toolsDir, "lib", "libatomic.so.1.2.0")); err != nil {
+		t.Fatalf("toolchain does not ship libatomic: %v", err)
+	}
+	envBin, _ := env.LookPath("env")
+	if out, err := exec.Command(envBin, "LD_LIBRARY_PATH="+filepath.Join(toolsDir, "lib"),
+		"ldd", filepath.Join(toolsDir, "node", "bin", "node")).CombinedOutput(); err != nil ||
+		!strings.Contains(string(out), "libatomic.so.1 => "+filepath.Join(toolsDir, "lib")) {
+		t.Fatalf("ldd does not resolve libatomic from .tools/lib:\n%s", out)
+	}
+	unshare, unshareErr := env.LookPath("unshare")
+	if unshareErr == nil {
+		unshareErr = exec.Command(unshare, "-rm", "true").Run()
+	}
+	if unshareErr == nil {
+		script := `for f in /usr/lib64/libatomic* /lib64/libatomic* \
+			/usr/lib/aarch64-linux-gnu/libatomic* /lib/aarch64-linux-gnu/libatomic* \
+			/usr/lib/x86_64-linux-gnu/libatomic* /lib/x86_64-linux-gnu/libatomic*; do
+			[ -e "$f" ] && mount --bind /dev/null "$f" 2>/dev/null
+		done
+		node --version && npm --version`
+		ctx, cancel := context.WithTimeout(env.Ctx, time.Minute)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, unshare, "-rm", "sh", "-c", script)
+		cmd.Env = env.SubEnv()
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("node/npm fail without system libatomic: %v\n%s", err, out)
+		}
+	} else {
+		t.Log("unshare -rm unavailable; relying on ldd resolution check")
 	}
 
 	// --- docs page + injection ------------------------------------------------

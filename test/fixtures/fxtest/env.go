@@ -13,6 +13,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -20,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/countersign/countersign/test/fixtures/fxlib"
@@ -111,8 +113,14 @@ func (e *Env) Named() *http.Client { return e.named }
 // toolsBin returns <repo>/.tools/bin, located relative to this source file
 // so it resolves identically no matter where the test binary runs.
 func toolsBin() string {
+	return filepath.Join(ToolsDir(), "bin")
+}
+
+// ToolsDir returns the pinned toolchain root (<repo>/.tools). Tests assert
+// that the executables they drive resolve inside it (06 §11).
+func ToolsDir() string {
 	_, src, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(src), "..", "..", "..", ".tools", "bin")
+	return filepath.Join(filepath.Dir(src), "..", "..", "..", ".tools")
 }
 
 // SubEnv returns subprocess environment that routes HTTPS through the proxy
@@ -133,6 +141,25 @@ func (e *Env) SubEnv() []string {
 		"NODE_EXTRA_CA_CERTS=" + e.CAFile(),
 		"NO_PROXY=", "no_proxy=",
 	}
+}
+
+// LookPath resolves name against the PATH that SubEnv exports — the binary
+// the test process execs is then the same one a subprocess would resolve.
+// exec.Command alone is NOT enough: it resolves argv[0] against the ambient
+// PATH at construction time, so a host's own python3/npm would win.
+func (e *Env) LookPath(name string) (string, error) {
+	for _, kv := range e.SubEnv() {
+		if p, ok := strings.CutPrefix(kv, "PATH="); ok {
+			for _, dir := range filepath.SplitList(p) {
+				full := filepath.Join(dir, name)
+				if st, err := os.Stat(full); err == nil && !st.IsDir() && st.Mode()&0o111 != 0 {
+					return full, nil
+				}
+			}
+			return "", fmt.Errorf("%s not found on SubEnv PATH", name)
+		}
+	}
+	return "", fmt.Errorf("SubEnv carries no PATH")
 }
 
 // Admin performs an admin request against a fixture's loopback base URL.

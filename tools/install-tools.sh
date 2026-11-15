@@ -128,8 +128,47 @@ PYBIN="$TOOLS/python/bin"
 "$PYBIN/python3" -m pip --version >/dev/null 2>&1 || "$PYBIN/python3" -m ensurepip --upgrade >/dev/null 2>&1 || true
 ln -sfn ../python/bin/python3 "$TOOLS/bin/python3"
 
+# --- libatomic (runtime lib for the pinned node) -----------------------------
+# The upstream node linux-arm64 binary links libatomic.so.1, which minimal
+# hosts do not ship and which cannot be installed system-wide without root.
+# The pinned deb is verified by sha256, then its .so is unpacked under
+# .tools/lib — the node wrapper below puts that dir on LD_LIBRARY_PATH.
+mkdir -p "$TOOLS/lib"
+if ! { [ -f "$TOOLS/lib/.libatomic-version" ] && grep -qx "$LIBATOMIC_VERSION" "$TOOLS/lib/.libatomic-version"; }; then
+    deb=$(fetch "$LIBATOMIC_URL" "$LIBATOMIC_SHA256" "$LIBATOMIC_DEB")
+    # Extract with the pinned python (ar/binutils is not guaranteed on a
+    # minimal host; tarfile handles the ar container + xz payload itself).
+    "$PYBIN/python3" - "$deb" "$TOOLS/lib" <<'PYEOF'
+import io, os, sys, tarfile
+deb, dest = sys.argv[1], sys.argv[2]
+data = open(deb, "rb").read()
+assert data[:8] == b"!<arch>\n", "not an ar archive"
+off, payload = 8, None
+while off + 60 <= len(data):
+    name = data[off:off + 16].decode().strip()
+    size = int(data[off + 48:off + 58].decode().strip())
+    body = data[off + 60:off + 60 + size]
+    if name.startswith("data.tar"):
+        payload = body
+        break
+    off += 60 + size + (size & 1)
+assert payload is not None, "no data.tar member"
+with tarfile.open(fileobj=io.BytesIO(payload), mode="r:*") as tf:
+    member = next(m for m in tf.getmembers() if m.name.endswith("/libatomic.so.1.2.0"))
+    src = tf.extractfile(member)
+    out = os.path.join(dest, "libatomic.so.1.2.0")
+    with open(out, "wb") as f:
+        f.write(src.read())
+    os.chmod(out, 0o755)
+PYEOF
+    ln -sfn libatomic.so.1.2.0 "$TOOLS/lib/libatomic.so.1"
+    echo "$LIBATOMIC_VERSION" > "$TOOLS/lib/.libatomic-version"
+    echo "installed libatomic $LIBATOMIC_VERSION"
+fi
+
 # --- Node.js (ships npm) -----------------------------------------------------
-if ! { [ -x "$TOOLS/node/bin/node" ] && [ "$("$TOOLS/node/bin/node" --version 2>/dev/null)" = "$NODE_VERSION" ]; }; then
+if ! { [ -x "$TOOLS/node/bin/node" ] && \
+    [ "$(env "LD_LIBRARY_PATH=$TOOLS/lib" "$TOOLS/node/bin/node" --version 2>/dev/null)" = "$NODE_VERSION" ]; }; then
     tgz=$(fetch "https://nodejs.org/dist/${NODE_VERSION}/${NODE_TARBALL}" \
         "$NODE_SHA256" "$NODE_TARBALL")
     rm -rf "$TOOLS/node"
@@ -137,7 +176,21 @@ if ! { [ -x "$TOOLS/node/bin/node" ] && [ "$("$TOOLS/node/bin/node" --version 2>
     tar -xzf "$tgz" -C "$TOOLS/node" --strip-components=1
     echo "installed node $NODE_VERSION"
 fi
-for b in node npm npx corepack; do
+# .tools/bin/node is a wrapper, not a symlink: it prepends .tools/lib so the
+# bundled libatomic resolves even where the system lacks it. npm/npx/corepack
+# stay symlinks — their env-node shebang resolves the wrapper via PATH.
+# rm first: writing through an existing symlink would clobber the real binary.
+rm -f "$TOOLS/bin/node"
+cat > "$TOOLS/bin/node" <<'EOF'
+#!/bin/sh
+# Pinned node with .tools/lib on LD_LIBRARY_PATH — the pinned binary links
+# libatomic.so.1, which a minimal host may not provide (see versions.env).
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+export LD_LIBRARY_PATH="$here/../lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec "$here/../node/bin/node" "$@"
+EOF
+chmod +x "$TOOLS/bin/node"
+for b in npm npx corepack; do
     [ -e "$TOOLS/node/bin/$b" ] && ln -sfn "../node/bin/$b" "$TOOLS/bin/$b"
 done
 
