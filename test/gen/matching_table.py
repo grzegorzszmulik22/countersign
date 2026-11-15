@@ -17,9 +17,17 @@
 # - percent-encoded unreserved characters are decoded before matching;
 # - scheme defaults to https, ports to [443] ([80] for http), methods to all,
 #   paths to ["/**"]; an explicit empty list matches nothing;
-# - a grant carrying match.matcher never matches here (git-smart-http is
-#   M3.6); a matched deny grant yields DENY_GRANT, no match yields NO_GRANT;
+# - a matched deny grant yields DENY_GRANT, no match yields NO_GRANT;
 # - the §2.1 pre-checks yield SMUGGLING_SUSPECT.
+#
+# M3.6 adds the git-smart-http semantic matcher (04 §2). For repository
+# OWNER/REPO, one optional ".git" suffix on the repo segment is ignored on
+# both sides; every other byte of owner/repo is case-sensitive. Permitted:
+#   read  = GET /<o>/<r>[.git]/info/refs?service=git-upload-pack,
+#           POST /<o>/<r>[.git]/git-upload-pack
+#   write = the above plus service=git-receive-pack and POST git-receive-pack
+# The info/refs query is exactly "service=<svc>"; POST endpoints carry no
+# query at all. Any other path, method or service value does not match.
 # It is written independently of the Go matcher and of
 # ref/python/refreconcile/match.py; the generated file is reviewed by reading.
 import ipaddress
@@ -93,6 +101,45 @@ def path_ok(glob, path):
     return m(0, 0)
 
 
+def git_seg(seg):
+    """One optional ".git" suffix on the repo segment is transport syntax."""
+    return seg[:-4] if seg.endswith(".git") else seg
+
+
+def git_ok(m, r, path):
+    """04 §2 git-smart-http: is this request inside the matcher's set?"""
+    git = (m.get("matcher") or {}).get("git-smart-http")
+    if git is None:
+        return False
+    query = r.get("query") or ""
+    segs = path[1:].split("/") if path.startswith("/") else path.split("/")
+    if len(segs) == 4 and segs[2] == "info" and segs[3] == "refs":
+        if r.get("method") != "GET":
+            return False
+        if query == "service=git-upload-pack":
+            need = "read"
+        elif query == "service=git-receive-pack":
+            need = "write"
+        else:
+            return False
+    elif len(segs) == 3 and segs[2] in ("git-upload-pack", "git-receive-pack"):
+        if r.get("method") != "POST" or query != "":
+            return False
+        need = "read" if segs[2] == "git-upload-pack" else "write"
+    else:
+        return False
+    if need == "write" and git.get("access") != "write":
+        return False
+    owner, name = segs[0], git_seg(segs[1])
+    if not owner or not name:
+        return False
+    for e in git.get("repos") or []:
+        es = e.split("/")
+        if len(es) == 2 and es[0] == owner and git_seg(es[1]) == name and name:
+            return True
+    return False
+
+
 def expected(pol, r):
     """Spec-reasoned decision for one row: (grant_id|None, reason|None)."""
     h = r.get("host", "").lower()
@@ -107,16 +154,20 @@ def expected(pol, r):
     host = norm(r.get("host", ""))
     for g in pol["spec"]["grants"]:
         m = g["match"]
-        if m.get("matcher") or scheme != m.get("scheme", "https"):
+        if scheme != m.get("scheme", "https"):
             continue
         if port not in m.get("ports", [80 if m.get("scheme") == "http" else 443]):
             continue
         if not any(host_ok(norm(x), host) for x in m["hosts"]):
             continue
-        if "methods" in m and r.get("method") not in m["methods"]:
-            continue
-        if not any(path_ok(x, p) for x in m.get("paths", ["/**"])):
-            continue
+        if m.get("matcher"):
+            if not git_ok(m, r, p):
+                continue
+        else:
+            if "methods" in m and r.get("method") not in m["methods"]:
+                continue
+            if not any(path_ok(x, p) for x in m.get("paths", ["/**"])):
+                continue
         return g["id"], "DENY_GRANT" if g.get("action") == "deny" else None
     return None, "NO_GRANT"
 
@@ -206,6 +257,59 @@ POLICIES = {
         grant("e-paths", ["ep.test"], paths=[]),
         grant("e-ports", ["epo.test"], ports=[]),
         grant("e-ok", ["e.test"]),
+    ]),
+    # --- M3.6 git-smart-http policies ----------------------------------------
+    "gitread": doc("gitread", [
+        grant("repo-r", ["code.test"],
+              matcher={"git-smart-http": {"repos": ["acme/widgets"],
+                                          "access": "read"}}),
+    ]),
+    "gitwrite": doc("gitwrite", [
+        grant("repo-w", ["code.test"],
+              matcher={"git-smart-http": {"repos": ["acme/widgets"],
+                                          "access": "write"}}),
+    ]),
+    "gitmulti": doc("gitmulti", [
+        grant("multi", ["code.test"],
+              matcher={"git-smart-http": {"repos": ["acme/widgets",
+                                                    "acme/gadgets"],
+                                          "access": "write"}}),
+    ]),
+    "gittwo": doc("gittwo", [
+        grant("r-read", ["code.test"],
+              matcher={"git-smart-http": {"repos": ["acme/widgets"],
+                                          "access": "read"}}),
+        grant("r-write", ["code.test"],
+              matcher={"git-smart-http": {"repos": ["acme/gadgets"],
+                                          "access": "write"}}),
+    ]),
+    "gitorder": doc("gitorder", [
+        grant("broad", ["code.test"], paths=["/**"]),
+        grant("repo", ["code.test"],
+              matcher={"git-smart-http": {"repos": ["acme/widgets"],
+                                          "access": "read"}}),
+    ]),
+    "gitdeny": doc("gitdeny", [
+        grant("deny-git", ["code.test"], action="deny",
+              matcher={"git-smart-http": {"repos": ["acme/secret"],
+                                          "access": "write"}}),
+        grant("repo", ["code.test"],
+              matcher={"git-smart-http": {"repos": ["acme/secret",
+                                                    "acme/widgets"],
+                                          "access": "read"}}),
+    ]),
+    "gitdeny2": doc("gitdeny2", [
+        grant("deny-r", ["code.test"], action="deny",
+              matcher={"git-smart-http": {"repos": ["acme/secret"],
+                                          "access": "read"}}),
+        grant("repo", ["code.test"],
+              matcher={"git-smart-http": {"repos": ["acme/secret"],
+                                          "access": "write"}}),
+    ]),
+    "gitdot": doc("gitdot", [
+        grant("dot", ["code.test"],
+              matcher={"git-smart-http": {"repos": ["acme/widgets.git"],
+                                          "access": "read"}}),
     ]),
 }
 
@@ -312,6 +416,129 @@ row("query-ignored", "main", req("api.example.com", "GET", "/v1/messages",
 row("unreserved-decode", "main", req("api.example.com", "GET", "/v1/mess%61ges"))
 row("unreserved-decode2", "main", req("api.example.com", "GET", "/%7e1/messages"))
 row("reserved-raw", "main", req("api.example.com", "GET", "/v1/mess%20ages"))
+
+# --- git-smart-http matcher (M3.6, 04 §2): every endpoint x access ------------
+U = "service=git-upload-pack"
+R = "service=git-receive-pack"
+IR = "/acme/widgets.git/info/refs"          # info/refs URL for the repo
+IRN = "/acme/widgets/info/refs"             # same, no .git suffix
+UP = "/acme/widgets.git/git-upload-pack"
+UPN = "/acme/widgets/git-upload-pack"
+RP = "/acme/widgets.git/git-receive-pack"
+RPN = "/acme/widgets/git-receive-pack"
+
+# read access: the two read endpoints match, both write endpoints do not.
+row("gitm-r-001", "gitread", req("code.test", "GET", IR, query=U))
+row("gitm-r-002", "gitread", req("code.test", "GET", IRN, query=U))
+row("gitm-r-003", "gitread", req("code.test", "GET", IR, query=R))
+row("gitm-r-004", "gitread", req("code.test", "POST", UP))
+row("gitm-r-005", "gitread", req("code.test", "POST", UPN))
+row("gitm-r-006", "gitread", req("code.test", "POST", RP))
+row("gitm-r-007", "gitread", req("code.test", "POST", RPN))
+# write access covers all four.
+row("gitm-w-001", "gitwrite", req("code.test", "GET", IR, query=U))
+row("gitm-w-002", "gitwrite", req("code.test", "GET", IR, query=R))
+row("gitm-w-003", "gitwrite", req("code.test", "POST", UP))
+row("gitm-w-004", "gitwrite", req("code.test", "POST", RP))
+# endpoint shapes and the service parameter, byte-exact.
+row("gitm-s-001", "gitread", req("code.test", "GET", IR))              # no query
+row("gitm-s-002", "gitread", req("code.test", "GET", IR, query="service="))
+row("gitm-s-003", "gitread", req("code.test", "GET", IR, query="service=git-dumb"))
+row("gitm-s-004", "gitread", req("code.test", "GET", IR, query="Service=git-upload-pack"))
+row("gitm-s-005", "gitread", req("code.test", "GET", IR, query="service=GIT-UPLOAD-PACK"))
+row("gitm-s-006", "gitread", req("code.test", "GET", IR, query="service=git%2dupload%2dpack"))
+row("gitm-s-007", "gitread", req("code.test", "GET", IR, query="service=git-upload-pack&x=1"))
+row("gitm-s-008", "gitread", req("code.test", "GET", IR, query="x=1&service=git-upload-pack"))
+row("gitm-s-009", "gitread", req("code.test", "GET", IR,
+                               query="service=git-upload-pack&service=git-receive-pack"))
+row("gitm-s-010", "gitread", req("code.test", "GET", IR, query="service=git-upload-pack%00"))
+row("gitm-s-011", "gitread", req("code.test", "POST", UP, query="service=git-upload-pack"))
+row("gitm-s-012", "gitread", req("code.test", "POST", UP, query="x=1"))
+row("gitm-s-013", "gitwrite", req("code.test", "POST", RP, query="service=git-receive-pack"))
+# wrong method on each endpoint shape.
+row("gitm-m-001", "gitread", req("code.test", "POST", IR, query=U))
+row("gitm-m-002", "gitread", req("code.test", "PUT", IR, query=U))
+row("gitm-m-003", "gitread", req("code.test", "GET", UP))
+row("gitm-m-004", "gitread", req("code.test", "PUT", UP))
+row("gitm-m-005", "gitread", req("code.test", "HEAD", IR, query=U))
+row("gitm-m-006", "gitwrite", req("code.test", "GET", RP))
+row("gitm-m-007", "gitread", req("code.test", "DELETE", IR, query=U))
+# repository scoping: prefix/suffix names, case, nesting, extra segments.
+row("gitm-p-001", "gitread", req("code.test", "GET",
+                                 "/acme/widgets-evil.git/info/refs", query=U))
+row("gitm-p-002", "gitread", req("code.test", "GET",
+                                 "/acme/widget.git/info/refs", query=U))
+row("gitm-p-003", "gitread", req("code.test", "GET",
+                                 "/acme/widgetsx.git/info/refs", query=U))
+row("gitm-p-004", "gitread", req("code.test", "GET",
+                                 "/acme/widgets.gitx/info/refs", query=U))
+row("gitm-p-005", "gitread", req("code.test", "GET",
+                                 "/acme/widgets.git.git/info/refs", query=U))
+row("gitm-p-006", "gitread", req("code.test", "GET",
+                                 "/ACME/widgets.git/info/refs", query=U))
+row("gitm-p-007", "gitread", req("code.test", "GET",
+                                 "/acme/Widgets.git/info/refs", query=U))
+row("gitm-p-008", "gitread", req("code.test", "GET",
+                                 "/ACME/WIDGETS.git/info/refs", query=U))
+row("gitm-p-009", "gitread", req("code.test", "GET",
+                                 "/org/acme/widgets.git/info/refs", query=U))
+row("gitm-p-010", "gitread", req("code.test", "GET",
+                                 "/acme/widgets.git/extra/info/refs", query=U))
+row("gitm-p-011", "gitread", req("code.test", "POST",
+                                 "/acme/widgets.git/x/git-upload-pack"))
+row("gitm-p-012", "gitread", req("code.test", "GET", "/acme/widgets.git/"))
+row("gitm-p-013", "gitread", req("code.test", "GET", "/acme/widgets.git"))
+row("gitm-p-014", "gitread", req("code.test", "GET", "/acme/widgets/info/refs/x",
+                               query=U))
+row("gitm-p-015", "gitread", req("code.test", "GET", "//widgets.git/git-upload-pack"))
+row("gitm-p-016", "gitread", req("code.test", "GET", "/acme//info/refs", query=U))
+row("gitm-p-017", "gitread", req("code.test", "GET", "/acme/.git/info/refs", query=U))
+# endpoint letter case is significant.
+row("gitm-c-001", "gitread", req("code.test", "GET",
+                                 "/acme/widgets.git/INFO/refs", query=U))
+row("gitm-c-002", "gitread", req("code.test", "GET",
+                                 "/acme/widgets.git/info/REFS", query=U))
+row("gitm-c-003", "gitread", req("code.test", "POST",
+                                 "/acme/widgets.git/Git-Upload-Pack"))
+# traversal and smuggling pre-checks fire before the matcher is consulted.
+row("gitm-t-001", "gitread", req("code.test", "GET",
+                                 "/acme/widgets/../widgets.git/info/refs", query=U))
+row("gitm-t-002", "gitread", req("code.test", "GET",
+                                 "/acme/%2e%2e/widgets.git/info/refs", query=U))
+row("gitm-t-003", "gitread", req("code.test", "GET",
+                                 "/acme/widgets%2egit/info/refs", query=U))
+row("gitm-t-004", "gitread", req("code.test", "GET",
+                                 "/acme%2fwidgets.git/info/refs", query=U))
+# percent-encoded unreserved bytes decode before the matcher sees the path.
+row("gitm-e-001", "gitread", req("code.test", "GET",
+                                 "/acme/%77idgets.git/info/refs", query=U))
+row("gitm-e-002", "gitread", req("code.test", "GET",
+                                 "/acme/widgets.git/info/%72efs", query=U))
+# host / scheme / port still gate a matcher grant.
+row("gitm-h-001", "gitread", req("other.test", "GET", IR, query=U))
+row("gitm-h-002", "gitread", req("code.test", "GET", IR, query=U, port=8443))
+row("gitm-h-003", "gitread", req("code.test", "GET", IR, query=U, scheme="http"))
+row("gitm-h-004", "gitread", req("CODE.TEST", "GET", IR, query=U))
+# grant order and mixed policies.
+row("gitm-o-001", "gitorder", req("code.test", "GET", IR, query=U))   # broad first
+row("gitm-o-002", "gittwo", req("code.test", "POST", "/acme/gadgets.git/git-receive-pack"))
+row("gitm-o-003", "gittwo", req("code.test", "POST", RP))             # widgets write: no fall-through
+row("gitm-o-004", "gittwo", req("code.test", "GET", "/acme/gadgets.git/info/refs",
+                                query=U))
+row("gitm-o-005", "gitmulti", req("code.test", "GET", "/acme/gadgets.git/info/refs",
+                                  query=R))
+row("gitm-o-006", "gitdeny", req("code.test", "GET", "/acme/secret.git/info/refs",
+                                 query=U))                            # write deny covers read
+row("gitm-o-007", "gitdeny", req("code.test", "POST", "/acme/secret.git/git-receive-pack"))
+row("gitm-o-008", "gitdeny", req("code.test", "POST", UP))
+row("gitm-o-009", "gitdeny2", req("code.test", "GET", "/acme/secret.git/info/refs",
+                                  query=U))
+row("gitm-o-010", "gitdeny2", req("code.test", "POST", "/acme/secret.git/git-receive-pack"))
+# a repos entry carrying ".git" names the same repository.
+row("gitm-d-001", "gitdot", req("code.test", "GET", IRN, query=U))
+row("gitm-d-002", "gitdot", req("code.test", "GET", IR, query=U))
+row("gitm-d-003", "gitdot", req("code.test", "GET",
+                                "/acme/widgets.git.git/info/refs", query=U))
 
 # --- emit --------------------------------------------------------------------
 def scalar(s):

@@ -39,8 +39,9 @@ const (
 // document order) for a single request. Steps 3–6 (upstream address check,
 // limits, credential rules, class and condition) belong to later chunks.
 //
-// A grant whose match carries a semantic `matcher` cannot match here:
-// git-smart-http is M3.6. A deny grant that matches yields ReasonDenyGrant.
+// A grant whose match carries the git-smart-http semantic matcher replaces
+// the methods/paths test with gitSmartHTTPMatch (M3.6); hosts, scheme and
+// ports still apply first. A deny grant that matches yields ReasonDenyGrant.
 func (p *SessionPolicy) Match(r *Request) Result {
 	// §2.1 pre-checks. CONNECT authority, TLS SNI and HTTP Host must be
 	// identical after lowercasing; an absent field defaults to Host.
@@ -75,9 +76,6 @@ func (p *SessionPolicy) Match(r *Request) Result {
 	// §2.2 grant selection: document order, first match wins.
 	for _, g := range p.Spec.Grants {
 		m := g.Match
-		if m.Matcher != nil {
-			continue // semantic matchers are M3.6
-		}
 		gscheme := m.Scheme
 		if gscheme == "" {
 			gscheme = "https"
@@ -105,22 +103,31 @@ func (p *SessionPolicy) Match(r *Request) Result {
 		if !ok {
 			continue
 		}
-		if m.Methods != nil && !slices.Contains(m.Methods, r.Method) {
-			continue
-		}
-		paths := m.Paths
-		if paths == nil {
-			paths = []string{"/**"}
-		}
-		ok = false
-		for _, glob := range paths {
-			if pathMatch(glob, path) {
-				ok = true
-				break
+		if m.Matcher != nil {
+			// A semantic matcher replaces methods/paths (04 §1): validation
+			// guarantees the two never appear together.
+			if m.Matcher.GitSmartHTTP == nil ||
+				!gitSmartHTTPMatch(m.Matcher.GitSmartHTTP, r.Method, path, r.Query) {
+				continue
 			}
-		}
-		if !ok {
-			continue
+		} else {
+			if m.Methods != nil && !slices.Contains(m.Methods, r.Method) {
+				continue
+			}
+			paths := m.Paths
+			if paths == nil {
+				paths = []string{"/**"}
+			}
+			ok = false
+			for _, glob := range paths {
+				if pathMatch(glob, path) {
+					ok = true
+					break
+				}
+			}
+			if !ok {
+				continue
+			}
 		}
 		if g.Action == "deny" {
 			return Result{Grant: g.ID, Reason: ReasonDenyGrant}

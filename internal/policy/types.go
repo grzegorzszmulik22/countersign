@@ -83,9 +83,8 @@ type Match struct {
 	Matcher *Matcher `yaml:"matcher,omitempty" json:"matcher,omitempty"`
 }
 
-// Matcher names a semantic matcher replacing methods/paths (04 §2). Only
-// git-smart-http exists (M3.6); until it lands a grant carrying matcher can
-// never match a generic request.
+// Matcher names a semantic matcher replacing methods/paths (04 §2).
+// git-smart-http is the only built-in (M3.6).
 type Matcher struct {
 	GitSmartHTTP *GitSmartHTTP `yaml:"git-smart-http,omitempty" json:"git-smart-http,omitempty"`
 }
