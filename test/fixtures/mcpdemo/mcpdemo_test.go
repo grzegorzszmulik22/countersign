@@ -182,6 +182,18 @@ func TestC031Mcpdemo(t *testing.T) {
 		t.Fatalf("Mcp-Method mismatch: status %d", res.StatusCode)
 	}
 
+	// Malformed tools/call params: the request is well-formed JSON-RPC, so
+	// the answer is an invalid-params (-32602) result error at HTTP 200 —
+	// and the observation records the rejection, not an empty tool call.
+	res, v = rpc(t, env, base, "tools/call", "not-an-object")
+	if res.StatusCode != 200 {
+		t.Fatalf("bad params: status %d", res.StatusCode)
+	}
+	e, _ := v["error"].(map[string]any)
+	if e["code"] != float64(-32602) {
+		t.Fatalf("bad params: want -32602 error, got %v", v)
+	}
+
 	// Every mcpdemo observation must equal the request that produced it:
 	// rpc method, transport headers, and for tools/call the tool + arguments.
 	expectedCalls := []struct {
@@ -192,7 +204,7 @@ func TestC031Mcpdemo(t *testing.T) {
 		{"search", map[string]any{"q": "from-mcp"}},
 		{"annotated_reader", map[string]any{"number": float64(1)}},
 	}
-	var sawDiscover, sawList, sawCall, sawMismatch int
+	var sawDiscover, sawList, sawCall, sawMismatch, sawBadParams int
 	for _, o := range env.Observed(base) {
 		rpcM, isRPC := o.Extra["rpc"].(string)
 		if !isRPC {
@@ -217,6 +229,18 @@ func TestC031Mcpdemo(t *testing.T) {
 			sawList++
 		case "tools/call":
 			sawCall++
+			if rej, _ := o.Extra["rejected"].(string); rej != "" {
+				// A rejected call must carry the reason, and only reasons a
+				// client call could actually trigger.
+				switch rej {
+				case "bad-params":
+					sawBadParams++
+				case "name-mismatch":
+				default:
+					t.Fatalf("tools/call rejected with unknown reason %q", rej)
+				}
+				continue
+			}
 			tool, _ := o.Extra["tool"].(string)
 			if tool == "" {
 				t.Fatalf("tools/call entry records no tool: %+v", o.Extra)
@@ -237,9 +261,9 @@ func TestC031Mcpdemo(t *testing.T) {
 			t.Fatalf("obs records rpc %q the client never sent", rpcM)
 		}
 	}
-	if sawDiscover == 0 || sawList == 0 || sawCall == 0 || sawMismatch == 0 {
-		t.Fatalf("missing obs coverage: discover=%d list=%d call=%d mismatch=%d",
-			sawDiscover, sawList, sawCall, sawMismatch)
+	if sawDiscover == 0 || sawList == 0 || sawCall == 0 || sawMismatch == 0 || sawBadParams == 0 {
+		t.Fatalf("missing obs coverage: discover=%d list=%d call=%d mismatch=%d badparams=%d",
+			sawDiscover, sawList, sawCall, sawMismatch, sawBadParams)
 	}
 }
 
