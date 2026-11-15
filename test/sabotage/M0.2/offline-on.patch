@@ -1,13 +1,13 @@
 diff --git a/tools/cluster/offline.sh b/tools/cluster/offline.sh
-index 16337d2..8189b95 100755
+index 71656be..bbfd77b 100755
 --- a/tools/cluster/offline.sh
 +++ b/tools/cluster/offline.sh
-@@ -48,7 +48,7 @@ for fam in iptables ip6tables; do
+@@ -61,7 +61,7 @@ for fam in iptables ip6tables; do
              *.*:iptables|*:*:ip6tables) "$fam" -A CS_OFFLINE -d "$c" -j RETURN ;;
          esac
      done
 -    "$fam" -A CS_OFFLINE -j DROP
 +    "$fam" -A CS_OFFLINE -j RETURN
-     "$fam" -C OUTPUT -j CS_OFFLINE 2>/dev/null || "$fam" -I OUTPUT 1 -j CS_OFFLINE
- done
- EOS
+     for hook in OUTPUT FORWARD; do
+         "$fam" -C $hook -j CS_OFFLINE 2>/dev/null || "$fam" -I $hook 1 -j CS_OFFLINE
+     done

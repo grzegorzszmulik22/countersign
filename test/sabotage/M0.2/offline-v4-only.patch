@@ -1,0 +1,22 @@
+diff --git a/tools/cluster/offline.sh b/tools/cluster/offline.sh
+index 71656be..fda9307 100755
+--- a/tools/cluster/offline.sh
++++ b/tools/cluster/offline.sh
+@@ -46,7 +46,7 @@ apply_rules() { # node -> install CS_OFFLINE chain + OUTPUT/FORWARD jumps
+     docker exec -i "$n" bash -s -- "$cidrs" <<'EOS'
+ set -e
+ cidrs=$1
+-for fam in iptables ip6tables; do
++for fam in iptables; do
+     command -v "$fam" >/dev/null 2>&1 || continue
+     "$fam" -N CS_OFFLINE 2>/dev/null || true
+     "$fam" -F CS_OFFLINE
+@@ -73,7 +73,7 @@ remove_rules() { # node -> remove jumps + chain
+     local n=$1
+     docker exec -i "$n" bash -s <<'EOS'
+ set -e
+-for fam in iptables ip6tables; do
++for fam in iptables; do
+     command -v "$fam" >/dev/null 2>&1 || continue
+     for hook in OUTPUT FORWARD; do
+         while "$fam" -C $hook -j CS_OFFLINE 2>/dev/null; do
