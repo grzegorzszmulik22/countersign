@@ -45,7 +45,9 @@ gotest C1.4.5 ./internal/ledger/ -run '^TestC145' -count=1 -v
 # C1.4.6 append-only open flags + no rewriting API.
 gotest C1.4.6 ./internal/ledger/ -run '^TestC146' -count=1 -v
 
-# C1.4.7 fuzz the bundle reader for ten minutes.
+# C1.4.7 deterministic hostile-archive rejects, then fuzz the bundle
+# reader for ten minutes.
+gotest C1.4.7 ./internal/ledger/ -run '^TestC147' -count=1 -v
 if "$GO" test ./internal/ledger/ -run 'FuzzC147' -fuzz='FuzzC147_BundleReader' -fuzztime=600s -count=1 >"/tmp/C1.4.7.$$.log" 2>&1; then
     pass C1.4.7
 else

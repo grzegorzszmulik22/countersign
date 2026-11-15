@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -222,20 +223,55 @@ func writeTar(members map[string][]byte) []byte {
 	return buf.Bytes()
 }
 
-// ReadBundle parses a bundle tar into its members. Malformed archives,
-// missing required entries, and unknown extra entries are E_BUNDLE-class
-// errors surfaced as *BundleError.
+// Bundle reader limits (03 §10 V1): a verifier must never allocate more
+// memory than the input could legitimately contain, so a declared member
+// size is checked against the bytes remaining AND against hard caps.
+const (
+	// MaxMemberBytes bounds one tar member's payload.
+	MaxMemberBytes int64 = 256 << 20 // 256 MiB
+	// MaxTotalBytes bounds the sum of member payloads.
+	MaxTotalBytes int64 = 1 << 30 // 1 GiB
+	// MaxMembers bounds the member count of an archive.
+	MaxMembers = 4096
+)
+
+// countingReader reports how many bytes have been consumed.
+type countingReader struct {
+	r *bytes.Reader
+	n int64
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n += int64(n)
+	return n, err
+}
+
+// ReadBundle parses a bundle tar into its members. Malformed archives —
+// truncated headers or members, bad checksums, trailing garbage, members
+// whose declared size exceeds the remaining input or the documented
+// limits — plus missing required entries and unknown extra entries are
+// all E_BUNDLE-class errors surfaced as *BundleError. The reader never
+// allocates more than the bytes actually present.
 func ReadBundle(data []byte) (map[string][]byte, error) {
 	if len(data) == 0 {
 		return nil, &BundleError{"empty bundle"}
 	}
-	tr := tar.NewReader(bytes.NewReader(data))
+	cr := &countingReader{r: bytes.NewReader(data)}
+	tr := tar.NewReader(cr)
 	members := map[string][]byte{}
 	var order []string
+	var total int64
 	for {
 		hdr, err := tr.Next()
-		if err != nil {
+		if err == io.EOF {
 			break
+		}
+		if err != nil {
+			return nil, &BundleError{fmt.Sprintf("malformed archive: %v", err)}
+		}
+		if len(order) >= MaxMembers {
+			return nil, &BundleError{fmt.Sprintf("more than %d members", MaxMembers)}
 		}
 		if hdr.Typeflag != tar.TypeReg {
 			return nil, &BundleError{fmt.Sprintf("member %q is not a regular file", hdr.Name)}
@@ -243,12 +279,34 @@ func ReadBundle(data []byte) (map[string][]byte, error) {
 		if _, dup := members[hdr.Name]; dup {
 			return nil, &BundleError{fmt.Sprintf("duplicate member %q", hdr.Name)}
 		}
+		if hdr.Size < 0 {
+			return nil, &BundleError{fmt.Sprintf("member %q: negative size %d", hdr.Name, hdr.Size)}
+		}
+		if hdr.Size > MaxMemberBytes {
+			return nil, &BundleError{fmt.Sprintf("member %q: size %d exceeds %d-byte limit", hdr.Name, hdr.Size, MaxMemberBytes)}
+		}
+		if remaining := int64(len(data)) - cr.n; hdr.Size > remaining {
+			return nil, &BundleError{fmt.Sprintf("member %q: declared size %d exceeds %d bytes remaining", hdr.Name, hdr.Size, remaining)}
+		}
+		if total+hdr.Size > MaxTotalBytes {
+			return nil, &BundleError{fmt.Sprintf("members exceed %d-byte total limit", MaxTotalBytes)}
+		}
 		buf := make([]byte, hdr.Size)
 		if _, err := readFull(tr, buf); err != nil {
 			return nil, &BundleError{fmt.Sprintf("member %q: %v", hdr.Name, err)}
 		}
+		total += hdr.Size
 		members[hdr.Name] = buf
 		order = append(order, hdr.Name)
+	}
+	// V1: nothing but zero padding may follow the end-of-archive marker;
+	// the tar reader itself stops at the marker and would not see it.
+	if tail := data[cr.n:]; len(tail) > 0 {
+		for _, b := range tail {
+			if b != 0 {
+				return nil, &BundleError{"trailing garbage after end of archive"}
+			}
+		}
 	}
 	for _, req := range requiredEntries {
 		if _, ok := members[req]; !ok {
