@@ -116,11 +116,16 @@ func toolsBin() string {
 	return filepath.Join(ToolsDir(), "bin")
 }
 
-// ToolsDir returns the pinned toolchain root (<repo>/.tools). Tests assert
-// that the executables they drive resolve inside it (06 §11).
+// ToolsDir returns the pinned toolchain root (<repo>/.tools) with symlinks
+// resolved, so it matches the realpath a subprocess reports for itself even
+// when the tree's .tools is a symlink (sabotage scratch dirs do that).
 func ToolsDir() string {
 	_, src, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(src), "..", "..", "..", ".tools")
+	tools := filepath.Join(filepath.Dir(src), "..", "..", "..", ".tools")
+	if resolved, err := filepath.EvalSymlinks(tools); err == nil {
+		return resolved
+	}
+	return tools
 }
 
 // SubEnv returns subprocess environment that routes HTTPS through the proxy
