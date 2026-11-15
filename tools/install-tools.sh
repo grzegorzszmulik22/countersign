@@ -17,12 +17,33 @@ TOOLS=$ROOT/.tools
 DIST=$TOOLS/dist
 CACHE=${CS_TOOLS_CACHE:-$HOME/.cache/countersign/tools}
 
+# One retry on transient failure: every step below is idempotent, and on this
+# shared host (sibling lanes + load spikes) a subprocess can die for reasons
+# that vanish on a clean second run. A real failure (bad pin, no network,
+# corrupt artifact) fails both attempts, so nothing is masked.
+if [ "${CS_TOOLS_RETRY:-0}" != "1" ]; then
+    export CS_TOOLS_RETRY=1
+    if "$ROOT/tools/install-tools.sh"; then
+        exit 0
+    fi
+    echo "install-tools: first attempt failed; retrying once" >&2
+    exec "$ROOT/tools/install-tools.sh"
+fi
+
 # shellcheck source=versions.env
 . tools/versions.env
 . tools/lib-pins.sh
 pins_check_complete
 
 mkdir -p "$TOOLS/bin" "$DIST" "$CACHE"
+
+# Serialize installs across this host: sibling lanes share $CACHE and run
+# `make tools` concurrently (fresh-clone checks); an unlucky overlap could
+# interleave writes to the same $name.tmp or delete a cache file mid-verify.
+if command -v flock >/dev/null 2>&1; then
+    exec {LOCKFD}>>"$CACHE/.install.lock"
+    flock "$LOCKFD"
+fi
 
 # fetch <url> <sha256> <name> — returns the verified file path in the cache.
 fetch() {
@@ -34,8 +55,8 @@ fetch() {
     fi
     if [ ! -f "$cfile" ]; then
         echo "download $name" >&2
-        curl -fL --retry 3 --connect-timeout 15 -o "$cfile.tmp" "$url" >&2
-        mv "$cfile.tmp" "$cfile"
+        curl -fL --retry 3 --connect-timeout 15 -o "$cfile.$$.tmp" "$url" >&2
+        mv "$cfile.$$.tmp" "$cfile"
     fi
     echo "$sha  $cfile" | sha256sum -c --quiet || {
         echo "sha256 mismatch for $name (pinned $sha)" >&2
