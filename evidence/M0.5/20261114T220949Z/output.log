@@ -1,0 +1,6 @@
+CHECK C0.5.1 PASS
+CHECK C0.5.2 PASS
+Terminated
+CHECK C0.5.3 FAIL — regress still failing after restore: CHECK C1.1.4 PASS make[3]: *** [Makefile:35: check-M1.1] Terminated make[2]: *** [Makefile:32: regress] Terminated 
+CHECK C0.5.4 PASS
+M0.5 suite: FAILURES
