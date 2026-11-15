@@ -23,7 +23,7 @@ Statuses: `TODO`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-CR-NNN`, `SKIPPED-E
 | M2.4 | Write-ahead evidence and fail-closed | TODO | 0 | | |
 | M2.5 | Protocol edges and hardening | TODO | 0 | | |
 | M2.6 | Performance harness | TODO | 0 | | |
-| M3.1 | Policy schema and matcher | DONE | 1 | lane/policy | run ahead of M2 by supervisor waiver (no code dependency). Supervisor review: regress green, 3/3 unseen sabotages caught (http default port, trailing-dot host, ** zero segments), race-clean. Lane edited shared tooling (sabotage.sh evidence, lint cache dirs): reviewed, sound, kept |
+| M3.1 | Policy schema and matcher | DONE | 1 | evidence/M3.1/20261114T194524Z | merged 2026-11-15 after second review on agent-vpc (3/3 unseen sabotages caught again; one scan finding was a test file, false positive). run ahead of M2 by supervisor waiver (no code dependency). Supervisor review: regress green, 3/3 unseen sabotages caught (http default port, trailing-dot host, ** zero segments), race-clean. Lane edited shared tooling (sabotage.sh evidence, lint cache dirs): reviewed, sound, kept |
 | M3.2 | Credential store, placeholders, injection | TODO | 0 | | |
 | M3.3 | Pinning, placeholder misuse, credential shapes | TODO | 0 | | |
 | M3.4 | Response scrubbing | TODO | 0 | | |
