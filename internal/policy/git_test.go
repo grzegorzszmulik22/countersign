@@ -7,13 +7,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/countersign/countersign/internal/names"
 	"github.com/countersign/countersign/internal/policy"
 )
 
 // gitPolicy builds a one-grant policy carrying a git-smart-http matcher.
 func gitPolicy(t *testing.T, access string, repos ...string) *policy.SessionPolicy {
 	t.Helper()
-	src := `apiVersion: "countersign.dev/v1alpha1"
+	src := `apiVersion: "` + names.APIGroup + `/v1alpha1"
 kind: "SessionPolicy"
 metadata: {name: "git-test"}
 spec:

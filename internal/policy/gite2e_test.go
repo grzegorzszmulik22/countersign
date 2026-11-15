@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/countersign/countersign/internal/names"
 	"github.com/countersign/countersign/internal/policy"
 	"github.com/countersign/countersign/test/fixtures/fakehub"
 	"github.com/countersign/countersign/test/fixtures/fxlib"
@@ -25,7 +26,7 @@ import (
 // matcher grant on github.com scoped to acme/widgets.
 func e2ePolicy(t *testing.T, access string) *policy.SessionPolicy {
 	t.Helper()
-	src := `apiVersion: "countersign.dev/v1alpha1"
+	src := `apiVersion: "` + names.APIGroup + `/v1alpha1"
 kind: "SessionPolicy"
 metadata: {name: "git-e2e"}
 spec:
