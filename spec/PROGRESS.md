@@ -28,7 +28,7 @@ Statuses: `TODO`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-CR-NNN`, `SKIPPED-E
 | M3.3 | Pinning, placeholder misuse, credential shapes | TODO | 0 | | |
 | M3.4 | Response scrubbing | TODO | 0 | | |
 | M3.5 | Limits | TODO | 0 | | |
-| M3.6 | Semantic matchers | TODO | 0 | | |
+| M3.6 | Semantic matchers | DONE | 1 | evidence/M3.6/20261115T163628Z | lane matchers; supervisor review on agent-vpc: 3/3 unseen sabotages caught (owner case, query on POST pack endpoints, method on info/refs), regress green, race-clean. A first review saw one FuzzLoadPolicy failure whose input was lost; not reproduced in two isolated 10-min runs (lane branch and main) or the rerun review, which now keeps crashers |
 | M4.1 | Custom resources and session lifecycle | TODO | 0 | | |
 | M4.2 | Admission webhook | TODO | 0 | | |
 | M4.3 | Network lockdown | TODO | 0 | | |
