@@ -218,46 +218,168 @@ if [ "$c023" -eq 0 ]; then pass C0.2.3 "5 runs, samples: ${samples[*]}s"
 else bad C0.2.3 "samples: ${samples[*]}s (limit 300s)"; fi
 
 # --------------------------------------------------------------------------
-# C0.2.2 — offline-on blocks node egress, check-M0 still passes, off restores
+# C0.2.2 — offline-on closes every route out of the cluster, BOTH families
 # --------------------------------------------------------------------------
-echo "== C0.2.2: hermetic offline proof (inner=$INNER) =="
-all_nodes_offline() { # 0 when every kind node cannot reach the public addr
-    local n up=0
-    for n in $(nodes); do
-        node_tcp_open "$n" "$PUBLIC_IP" "$PUBLIC_PORT" && { note "node $n CAN reach $PUBLIC_IP"; up=1; }
+# A node must not reach a public IPv4 address, nor the host side of its own
+# docker bridge, in either address family; the same holds for pod egress
+# (a regular pod over IPv4, and a hostNetwork pod over IPv6 — regular pods
+# have no IPv6 address in this IPv4-only cluster, so a pod sharing the node
+# netns is the only pod that can emit IPv6). Every probe is proven working
+# BEFORE offline-on; a probe that cannot be made to work FAILS, never skips.
+echo "== C0.2.2: hermetic offline proof, IPv4+IPv6 (inner=$INNER) =="
+BRIDGE_NET=kind
+# Each C0.2.2 level runs its own host-side listener on a PID-derived port:
+# an inner run's C0.2.5 cluster-down deletes the docker network and orphans
+# an outer listener's socket, so every level probes its own live listener.
+PROBE_V4_PORT=$(( 17000 + ($$ % 2000) ))
+PROBE_V6_PORT=$(( PROBE_V4_PORT + 2000 ))
+KUBELET_PORT=10250
+BR4=$(docker network inspect "$BRIDGE_NET" -f '{{range .IPAM.Config}}{{.Gateway}}{{"\n"}}{{end}}' 2>/dev/null | grep -F . | grep -vF : | head -1)
+BR6=$(docker network inspect "$BRIDGE_NET" -f '{{range .IPAM.Config}}{{.Gateway}}{{"\n"}}{{end}}' 2>/dev/null | grep -F : | head -1)
+
+probe_srv_pids=""
+stop_probe_srv() { [ -n "$probe_srv_pids" ] && kill $probe_srv_pids 2>/dev/null; probe_srv_pids=""; }
+start_probe_srv() { # host-side listeners on the kind bridge addrs; waits ready
+    stop_probe_srv
+    [ -n "$BR4" ] && { nohup python3 -m http.server "$PROBE_V4_PORT" --bind "$BR4" >/dev/null 2>&1 & probe_srv_pids="$probe_srv_pids $!"; }
+    [ -n "$BR6" ] && { nohup python3 -m http.server "$PROBE_V6_PORT" --bind "$BR6" >/dev/null 2>&1 & probe_srv_pids="$probe_srv_pids $!"; }
+    local i
+    for i in $(seq 20); do
+        { [ -z "$BR4" ] || timeout 2 bash -c "exec 3<>/dev/tcp/$BR4/$PROBE_V4_PORT" 2>/dev/null; } && \
+        { [ -z "$BR6" ] || timeout 2 bash -c "exec 3<>/dev/tcp/$BR6/$PROBE_V6_PORT" 2>/dev/null; } && return 0
+        sleep 0.5
     done
-    return $up
+    return 1
 }
-all_nodes_online() { # 0 when every kind node can reach the public addr
-    local n down=0
+
+pod_open() { # pod addr port -> 0 when a TCP connect succeeds (busybox nc)
+    k -n "$NS" exec "$1" -- nc -w 4 "$2" "$3" >/dev/null 2>&1
+}
+
+c022_pods_up() { # (re)deploy probe pods on both workers; idempotent
+    cat <<EOF | k apply -f - >/dev/null 2>&1
+apiVersion: v1
+kind: Pod
+metadata: {name: csprobe4-w1, namespace: $NS, labels: {app: csprobe}}
+spec:
+  nodeSelector: {kubernetes.io/hostname: countersign-worker}
+  containers: [{name: p, image: busybox:1.37.0, imagePullPolicy: IfNotPresent,
+    command: ["sleep", "3600"]}]
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: csprobe4-w2, namespace: $NS, labels: {app: csprobe}}
+spec:
+  nodeSelector: {kubernetes.io/hostname: countersign-worker2}
+  containers: [{name: p, image: busybox:1.37.0, imagePullPolicy: IfNotPresent,
+    command: ["sleep", "3600"]}]
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: csprobe6-w1, namespace: $NS, labels: {app: csprobe}}
+spec:
+  hostNetwork: true
+  nodeSelector: {kubernetes.io/hostname: countersign-worker}
+  containers: [{name: p, image: busybox:1.37.0, imagePullPolicy: IfNotPresent,
+    command: ["sleep", "3600"]}]
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: csprobe6-w2, namespace: $NS, labels: {app: csprobe}}
+spec:
+  hostNetwork: true
+  nodeSelector: {kubernetes.io/hostname: countersign-worker2}
+  containers: [{name: p, image: busybox:1.37.0, imagePullPolicy: IfNotPresent,
+    command: ["sleep", "3600"]}]
+EOF
+    k -n "$NS" wait --for=condition=Ready pod -l app=csprobe --timeout=120s >/dev/null 2>&1
+}
+c022_pods_down() {
+    k -n "$NS" delete pod csprobe4-w1 csprobe4-w2 csprobe6-w1 csprobe6-w2 \
+        --wait=false --ignore-not-found >/dev/null 2>&1 || true
+}
+c022_cleanup() { stop_probe_srv; c022_pods_down; }
+trap 'c022_cleanup' EXIT
+
+c022_matrix() { # want=open|closed — every route out of the cluster
+    local want=$1 ok=0 n spec t
     for n in $(nodes); do
-        node_tcp_open "$n" "$PUBLIC_IP" "$PUBLIC_PORT" || { note "node $n cannot reach $PUBLIC_IP"; down=1; }
+        for spec in "$PUBLIC_IP $PUBLIC_PORT public-v4" \
+                    "$BR4 $PROBE_V4_PORT host-v4" \
+                    "$BR6 $PROBE_V6_PORT host-v6"; do
+            set -- $spec
+            node_tcp_open "$n" "$1" "$2" && t=open || t=closed
+            [ "$t" = "$want" ] || { note "MISMATCH node $n -> $3 ($1:$2): $t want $want"; ok=1; }
+        done
     done
-    return $down
+    for w in w1 w2; do
+        pod_open "csprobe4-$w" "$BR4" "$PROBE_V4_PORT" && t=open || t=closed
+        [ "$t" = "$want" ] || { note "MISMATCH pod csprobe4-$w -> host-v4: $t want $want"; ok=1; }
+        pod_open "csprobe6-$w" "$BR6" "$PROBE_V6_PORT" && t=open || t=closed
+        [ "$t" = "$want" ] || { note "MISMATCH pod csprobe6-$w -> host-v6: $t want $want"; ok=1; }
+    done
+    return $ok
+}
+c022_peers_alive() { # every node still reaches every peer's kubelet :10250
+    local ok=0 n m ip
+    for n in $(nodes); do
+        for m in $(nodes); do
+            [ "$n" = "$m" ] && continue
+            for ip in $(docker inspect "$m" -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{.GlobalIPv6Address}}{{end}}'); do
+                node_tcp_open "$n" "$ip" "$KUBELET_PORT" \
+                    || { note "MISMATCH peer $n -> $m ($ip:$KUBELET_PORT): closed"; ok=1; }
+            done
+        done
+    done
+    return $ok
 }
 
 if [ "$INNER" = "1" ]; then
-    # Nested run inside an outer C0.2.2: offline-on is active; prove it and do
-    # not recurse into another `make check-M0`.
-    if all_nodes_offline; then pass C0.2.2 "inner run: all nodes offline"
-    else bad C0.2.2 "inner run: a node reached $PUBLIC_IP under offline-on"; fi
+    # Nested run inside an outer C0.2.2: offline-on is active. Assert every
+    # route closed and intra-cluster alive; do not recurse into check-M0.
+    # Our own listener on our own ports: an outer level's listener may be
+    # orphaned by a cluster recreate, so we never rely on it.
+    if [ -z "$BR4" ] || [ -z "$BR6" ]; then
+        bad C0.2.2 "inner run: kind bridge addrs missing (v4='$BR4' v6='$BR6')"
+    elif ! start_probe_srv; then
+        bad C0.2.2 "inner run: host-side probe listeners failed to start"
+    elif ! c022_pods_up; then
+        bad C0.2.2 "inner run: probe pods failed to come up under offline-on"
+    elif c022_matrix closed && c022_peers_alive; then
+        pass C0.2.2 "inner run: all routes closed, peers alive"
+    else
+        bad C0.2.2 "inner run: route open or peers dead under offline-on"
+    fi
+    c022_cleanup
 else
     "$MAKE" offline-off >/dev/null 2>&1 || true
-    if ! all_nodes_online; then
-        bad C0.2.2 "node cannot reach $PUBLIC_IP before offline-on (cannot prove)"
+    if [ -z "$BR4" ] || [ -z "$BR6" ]; then
+        bad C0.2.2 "kind bridge addrs missing (v4='$BR4' v6='$BR6'): IPv6 probe cannot be made to work"
+    elif ! start_probe_srv; then
+        bad C0.2.2 "host-side probe listeners failed to start (cannot prove reachability)"
+    elif ! c022_pods_up; then
+        bad C0.2.2 "probe pods did not become Ready"
+    elif ! c022_matrix open; then
+        bad C0.2.2 "pre-offline probes failed: a route out is already unreachable (cannot prove offline blocks it)"
     elif ! "$MAKE" offline-on; then
         bad C0.2.2 "make offline-on exited non-zero"
-    elif ! all_nodes_offline; then
+    elif ! { c022_matrix closed && c022_peers_alive; }; then
         "$MAKE" offline-off >/dev/null 2>&1 || true
-        bad C0.2.2 "a node still reached $PUBLIC_IP after offline-on"
+        bad C0.2.2 "a route out stayed open, or peers died, under offline-on"
     elif ! CS_M02_OFFLINE_INNER=1 "$MAKE" check-M0; then
         "$MAKE" offline-off >/dev/null 2>&1 || true
         bad C0.2.2 "make check-M0 failed under offline-on"
-    elif "$MAKE" offline-off && all_nodes_online; then
-        pass C0.2.2 "nodes offline under offline-on; check-M0 green; restored"
     else
-        bad C0.2.2 "node connectivity not restored after offline-off"
+        "$MAKE" offline-off >/dev/null 2>&1 || true
+        start_probe_srv  # inner C0.2.5 recreated the docker network; rebind
+        c022_pods_up     # inner C0.2.5 also recreated the cluster (pods gone)
+        if c022_matrix open; then
+            pass C0.2.2 "all routes closed under offline-on, both families; check-M0 green; restored"
+        else
+            bad C0.2.2 "connectivity not restored after offline-off"
+        fi
     fi
+    c022_cleanup
 fi
 
 # --------------------------------------------------------------------------
