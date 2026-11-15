@@ -27,13 +27,16 @@ func (s *Server) serveGitHTTP(w http.ResponseWriter, r *http.Request, tok string
 	path := r.URL.Path
 	i := strings.Index(path, ".git")
 	repo := path[1:i] // "/{owner}/{repo}.git/..." → "{owner}/{repo}"
+	// The service the client actually used: ?service= on the info/refs GET,
+	// the /git-* path suffix on the POSTs that follow it.
+	svc := gitService(r)
 	if !knownRepo(repo) {
-		_, _ = s.Obs.AddHTTP(r, "https", map[string]any{"token": tok, "repo": repo, "result": "404"})
+		_, _ = s.Obs.AddHTTP(r, "https", map[string]any{"token": tok, "repo": repo, "service": svc, "result": "404"})
 		fxlib.WriteJSON(w, 404, map[string]string{"message": "not found"})
 		return
 	}
 	body, _ := s.Obs.AddHTTP(r, "https", map[string]any{
-		"token": tok, "repo": repo, "service": r.URL.Query().Get("service"),
+		"token": tok, "repo": repo, "service": svc,
 	})
 	status, hdr, out, err := gitHTTPBackend(s.Root, repo, r, body)
 	if err != nil {
@@ -45,6 +48,21 @@ func (s *Server) serveGitHTTP(w http.ResponseWriter, r *http.Request, tok string
 	}
 	w.WriteHeader(status)
 	_, _ = w.Write(out)
+}
+
+// gitService returns the git smart-HTTP service the request addresses:
+// the ?service= parameter on the info/refs GET, or the /git-* path suffix
+// on the POSTs that follow it.
+func gitService(r *http.Request) string {
+	if s := r.URL.Query().Get("service"); s != "" {
+		return s
+	}
+	for _, svc := range []string{"git-upload-pack", "git-receive-pack"} {
+		if strings.HasSuffix(r.URL.Path, "/"+svc) {
+			return svc
+		}
+	}
+	return ""
 }
 
 func knownRepo(repo string) bool {

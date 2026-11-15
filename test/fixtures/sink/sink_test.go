@@ -7,6 +7,7 @@ package sink
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/binary"
@@ -44,13 +45,30 @@ func obsBytes(obs []fxlib.Observation, listener, sha string) ([]byte, bool) {
 	return nil, false
 }
 
+// dialCapturing returns a DialContext that records the local address each
+// connection uses — the source the fixture must record for that request.
+func dialCapturing(src *string) func(ctx context.Context, network, addr string) (net.Conn, error) {
+	d := &net.Dialer{}
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		c, err := d.DialContext(ctx, network, addr)
+		if err == nil {
+			*src = c.LocalAddr().String()
+		}
+		return c, err
+	}
+}
+
 func TestC031Sink(t *testing.T) {
 	env := fxtest.NewEnv(t)
 	s := startSink(t, env)
 	base := "https://" + s.Addr(LHTTPS)
 
 	// HTTPS listener: a TLS request lands and is recorded.
-	tlsClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: env.CA.Pool()}}}
+	var srcHTTPS string
+	tlsClient := &http.Client{Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{RootCAs: env.CA.Pool()},
+		DialContext:     dialCapturing(&srcHTTPS),
+	}}
 	res, err := tlsClient.Post(base+"/loot", "application/octet-stream", bytes.NewReader([]byte("captured-https")))
 	if err != nil {
 		t.Fatalf("https post: %v", err)
@@ -58,7 +76,9 @@ func TestC031Sink(t *testing.T) {
 	_ = res.Body.Close()
 
 	// HTTP listener: plain HTTP works.
-	hres, err := http.Post("http://"+s.Addr(LHTTP)+"/loot", "text/plain", strings.NewReader("captured-http"))
+	var srcHTTP string
+	plainClient := &http.Client{Transport: &http.Transport{DialContext: dialCapturing(&srcHTTP)}}
+	hres, err := plainClient.Post("http://"+s.Addr(LHTTP)+"/loot", "text/plain", strings.NewReader("captured-http"))
 	if err != nil {
 		t.Fatalf("http post: %v", err)
 	}
@@ -85,6 +105,32 @@ func TestC031Sink(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
+	// The recorded source is the client socket address, and the recorded
+	// method/path/host fields are what the request actually carried.
+	var sawCapHTTPS, sawCapHTTP bool
+	for _, o := range env.Observed(base) {
+		if o.Listener == LHTTPS && o.Extra["method"] == "POST" && o.Extra["path"] == "/loot" {
+			if o.Source != srcHTTPS {
+				t.Fatalf("https obs recorded source %q, client dialed %q", o.Source, srcHTTPS)
+			}
+			if o.Extra["host"] != s.Addr(LHTTPS) {
+				t.Fatalf("https obs recorded host %q, sent %q", o.Extra["host"], s.Addr(LHTTPS))
+			}
+			sawCapHTTPS = true
+		}
+		if o.Listener == LHTTP && o.Extra["method"] == "POST" && o.Extra["path"] == "/loot" {
+			if o.Source != srcHTTP {
+				t.Fatalf("http obs recorded source %q, client dialed %q", o.Source, srcHTTP)
+			}
+			if o.Extra["host"] != s.Addr(LHTTP) {
+				t.Fatalf("http obs recorded host %q, sent %q", o.Extra["host"], s.Addr(LHTTP))
+			}
+			sawCapHTTP = true
+		}
+	}
+	if !sawCapHTTPS || !sawCapHTTP {
+		t.Fatalf("missing captured entries (https=%v http=%v)", sawCapHTTPS, sawCapHTTP)
+	}
 }
 
 // TestC032SinkExactBytes sends distinctive payloads over all six listeners and
@@ -97,28 +143,36 @@ func TestC032SinkExactBytes(t *testing.T) {
 	type shot struct {
 		listener string
 		payload  []byte
+		proto    string
+		src      string
 	}
 	var shots []shot
 
 	// HTTPS.
 	p := []byte("exact-bytes-https-\x00\x01\x02")
-	tlsClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: env.CA.Pool()}}}
+	var srcHTTPS2 string
+	tlsClient := &http.Client{Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{RootCAs: env.CA.Pool()},
+		DialContext:     dialCapturing(&srcHTTPS2),
+	}}
 	res, err := tlsClient.Post(base+"/x", "application/octet-stream", bytes.NewReader(p))
 	if err != nil {
 		t.Fatalf("https post: %v", err)
 	}
 	_ = res.Body.Close()
 	// The request line is prepended; the payload must appear verbatim.
-	shots = append(shots, shot{LHTTPS, append(requestLineBytes(http.MethodPost, "/x"), p...)})
+	shots = append(shots, shot{LHTTPS, append(requestLineBytes(http.MethodPost, "/x"), p...), "http", srcHTTPS2})
 
 	// HTTP.
 	p2 := []byte("exact-bytes-http-\xFE\xFF")
-	hres, err := http.Post("http://"+s.Addr(LHTTP)+"/y", "application/octet-stream", bytes.NewReader(p2))
+	var srcHTTP2 string
+	plainClient := &http.Client{Transport: &http.Transport{DialContext: dialCapturing(&srcHTTP2)}}
+	hres, err := plainClient.Post("http://"+s.Addr(LHTTP)+"/y", "application/octet-stream", bytes.NewReader(p2))
 	if err != nil {
 		t.Fatalf("http post: %v", err)
 	}
 	_ = hres.Body.Close()
-	shots = append(shots, shot{LHTTP, append(requestLineBytes(http.MethodPost, "/y"), p2...)})
+	shots = append(shots, shot{LHTTP, append(requestLineBytes(http.MethodPost, "/y"), p2...), "http", srcHTTP2})
 
 	// Raw TCP.
 	tcpPayload := []byte("exact-bytes-tcp-PING-\x03\x04")
@@ -130,8 +184,8 @@ func TestC032SinkExactBytes(t *testing.T) {
 	buf := make([]byte, 8)
 	_ = c.SetReadDeadline(time.Now().Add(2 * time.Second))
 	_, _ = c.Read(buf)
+	shots = append(shots, shot{LTCP, tcpPayload, "tcp", c.LocalAddr().String()})
 	_ = c.Close()
-	shots = append(shots, shot{LTCP, tcpPayload})
 
 	// UDP.
 	udpPayload := []byte("exact-bytes-udp-\x05\x06\x07")
@@ -143,8 +197,8 @@ func TestC032SinkExactBytes(t *testing.T) {
 	_, _ = uc.Write(udpPayload)
 	_ = uc.SetReadDeadline(time.Now().Add(2 * time.Second))
 	_, _ = uc.Read(buf)
+	shots = append(shots, shot{LUDP, udpPayload, "udp", uc.LocalAddr().String()})
 	_ = uc.Close()
-	shots = append(shots, shot{LUDP, udpPayload})
 
 	// DNS over UDP: build a query for exfil.attacker.test.
 	dnsQ := dnsQuery(0xBEEF, "exfil.attacker.test")
@@ -157,14 +211,14 @@ func TestC032SinkExactBytes(t *testing.T) {
 	_ = ud.SetReadDeadline(time.Now().Add(2 * time.Second))
 	rbuf := make([]byte, 512)
 	n, _ := ud.Read(rbuf)
-	_ = ud.Close()
 	if n == 0 {
 		t.Fatal("dns udp: no answer")
 	}
 	if a := dnsAnswerA(rbuf[:n]); a != "10.66.66.66" {
 		t.Fatalf("dns udp answer %q, want 10.66.66.66", a)
 	}
-	shots = append(shots, shot{LDNSU, dnsQ})
+	shots = append(shots, shot{LDNSU, dnsQ, "dns-udp", ud.LocalAddr().String()})
+	_ = ud.Close()
 
 	// DNS over TCP.
 	dnsQ2 := dnsQuery(0xCAFE, "loot.attacker.test")
@@ -181,11 +235,11 @@ func TestC032SinkExactBytes(t *testing.T) {
 	_, _ = io.ReadFull(dc, rl[:])
 	resp := make([]byte, binary.BigEndian.Uint16(rl[:]))
 	_, _ = io.ReadFull(dc, resp)
-	_ = dc.Close()
 	if a := dnsAnswerA(resp); a != "10.66.66.66" {
 		t.Fatalf("dns tcp answer %q, want 10.66.66.66", a)
 	}
-	shots = append(shots, shot{LDNST, dnsQ2})
+	shots = append(shots, shot{LDNST, dnsQ2, "dns-tcp", dc.LocalAddr().String()})
+	_ = dc.Close()
 
 	// ICMP: needs CAP_NET_RAW. If the listener is down the check is reported
 	// SKIPPED-ENV by the suite (grep for the marker below).
@@ -206,7 +260,7 @@ func TestC032SinkExactBytes(t *testing.T) {
 			if _, err := pc.Write(icmpPayload); err != nil {
 				icmpOK = false
 			} else {
-				shots = append(shots, shot{LICMP, icmpPayload})
+				shots = append(shots, shot{LICMP, icmpPayload, "icmp", pc.LocalAddr().String()})
 			}
 			_ = pc.Close()
 		}
@@ -240,6 +294,35 @@ func TestC032SinkExactBytes(t *testing.T) {
 			t.Fatalf("missing exact-byte captures: %v", summarize(obs))
 		}
 		time.Sleep(25 * time.Millisecond)
+	}
+
+	// Every captured entry must report the protocol and source the client
+	// actually used — correlate each shot to its entry by listener+bytes.
+	for _, sh := range shots {
+		obs := env.Observed(base)
+		var entry *fxlib.Observation
+		for i := range obs {
+			o := &obs[i]
+			if o.Listener != sh.listener {
+				continue
+			}
+			got, err := base64.StdEncoding.DecodeString(o.BodyB64)
+			if err != nil {
+				t.Fatalf("obs on %s: undecodable body: %v", sh.listener, err)
+			}
+			if bytes.Contains(got, sh.payload) || digest(sh.payload) == o.BodySHA {
+				entry = o
+			}
+		}
+		if entry == nil {
+			t.Fatalf("no obs entry for %s shot", sh.listener)
+		}
+		if entry.Proto != sh.proto {
+			t.Fatalf("%s obs recorded proto %q, client used %q", sh.listener, entry.Proto, sh.proto)
+		}
+		if entry.Source != sh.src {
+			t.Fatalf("%s obs recorded source %q, client sent from %q", sh.listener, entry.Source, sh.src)
+		}
 	}
 }
 

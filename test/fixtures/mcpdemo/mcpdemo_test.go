@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -170,6 +171,7 @@ func TestC031Mcpdemo(t *testing.T) {
 	// Transport strictness: header/method mismatch is rejected.
 	b, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 9, "method": "tools/list"})
 	req, _ = http.NewRequestWithContext(env.Ctx, http.MethodPost, base+"/mcp", bytes.NewReader(b))
+	req.Header.Set("MCP-Protocol-Version", ProtocolRev)
 	req.Header.Set("Mcp-Method", "tools/call") // lie
 	res, err = env.Direct().Do(req)
 	if err != nil {
@@ -178,6 +180,66 @@ func TestC031Mcpdemo(t *testing.T) {
 	_ = res.Body.Close()
 	if res.StatusCode != 400 {
 		t.Fatalf("Mcp-Method mismatch: status %d", res.StatusCode)
+	}
+
+	// Every mcpdemo observation must equal the request that produced it:
+	// rpc method, transport headers, and for tools/call the tool + arguments.
+	expectedCalls := []struct {
+		name string
+		args map[string]any
+	}{
+		{"create_record", map[string]any{"title": "from-mcp", "body": "via tool"}},
+		{"search", map[string]any{"q": "from-mcp"}},
+		{"annotated_reader", map[string]any{"number": float64(1)}},
+	}
+	var sawDiscover, sawList, sawCall, sawMismatch int
+	for _, o := range env.Observed(base) {
+		rpcM, isRPC := o.Extra["rpc"].(string)
+		if !isRPC {
+			continue // admin endpoints, parse failures handled elsewhere
+		}
+		if o.Method != http.MethodPost || !strings.HasSuffix(o.Path, "/mcp") {
+			t.Fatalf("rpc entry records method %q path %q, want POST .../mcp", o.Method, o.Path)
+		}
+		if hv, _ := o.Extra["hdr_version"].(string); hv != ProtocolRev {
+			t.Fatalf("rpc %s recorded hdr_version %q, client sent %q", rpcM, hv, ProtocolRev)
+		}
+		if hm, _ := o.Extra["hdr_method"].(string); hm != rpcM {
+			if o.Extra["rejected"] != "method-mismatch" {
+				t.Fatalf("rpc %s recorded hdr_method %q with no rejection", rpcM, hm)
+			}
+			sawMismatch++
+		}
+		switch rpcM {
+		case "server/discover":
+			sawDiscover++
+		case "tools/list":
+			sawList++
+		case "tools/call":
+			sawCall++
+			tool, _ := o.Extra["tool"].(string)
+			if tool == "" {
+				t.Fatalf("tools/call entry records no tool: %+v", o.Extra)
+			}
+			if hn, _ := o.Extra["hdr_name"].(string); hn != tool {
+				t.Fatalf("tools/call %s recorded hdr_name %q", tool, hn)
+			}
+			matched := false
+			for _, e := range expectedCalls {
+				if e.name == tool && reflect.DeepEqual(e.args, o.Extra["args"]) {
+					matched = true
+				}
+			}
+			if !matched {
+				t.Fatalf("tools/call entry tool=%q args=%v matches no issued call", tool, o.Extra["args"])
+			}
+		default:
+			t.Fatalf("obs records rpc %q the client never sent", rpcM)
+		}
+	}
+	if sawDiscover == 0 || sawList == 0 || sawCall == 0 || sawMismatch == 0 {
+		t.Fatalf("missing obs coverage: discover=%d list=%d call=%d mismatch=%d",
+			sawDiscover, sawList, sawCall, sawMismatch)
 	}
 }
 

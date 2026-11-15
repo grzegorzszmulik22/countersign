@@ -182,10 +182,14 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 	if !s.Tokens[tok] {
 		w.Header().Set("WWW-Authenticate", `Basic realm="fakehub"`)
 		// Record the credential that was presented even on rejection — leak
-		// oracles need the attempted token, not just that auth failed.
-		entry := map[string]any{"auth": "rejected", "token": tok}
+		// oracles need the attempted token, not just that auth failed — and
+		// the repo the request actually addressed ("" for non-repo paths).
+		entry := map[string]any{"auth": "rejected", "token": tok, "repo": ""}
 		if i := strings.Index(r.URL.Path, ".git"); i > 0 {
 			entry["repo"] = r.URL.Path[1:i]
+			entry["service"] = gitService(r)
+		} else if rp, _ := splitRepoPath(r.URL.Path); rp != "" {
+			entry["repo"] = rp
 		}
 		_, _ = s.Obs.AddHTTP(r, "https", entry)
 		fxlib.WriteJSON(w, 401, map[string]string{"message": "bad credentials"})

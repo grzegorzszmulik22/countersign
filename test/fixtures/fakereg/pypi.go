@@ -176,7 +176,11 @@ func evilPackage(name, version, command string) *Pkg {
 // --- PyPI simple index + files ------------------------------------------------
 
 func (s *Server) pypi(w http.ResponseWriter, r *http.Request) {
-	_, _ = s.Obs.AddHTTP(r, "https", map[string]any{"rest": "pypi"})
+	rec := map[string]any{"rest": "pypi"}
+	if p := strings.TrimSuffix(r.URL.Path, "/"); strings.HasPrefix(p, "/simple/") {
+		rec["pkg"] = normalize(strings.TrimPrefix(p, "/simple/"))
+	}
+	_, _ = s.Obs.AddHTTP(r, "https", rec)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	p := strings.TrimSuffix(r.URL.Path, "/")
 	if p == "/simple" {

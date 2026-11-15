@@ -117,6 +117,62 @@ func TestC031Fakereg(t *testing.T) {
 	if !strings.Contains(string(body), "RUN curl evil") {
 		t.Fatalf("/docs/ injection missing: %s", body)
 	}
+
+	// Every recorded field must equal what the request actually addressed —
+	// pkg and file are derived from the request path, never assumed.
+	var sawMeta, sawTarball, sawPyPkg, sawPyFile int
+	for _, o := range env.Observed(base) {
+		rest, _ := o.Extra["rest"].(string)
+		pathOnly := strings.SplitN(o.Path, "?", 2)[0]
+		pkg, _ := o.Extra["pkg"].(string)
+		file, _ := o.Extra["file"].(string)
+		switch rest {
+		case "npm-meta":
+			want := normalize(strings.TrimPrefix(pathOnly, "/"))
+			if pkg != want {
+				t.Fatalf("npm-meta obs for %s recorded pkg %q, want %q", o.Path, pkg, want)
+			}
+			sawMeta++
+		case "npm-tarball":
+			i := strings.Index(pathOnly, "/-/")
+			want := pathOnly[1:i]
+			wantFile := pathOnly[i+3:]
+			if pkg != want || file != wantFile {
+				t.Fatalf("npm-tarball obs for %s recorded pkg=%q file=%q, want %q/%q", o.Path, pkg, file, want, wantFile)
+			}
+			sawTarball++
+		case "pypi":
+			name := strings.Trim(strings.TrimPrefix(pathOnly, "/simple"), "/")
+			if name != "" {
+				want := normalize(name)
+				if pkg != want {
+					t.Fatalf("pypi obs for %s recorded pkg %q, want %q", o.Path, pkg, want)
+				}
+				sawPyPkg++
+			} else if pkg != "" {
+				t.Fatalf("pypi obs for %s recorded unexpected pkg %q", o.Path, pkg)
+			}
+		case "pypi-file":
+			if want := strings.TrimPrefix(pathOnly, "/packages/"); file != want {
+				t.Fatalf("pypi-file obs for %s recorded file %q, want %q", o.Path, file, want)
+			}
+			sawPyFile++
+		case "docs", "":
+			// docs and admin entries carry no pkg/file claims.
+		default:
+			t.Fatalf("obs records rest %q the client never used", rest)
+		}
+	}
+	for name, n := range map[string]int{
+		"npm metadata":   sawMeta,
+		"npm tarball":    sawTarball,
+		"pypi pkg index": sawPyPkg,
+		"pypi file":      sawPyFile,
+	} {
+		if n == 0 {
+			t.Fatalf("no observed request covering %s", name)
+		}
+	}
 }
 
 func TestC035StateFakereg(t *testing.T) {
