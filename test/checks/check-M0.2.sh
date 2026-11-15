@@ -257,6 +257,9 @@ pod_open() { # pod addr port -> 0 when a TCP connect succeeds (busybox nc)
 }
 
 c022_pods_up() { # (re)deploy probe pods on both workers; idempotent
+    # The namespace may not exist yet — an inner run's C0.2.5 recreates the
+    # whole cluster mid-window.
+    k create namespace "$NS" --dry-run=client -o yaml | k apply -f - >/dev/null 2>&1
     cat <<EOF | k apply -f - >/dev/null 2>&1
 apiVersion: v1
 kind: Pod
@@ -371,9 +374,11 @@ else
         bad C0.2.2 "make check-M0 failed under offline-on"
     else
         "$MAKE" offline-off >/dev/null 2>&1 || true
-        start_probe_srv  # inner C0.2.5 recreated the docker network; rebind
-        c022_pods_up     # inner C0.2.5 also recreated the cluster (pods gone)
-        if c022_matrix open; then
+        # inner C0.2.5 recreated the docker network and the cluster:
+        # rebind the listener and redeploy the probe pods.
+        if ! start_probe_srv || ! c022_pods_up; then
+            bad C0.2.2 "restore probes failed to set up (listener or pods)"
+        elif c022_matrix open; then
             pass C0.2.2 "all routes closed under offline-on, both families; check-M0 green; restored"
         else
             bad C0.2.2 "connectivity not restored after offline-off"
