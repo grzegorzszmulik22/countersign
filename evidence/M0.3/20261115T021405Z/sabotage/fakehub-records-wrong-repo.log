@@ -1,0 +1,18 @@
+make[1]: Entering directory '/home/csbuild/src/cs-fixtures/.check-work/sabotage-M0.3-fakehub-records-wrong-repo'
+CHECK C0.3.1.echo PASS
+CHECK C0.3.1.sink PASS
+CHECK C0.3.1.fakehub FAIL — --- FAIL: TestC031Fakehub (13.54s)     fakehub_test.go:324: request GET /acme/widgets.git/info/refs?service=git-upload-pack recorded repo "attacker/loot", the path addressed "acme/widgets" FAIL FAIL	github.com/countersign/countersign/test/fixtures/fakehub	14.322s FAIL 
+CHECK C0.3.1.fakereg PASS
+CHECK C0.3.1.fakemsg PASS
+CHECK C0.3.1.mockllm PASS
+CHECK C0.3.1.mcpdemo PASS
+CHECK C0.3.2 PASS
+CHECK C0.3.3 PASS
+CHECK C0.3.4 PASS
+CHECK C0.3.5 PASS
+CHECK lint.fixtures PASS
+CHECK C0.3.1.binaries PASS
+M0.3 suite: FAILURES
+check-M0.3: FAIL (exit 1, evidence: evidence/M0.3/20261115T021554Z)
+make[1]: *** [Makefile:35: check-M0.3] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-fixtures/.check-work/sabotage-M0.3-fakehub-records-wrong-repo'

@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "name": "reference",
+  "model": "fixture-model-1",
+  "turns": [
+    {
+      "expect_user_contains": "hostname",
+      "response": {
+        "stop": "tool_use",
+        "text": "I'll read the hostname file.",
+        "calls": [
+          {"key": "r1", "tool": "Read", "input": {"file_path": "/etc/hostname"}}
+        ]
+      }
+    },
+    {
+      "expect_results": {"r1": ""},
+      "response": {
+        "stop": "tool_use",
+        "text": "Now I will check the repository and the issue tracker.",
+        "calls": [
+          {"key": "b1", "tool": "Bash", "input": {"command": "git -C /work/widgets status --porcelain"}},
+          {"key": "w1", "tool": "WebFetch", "input": {"url": "https://api.github.com/repos/acme/widgets/issues/1"}}
+        ]
+      }
+    },
+    {
+      "expect_results": {"b1": "", "w1": "open"},
+      "response": {
+        "stop": "end_turn",
+        "text": "Done: the worktree is clean and issue 1 is open."
+      }
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+diff --git a/test/fixtures/fakehub/git.go b/test/fixtures/fakehub/git.go
+index 75047d9..9b0947d 100644
+--- a/test/fixtures/fakehub/git.go
++++ b/test/fixtures/fakehub/git.go
+@@ -31,12 +31,12 @@ func (s *Server) serveGitHTTP(w http.ResponseWriter, r *http.Request, tok string
+ 	// the /git-* path suffix on the POSTs that follow it.
+ 	svc := gitService(r)
+ 	if !knownRepo(repo) {
+-		_, _ = s.Obs.AddHTTP(r, "https", map[string]any{"token": tok, "repo": repo, "service": svc, "result": "404"})
++		_, _ = s.Obs.AddHTTP(r, "https", map[string]any{"token": "", "repo": repo, "service": svc, "result": "404"})
+ 		fxlib.WriteJSON(w, 404, map[string]string{"message": "not found"})
+ 		return
+ 	}
+ 	body, _ := s.Obs.AddHTTP(r, "https", map[string]any{
+-		"token": tok, "repo": repo, "service": svc,
++		"token": "", "repo": repo, "service": svc,
+ 	})
+ 	status, hdr, out, err := gitHTTPBackend(s.Root, repo, r, body)
+ 	if err != nil {

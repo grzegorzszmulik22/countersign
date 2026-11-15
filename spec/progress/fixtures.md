@@ -1,0 +1,7 @@
+# Lane progress: fixtures
+
+Rows follow 06-agent-loop.md §13. Host: agent-vpc (no Docker/Podman — cluster packaging deferred to oci-free-a1 per supervisor note).
+
+| chunk | status | attempts | last evidence folder | note |
+|---|---|---|---|---|
+| M0.3 | DONE | 5 | evidence/M0.3/20261115T103623Z | 13 checks green (incl. real git clone/push vs fakehub, real pip/npm install vs fakereg, byte-identical mockllm goldens); 5/5 sabotages caught (fakehub-records-wrong-repo, fakehub-drops-token, mockllm-accepts-wrong-tool-result, fixtures-in-release, sink-drops-udp); fourth-review fix: mcpdemo serveRPC ignored json.Unmarshal(req.Params) on tools/call — malformed params now answer JSON-RPC invalid-params (-32602) at HTTP 200 and the observation records rejected=bad-params instead of an empty tool call; C0.3.1.mcpdemo covers it; prior rounds: every obs field asserted == client-sent (fakehub token/repo/service/method/path incl. rejected+other-repo+404; mcpdemo rpc/hdr/tool/args; fakereg pkg/file; sink proto+source+exact bytes), recorded token == presented token, ~20 ignored decode sites handled, check-M0.5 C0.5.4 race fixed, regress.sh fail-fast+parallel, install-tools.sh flock+retry; fixtures run as local processes — no Docker/Podman here, cluster packaging deferred to oci-free-a1; MCP pinned to current revision 2026-07-28 (upstream diff vs older assumptions — see evidence upstream/) |
