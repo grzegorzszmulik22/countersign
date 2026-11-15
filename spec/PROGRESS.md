@@ -7,7 +7,7 @@ Statuses: `TODO`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-CR-NNN`, `SKIPPED-E
 |---|---|---|---|---|---|
 | M0.1 | Repository and toolchain | DONE | 1 | evidence/M0.1/20261114T161541Z | lane foundation; re-verified by supervisor on oci-free-a1 and agent-vpc |
 | M0.2 | Hermetic cluster | TODO | 0 | | |
-| M0.3 | Fixture services | IN_PROGRESS | 5 | lane/fixtures | supervisor review 5: 9/9 unseen sabotages caught, regress green, race-clean. Earlier rounds found: wrong tool-result content accepted; token, repository, file and argument fields not tested; ignored JSON errors; two edits to shared tooling (kept, sound). REOPENED after merge: fakereg tests use the host's pip and npm, absent on oci-free-a1, so make regress fails there |
+| M0.3 | Fixture services | DONE | 7 | evidence/M0.3/20261115T205828Z | lane fixtures; reopened for host-dependent pip/npm, then for a pinned node that did not run on oci-free-a1 (libatomic) and tests that did not prove which binary ran. Final supervisor review of main+lane on BOTH hosts: make tools and regress green on oci-free-a1, 10/10 unseen sabotages caught on each host. One C0.1.2 failure during the agent-vpc review, under load from another lane, did not reproduce on a fresh clone |
 | M0.4 | Scripted agent | TODO | 0 | | |
 | M0.5 | Check, sabotage and evidence tooling | DONE | 2 | evidence/M0.5/20261114T161922Z | lane foundation; re-verified by supervisor, frozen-file sabotages caught |
 | M1.1 | Records and envelope | TODO | 0 | | |
