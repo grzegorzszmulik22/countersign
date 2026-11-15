@@ -32,6 +32,16 @@ chk kubectl       "$KUBECTL_VERSION"              "$("$TOOLS/bin/kubectl" versio
 chk helm          "$HELM_VERSION"                 "$("$TOOLS/bin/helm" version 2>&1)"
 chk golangci-lint "${GOLANGCI_LINT_VERSION#v} "   "$("$TOOLS/bin/golangci-lint" version 2>&1)"
 chk python        "Python $PYTHON_VERSION"        "$("$TOOLS/python/bin/python3" --version 2>&1)"
+chk node          "$NODE_VERSION"                 "$("$TOOLS/node/bin/node" --version 2>&1)"
+# npm is bundled with the pinned node release; assert it runs and reports a
+# semver (the node pin determines the npm version).
+npmv="$(PATH="$TOOLS/bin:$PATH" "$TOOLS/bin/npm" --version 2>&1)"
+if printf '%s' "$npmv" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+'; then
+    printf 'version ok: npm %s\n' "$npmv"
+else
+    printf 'version MISMATCH: npm (bundled with %s, got %s)\n' "$NODE_VERSION" "$npmv" >&2
+    fail=1
+fi
 chk cryptography  "$CRYPTOGRAPHY_VERSION"         "$("$TOOLS/python/bin/python3" -c 'import cryptography; print(cryptography.__version__)' 2>&1)"
 
 # The wheel file pin must match the file we install from (cache).

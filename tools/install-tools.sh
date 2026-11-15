@@ -128,6 +128,19 @@ PYBIN="$TOOLS/python/bin"
 "$PYBIN/python3" -m pip --version >/dev/null 2>&1 || "$PYBIN/python3" -m ensurepip --upgrade >/dev/null 2>&1 || true
 ln -sfn ../python/bin/python3 "$TOOLS/bin/python3"
 
+# --- Node.js (ships npm) -----------------------------------------------------
+if ! { [ -x "$TOOLS/node/bin/node" ] && [ "$("$TOOLS/node/bin/node" --version 2>/dev/null)" = "$NODE_VERSION" ]; }; then
+    tgz=$(fetch "https://nodejs.org/dist/${NODE_VERSION}/${NODE_TARBALL}" \
+        "$NODE_SHA256" "$NODE_TARBALL")
+    rm -rf "$TOOLS/node"
+    mkdir -p "$TOOLS/node"
+    tar -xzf "$tgz" -C "$TOOLS/node" --strip-components=1
+    echo "installed node $NODE_VERSION"
+fi
+for b in node npm npx corepack; do
+    [ -e "$TOOLS/node/bin/$b" ] && ln -sfn "../node/bin/$b" "$TOOLS/bin/$b"
+done
+
 # --- cryptography wheel (pinned file + sha256) -------------------------------
 if ! [ "$("$PYBIN/python3" -c 'import cryptography,sys; print(cryptography.__version__)' 2>/dev/null)" = "$CRYPTOGRAPHY_VERSION" ]; then
     whl=$(fetch "$CRYPTOGRAPHY_WHEEL_URL" "$CRYPTOGRAPHY_SHA256" "$CRYPTOGRAPHY_WHEEL")
