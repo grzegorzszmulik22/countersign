@@ -65,7 +65,7 @@ Statuses: `TODO`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-CR-NNN`, `SKIPPED-E
 | M8.3 | Request-side tracking: results, windows, context | TODO | 0 | | |
 | M8.4 | MCP inspection | TODO | 0 | | |
 | M8.5 | Privacy and redaction | TODO | 0 | | |
-| M9.1 | Reference reconciler and trace corpus | TODO | 0 | | |
+| M9.1 | Reference reconciler and trace corpus | DONE | 1 | lane/reconcile-ref | run ahead of M5-M8 by supervisor waiver (no code dependency). Supervisor review on main+lane: regress green, 5/5 unseen sabotages caught (one intent matching two MCP calls, arguments not compared, result not closing the window, provider intents opening a window, maxEffects off by one). 198 hand-derived traces |
 | M9.2 | Go engine and offline verification | TODO | 0 | | |
 | M9.3 | Inline enforcement | TODO | 0 | | |
 | M9.4 | Expectation rule packs | TODO | 0 | | |
