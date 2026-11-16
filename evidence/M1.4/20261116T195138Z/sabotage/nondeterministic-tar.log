@@ -1,0 +1,13 @@
+make[1]: Entering directory '/home/csbuild/src/cs-evidence-go/.check-work/sabotage-M1.4-nondeterministic-tar'
+CHECK C1.4.1 PASS
+CHECK C1.4.2 FAIL — === RUN   TestC142_DeterministicExport     ledger_test.go:174: two exports of one session differ --- FAIL: TestC142_DeterministicExport (4.96s) FAIL FAIL	github.com/countersign/countersign/internal/ledger	5.016s FAIL 
+CHECK C1.4.3 PASS
+CHECK C1.4.4 PASS
+CHECK C1.4.5 PASS
+CHECK C1.4.6 PASS
+CHECK C1.4.7 PASS
+CHECK C1.4.7 PASS
+M1.4 suite: FAILURES
+check-M1.4: FAIL (exit 1, evidence: evidence/M1.4/20261116T200242Z)
+make[1]: *** [Makefile:37: check-M1.4] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-evidence-go/.check-work/sabotage-M1.4-nondeterministic-tar'

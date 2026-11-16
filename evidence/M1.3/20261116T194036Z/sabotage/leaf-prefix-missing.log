@@ -1,0 +1,10 @@
+make[1]: Entering directory '/home/csbuild/src/cs-evidence-go/.check-work/sabotage-M1.3-leaf-prefix-missing'
+CHECK C1.3.1 PASS
+CHECK C1.3.2 PASS
+CHECK C1.3.3 PASS
+CHECK C1.3.4 FAIL —     mlog_test.go:285: empty leaf: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 --- FAIL: TestC134_Vectors (0.00s) FAIL FAIL	github.com/countersign/countersign/internal/mlog	0.015s FAIL 
+CHECK C1.3.5 PASS
+M1.3 suite: FAILURES
+check-M1.3: FAIL (exit 1, evidence: evidence/M1.3/20261116T194045Z)
+make[1]: *** [Makefile:37: check-M1.3] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-evidence-go/.check-work/sabotage-M1.3-leaf-prefix-missing'
