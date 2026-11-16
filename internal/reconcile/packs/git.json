@@ -1,0 +1,23 @@
+{
+  "kind": "expectation-pack/v1",
+  "pack": "git",
+  "comment": "spec/04 §6.2 git rows: clone/fetch/pull expect git-smart-http read, push expects write. remote_url binds the first argument that parses as an https URL; unbound means any repository inside the selected grant. Options that can redirect the remote or run another command forbid firing.",
+  "rules": [
+    {
+      "id": "git-read",
+      "when": {"tool": "Bash", "tool_class": "exec", "argv0": ["git"], "argv1": ["clone", "fetch", "pull"]},
+      "forbid_tokens": ["-c", "--config", "--config-env", "--exec", "--upload-pack", "--receive-pack", "-o"],
+      "forbid_prefixes": ["-c", "--config=", "--config-env=", "--exec=", "--upload-pack=", "--receive-pack="],
+      "bind": {"remote_url": {"kind": "first-arg-url", "schemes": ["https"]}},
+      "expect": [{"shape": "git-smart-http", "access": "read", "url": "{remote_url}"}]
+    },
+    {
+      "id": "git-push",
+      "when": {"tool": "Bash", "tool_class": "exec", "argv0": ["git"], "argv1": ["push"]},
+      "forbid_tokens": ["-c", "--config", "--config-env", "--exec", "--upload-pack", "--receive-pack", "-o"],
+      "forbid_prefixes": ["-c", "--config=", "--config-env=", "--exec=", "--upload-pack=", "--receive-pack="],
+      "bind": {"remote_url": {"kind": "first-arg-url", "schemes": ["https"]}},
+      "expect": [{"shape": "git-smart-http", "access": "write", "url": "{remote_url}"}]
+    }
+  ]
+}

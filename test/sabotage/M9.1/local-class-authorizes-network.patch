@@ -1,0 +1,11 @@
+--- a/ref/python/refreconcile/reconcile.py	2026-11-16 10:39:18.211098734 +0000
++++ b/ref/python/refreconcile/reconcile.py	2026-11-16 10:39:21.663106874 +0000
+@@ -99,7 +99,7 @@
+ 
+ 
+ def _open_network_intents(st):
+-    return [i for i in st.intent_order if i.open and i.cls in NETWORK_CLASSES]
++    return [i for i in st.intent_order if i.open]
+ 
+ 
+ def _map_mcp_tool(st, tool_name):
