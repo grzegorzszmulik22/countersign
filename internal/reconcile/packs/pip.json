@@ -1,0 +1,17 @@
+{
+  "kind": "expectation-pack/v1",
+  "pack": "pip",
+  "comment": "spec/04 §6.2 pip row: `pip install` and `python -m pip install` expect GET/HEAD on the package index hosts (PyPI).",
+  "rules": [
+    {
+      "id": "pip-install",
+      "when": {"tool": "Bash", "tool_class": "exec", "argv0": ["pip", "pip3"], "argv1": ["install"]},
+      "expect": [{"shape": "http", "methods": ["GET", "HEAD"], "hosts": ["pypi.org", "files.pythonhosted.org"]}]
+    },
+    {
+      "id": "python-m-pip-install",
+      "when": {"tool": "Bash", "tool_class": "exec", "argv0_prefix": ["python"], "argv_prefix": ["-m", "pip", "install"]},
+      "expect": [{"shape": "http", "methods": ["GET", "HEAD"], "hosts": ["pypi.org", "files.pythonhosted.org"]}]
+    }
+  ]
+}

@@ -3,10 +3,12 @@
 Updated by the implementation agent on every loop iteration (`06-agent-loop.md` §1, §13).
 Statuses: `TODO`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-CR-NNN`, `SKIPPED-ENV`, `AWAITING-GATE`.
 
+Build order: Slice 1 first (`README.md`, Build order; CR-001).
+
 | chunk | title | status | attempts | last evidence folder | note |
 |---|---|---|---|---|---|
 | M0.1 | Repository and toolchain | DONE | 1 | evidence/M0.1/20261114T161541Z | lane foundation; re-verified by supervisor on oci-free-a1 and agent-vpc |
-| M0.2 | Hermetic cluster | TODO | 0 | | |
+| M0.2 | Hermetic cluster | DONE | 2 | lane/cluster | supervisor review on main+lane: lane checks and sabotages green on a fresh clone, 2/2 unseen sabotages caught (offline mode skipping IPv6; DROP turned into RETURN). Regress failed only in C0.4.1: the M0.4 image build read the live tree while a parallel suite changed it (docker: 'missed writing' on tools/verify-versions.sh); check-M0.4 passes alone. Race handed to lane agent |
 | M0.3 | Fixture services | DONE | 7 | evidence/M0.3/20261115T205828Z | lane fixtures; reopened for host-dependent pip/npm, then for a pinned node that did not run on oci-free-a1 (libatomic) and tests that did not prove which binary ran. Final supervisor review of main+lane on BOTH hosts: make tools and regress green on oci-free-a1, 10/10 unseen sabotages caught on each host. One C0.1.2 failure during the agent-vpc review, under load from another lane, did not reproduce on a fresh clone |
 | M0.4 | Scripted agent | DONE | 1 | evidence/M0.4/20261114T173517Z | lane agent; held for M0.3, then reviewed as main+lane on both hosts: on oci-free-a1 (its Docker host) 3/3 unseen sabotages caught; on agent-vpc every check is SKIPPED-ENV by design (no Docker). A first regress on oci-free-a1 failed in C0.5.3 while the cluster lane was starting kind; a second full regress was green |
 | M0.5 | Check, sabotage and evidence tooling | DONE | 2 | evidence/M0.5/20261114T161922Z | lane foundation; re-verified by supervisor, frozen-file sabotages caught |
@@ -23,8 +25,10 @@ Statuses: `TODO`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-CR-NNN`, `SKIPPED-E
 | M2.4 | Write-ahead evidence and fail-closed | TODO | 0 | | |
 | M2.5 | Protocol edges and hardening | TODO | 0 | | |
 | M2.6 | Performance harness | TODO | 0 | | |
+| M2.7 | Local runner (CR-001, slice step 2) | TODO | 0 | | |
 | M3.1 | Policy schema and matcher | DONE | 1 | evidence/M3.1/20261114T194524Z | merged 2026-11-15 after second review on agent-vpc (3/3 unseen sabotages caught again; one scan finding was a test file, false positive). run ahead of M2 by supervisor waiver (no code dependency). Supervisor review: regress green, 3/3 unseen sabotages caught (http default port, trailing-dot host, ** zero segments), race-clean. Lane edited shared tooling (sabotage.sh evidence, lint cache dirs): reviewed, sound, kept |
 | M3.2 | Credential store, placeholders, injection | TODO | 0 | | |
+| **G2L** | **Human gate: the local runner's boundary (CR-001)** | TODO | | | |
 | M3.3 | Pinning, placeholder misuse, credential shapes | TODO | 0 | | |
 | M3.4 | Response scrubbing | TODO | 0 | | |
 | M3.5 | Limits | TODO | 0 | | |
@@ -65,13 +69,14 @@ Statuses: `TODO`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-CR-NNN`, `SKIPPED-E
 | M8.3 | Request-side tracking: results, windows, context | TODO | 0 | | |
 | M8.4 | MCP inspection | TODO | 0 | | |
 | M8.5 | Privacy and redaction | TODO | 0 | | |
-| M9.1 | Reference reconciler and trace corpus | TODO | 0 | | |
+| M9.1 | Reference reconciler and trace corpus | DONE | 1 | lane/reconcile-ref | run ahead of M5-M8 by supervisor waiver (no code dependency). Supervisor review on main+lane: regress green, 5/5 unseen sabotages caught (one intent matching two MCP calls, arguments not compared, result not closing the window, provider intents opening a window, maxEffects off by one). 198 hand-derived traces |
 | M9.2 | Go engine and offline verification | TODO | 0 | | |
 | M9.3 | Inline enforcement | TODO | 0 | | |
 | M9.4 | Expectation rule packs | TODO | 0 | | |
 | M9.5 | MCP: undeclared calls and server contracts | TODO | 0 | | |
 | M9.6 | Policy and contract learning | TODO | 0 | | |
 | M9.7 | Intent annotations on changesets | TODO | 0 | | |
+| **G34** | **Human gate: slice transaction and reconciliation semantics (CR-001)** | TODO | | | |
 | M9.8 | Transaction propagation into MCP servers | TODO | 0 | | |
 | **G4** | **Human gate: reconciliation semantics** | TODO | | | |
 | M10.1 | Labels and taint state | TODO | 0 | | |
@@ -94,6 +99,7 @@ Statuses: `TODO`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-CR-NNN`, `SKIPPED-E
 | M13.2 | Write budget | TODO | 0 | | |
 | M13.3 | Attested outputs | TODO | 0 | | |
 | M13.4 | The gate | TODO | 0 | | |
+| M14.0 | The slice: demonstration, benchmark subset, real agents (CR-001) | TODO | 0 | | |
 | M14.1 | Benchmark runner, scenarios, shared policies | TODO | 0 | | |
 | M14.2 | Defence levels | TODO | 0 | | |
 | M14.3 | Results | TODO | 0 | | |

@@ -119,6 +119,24 @@
 
 **Denied.** Optimizing past the targets (D18). Benchmarks against other proxies.
 
+## M2.7 Local runner (CR-001)
+
+**Build.** `cmd/cs` with `cs run [--policy <file>] [--cooperative] -- <command…>`. It starts `csledger` (file store) and `csbroker --local` on loopback, mints a session with the policy, and runs the command as the sandbox. Inside, the proxy variables (`HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY` and their lower-case forms; `NO_PROXY` empty) point at the broker, the trust variables (`SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, `GIT_SSL_CAINFO`, `CURL_CA_BUNDLE`) at the session CA, and credentials exist only as placeholders (injection is M3.2's).
+
+**Enforced mode** is the default on Linux: the command runs in a new user, mount and network namespace. The network namespace has only loopback; a relay inside it listens on `127.0.0.1:<port>` and forwards only to the broker, over a Unix socket handed in by the parent. The runner's data directory (credentials, signing keys, ledger, session CA key) is covered by an empty `tmpfs` inside the mount namespace. No root, no setuid helper, no added capabilities on the host, no container runtime. Where unprivileged user namespaces are unavailable (the probe and its output are recorded), `cs run` exits non-zero with one sentence naming `--cooperative`. With `--cooperative`, the same variables are set without namespaces, and `session.started` records `boundary: cooperative`; `csverify` prints the boundary in every verdict. On Windows and macOS only cooperative mode exists. `cs run` exits with the command's status and prints the session ID and the bundle path.
+
+**Checks.**
+- C2.7.1 In enforced mode, a process that ignores the proxy variables and connects straight to a fixture's address (TCP, UDP, IPv6) fails, and the fixture's `/__observed` stays empty; the same process under `--cooperative` reaches it (so the check can see a leak).
+- C2.7.2 A grandchild started with an empty environment (`env -i`) still reaches nothing but the broker in enforced mode.
+- C2.7.3 `curl`, `git` over smart HTTP, Python `requests` and a Node client using an environment-aware proxy agent reach `echo` through the broker under the session CA with no other configuration, and each request has its ledger record.
+- C2.7.4 A canary scan from inside an enforced sandbox (environment, every readable file, `/proc` of every visible process) finds no real credential, no signing key and no session CA key; the same scan under `--cooperative` is reported, and never counted for H1 or H23.
+- C2.7.5 With the probe forced to report no unprivileged user namespaces: `cs run` without `--cooperative` exits non-zero with the one-sentence message; with it, `session.started` has `boundary: cooperative` and `csverify` prints it.
+- C2.7.6 SIGINT to `cs run` ends the command and its descendants, seals the session, and leaves a bundle that verifies in both verifiers.
+
+**Sabotage.** `relay-forwards-any-destination` (the relay connects to the address the client asked for instead of only the broker socket); `datadir-visible-in-sandbox` (the tmpfs cover is skipped); `cooperative-not-recorded` (cooperative sessions record `boundary: enforced`).
+
+**Denied.** Containers or any container runtime. Root, setuid, file capabilities or a privileged helper on the host. Weakening the namespace setup to make an agent work (an agent that fails under enforced mode is reported, not accommodated). Filesystem policy beyond hiding the data directory (later work). A GUI.
+
 ---
 
 ## Exit

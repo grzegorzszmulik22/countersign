@@ -1,0 +1,39 @@
+make[1]: Entering directory '/home/opc/src/cs-cluster/.check-work/sabotage-M0.2-allow-all-policy'
+== preamble: make images && make cluster-up ==
+make[2]: Entering directory '/home/opc/src/cs-cluster/.check-work/sabotage-M0.2-allow-all-policy'
+images: digest refs -> tags
+  quay.io/calico/calico:v3.33.0
+  quay.io/calico/node:v3.33.0
+  quay.io/calico/third-party-cni-plugins:v3.33.0
+  registry.k8s.io/e2e-test-images/agnhost:2.56
+  docker.io/library/busybox:1.37.0
+images: quay.io/calico/calico:v3.33.0 already on countersign-worker
+images: quay.io/calico/calico:v3.33.0 already on countersign-control-plane
+images: quay.io/calico/calico:v3.33.0 already on countersign-worker2
+images: quay.io/calico/node:v3.33.0 already on countersign-worker
+images: quay.io/calico/node:v3.33.0 already on countersign-control-plane
+images: quay.io/calico/node:v3.33.0 already on countersign-worker2
+images: quay.io/calico/third-party-cni-plugins:v3.33.0 already on countersign-worker
+images: load quay.io/calico/third-party-cni-plugins:v3.33.0 -> countersign-control-plane
+images: quay.io/calico/third-party-cni-plugins:v3.33.0 already on countersign-worker2
+images: registry.k8s.io/e2e-test-images/agnhost:2.56 already on countersign-worker
+images: registry.k8s.io/e2e-test-images/agnhost:2.56 already on countersign-control-plane
+images: registry.k8s.io/e2e-test-images/agnhost:2.56 already on countersign-worker2
+images: load docker.io/library/busybox:1.37.0 -> countersign-worker
+images: load docker.io/library/busybox:1.37.0 -> countersign-control-plane
+images: docker.io/library/busybox:1.37.0 already on countersign-worker2
+images: done
+make[2]: Leaving directory '/home/opc/src/cs-cluster/.check-work/sabotage-M0.2-allow-all-policy'
+make[2]: Entering directory '/home/opc/src/cs-cluster/.check-work/sabotage-M0.2-allow-all-policy'
+cluster-up: cluster 'countersign' already exists (idempotent path)
+error: error validating "deploy/kind/calico-v3.33.0.yaml": error validating data: failed to download openapi: Get "http://localhost:8080/openapi/v2?timeout=32s": dial tcp 127.0.0.1:8080: connect: connection refused; if you choose to ignore these errors, turn validation off with --validate=false
+make[2]: *** [Makefile:46: cluster-up] Error 1
+make[2]: Leaving directory '/home/opc/src/cs-cluster/.check-work/sabotage-M0.2-allow-all-policy'
+CHECK C0.2.1 FAIL — cluster preamble failed (make images/cluster-up)
+CHECK C0.2.2 FAIL — cluster preamble failed (make images/cluster-up)
+CHECK C0.2.3 FAIL — cluster preamble failed (make images/cluster-up)
+CHECK C0.2.4 FAIL — cluster preamble failed (make images/cluster-up)
+CHECK C0.2.5 FAIL — cluster preamble failed (make images/cluster-up)
+check-M0.2: FAIL (exit 1, evidence: evidence/M0.2/20261114T184512Z)
+make[1]: *** [Makefile:36: check-M0.2] Error 1
+make[1]: Leaving directory '/home/opc/src/cs-cluster/.check-work/sabotage-M0.2-allow-all-policy'

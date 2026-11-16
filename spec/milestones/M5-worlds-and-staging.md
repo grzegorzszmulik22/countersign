@@ -55,7 +55,7 @@ Decision table `test/vectors/policy/classes.yaml` (≥ 250 rows, expected column
 - C5.2.2 A request matching no rule is `irreversible`. A grant with an unknown stager or a `staged` class without a stager fails validation.
 - C5.2.3 A grant `requires` looser than `autonomy[class]` has no effect (strictest wins), asserted on 20 rows.
 - C5.2.4 `declared_safe` is recorded on the effect and survives into the session's records.
-- C5.2.5 All M2–M4 suites pass with the default autonomy table.
+- C5.2.5 All merged M2–M4 suites (in the slice: M2.1–M2.4, M2.7, M3.1, M3.2, M3.6) pass with the default autonomy table.
 
 **Sabotage.** `unclassified-defaults-to-safe`; `grant-requires-overrides-autonomy-downward`; `post-treated-as-safe`.
 
@@ -70,7 +70,7 @@ Decision table `test/vectors/policy/classes.yaml` (≥ 250 rows, expected column
 - C5.3.2 No `session.seal` precedes `world.closed` (ordering asserted; sabotage below).
 - C5.3.3 World service down: `safe` and `control` requests succeed; a staged push, a POST and a DELETE are each denied `WORLD_UNAVAILABLE`; nothing reaches the fixtures.
 - C5.3.4 A request by the world service to an upstream is recorded as `effect.http{actor: world}` **before** it is sent (write-ahead assertion as C2.4.1) and is matched against the session's grants: a world request outside the grants is denied like any other.
-- C5.3.5 The world token cannot be used from a sandbox pod (wrong certificate, wrong source) → `NO_SESSION`.
+- C5.3.5 The world token cannot be used from a sandbox (a pod in cluster mode; the `cs run` namespace in local mode) (wrong certificate, wrong source) → `NO_SESSION`.
 - C5.3.6 MM5.7: planted marker strings in staged content and file names do not appear in plaintext anywhere on the volume.
 - C5.3.7 World service restart: journal and state are rebuilt from the ledger plus its stores; pending entries intact.
 
@@ -117,7 +117,7 @@ Decision table `test/vectors/policy/classes.yaml` (≥ 250 rows, expected column
 **Build.** `csctl world abort|rewind|show`. Abort deletes the shadow and closes the world `aborted`. Rewind per `05` §3 (the undo part is wired in M7). The harness's **world oracle**: every fixture's `GET /__state` returns a deterministic digest of all its externally visible state; the oracle compares digests before a session and after.
 
 **Checks.**
-- C5.6.1 MM5.3 over: a benign clone-commit-push flow; ten pushes across four refs; the M3/M4 attack miniatures that involve pushes (A2, B3).
+- C5.6.1 MM5.3 over: a benign clone-commit-push flow; ten pushes across four refs; the attack miniatures that involve pushes (A2, B3), under `cs run` in enforced mode (and in cluster mode once M4 is merged).
 - C5.6.2 Oracle self-test: one direct write to `fakehub` changes its digest; a read does not.
 - C5.6.3 Rewind to the second of five entries: entries three to five are dropped, the overlay shows the second entry's state, `world.rewound` lists the dropped entries, and a later commit (M6) would apply only what remains.
 - C5.6.4 After abort the shadow directory is gone and the world's data key is destroyed (the encrypted stores can no longer be read).

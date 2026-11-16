@@ -34,9 +34,20 @@ chk golangci-lint "${GOLANGCI_LINT_VERSION#v} "   "$("$TOOLS/bin/golangci-lint" 
 chk python        "Python $PYTHON_VERSION"        "$("$TOOLS/python/bin/python3" --version 2>&1)"
 chk node          "$NODE_VERSION"                 "$("$TOOLS/bin/node" --version 2>&1)"
 # node links libatomic.so.1; the toolchain must provide it for hosts that
-# lack the system lib (see install-tools.sh).
-if [ -f "$TOOLS/lib/libatomic.so.1.2.0" ] && \
-   env "LD_LIBRARY_PATH=$TOOLS/lib" ldd "$TOOLS/node/bin/node" 2>/dev/null | grep -q "libatomic.so.1 => $TOOLS/lib/"; then
+# lack the system lib (see install-tools.sh). ldd spawns a subshell loader,
+# which intermittently fails under the fd/process pressure of nested check
+# runs — retry so a transient exec failure cannot produce a false MISMATCH.
+libatomic_ok() {
+    local i
+    for i in 1 2 3 4; do
+        [ -f "$TOOLS/lib/libatomic.so.1.2.0" ] || return 1
+        env "LD_LIBRARY_PATH=$TOOLS/lib" ldd "$TOOLS/node/bin/node" 2>/dev/null \
+            | grep -q "libatomic.so.1 => $TOOLS/lib/" && return 0
+        sleep 0.5
+    done
+    return 1
+}
+if libatomic_ok; then
     printf 'version ok: libatomic bundled for node\n'
 else
     printf 'version MISMATCH: .tools/lib/libatomic.so.1 missing or not resolved\n' >&2

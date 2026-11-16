@@ -1,0 +1,13 @@
+== make check-M0.1 ==
+make[2]: Entering directory '/home/opc/src/cs-cluster'
+CHECK C0.1.1 PASS
+CHECK C0.1.2 PASS
+CHECK C0.1.3 PASS
+CHECK C0.1.4 PASS
+CHECK C0.1.5 PASS
+M0.1 suite: all checks passed
+check-M0.1: PASS (evidence: evidence/M0.1/20261114T170308Z)
+make[2]: Leaving directory '/home/opc/src/cs-cluster'
+CHECK M0.1 PASS
+== make check-M0.2 ==
+make[2]: Entering directory '/home/opc/src/cs-cluster'

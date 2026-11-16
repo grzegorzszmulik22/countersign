@@ -1,0 +1,6 @@
+kernel: 7.0.0-1013-oracle
+arch: aarch64
+cpu_model: Neoverse-N1
+cores: 2
+memory: 11925 MB
+docker: 29.1.3
