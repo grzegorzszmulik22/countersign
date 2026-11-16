@@ -43,7 +43,7 @@ job_C2.3.5() { gotest "$1" '^TestC235MemoryBound$' -timeout 300s; }
 job_lint.proxy() {
     command -v golangci-lint >/dev/null 2>&1 || { echo "golangci-lint not on PATH"; return 1; }
     mkdir -p "$ROOT/.check-work/tmp"
-    if GOLANGCI_LINT_CACHE="$ROOT/.check-work/golangci-lint-cache" TMPDIR="$ROOT/.check-work/tmp" \
+    if GOLANGCI_LINT_CACHE="$ROOT/.check-work/golangci-lint-cache-M2.3" TMPDIR="$ROOT/.check-work/tmp" \
         golangci-lint run --build-tags fixtures ./internal/proxy ./cmd/csbroker >"$WORK/lint.proxy.detail.log" 2>&1; then
         return 0
     fi
@@ -51,15 +51,12 @@ job_lint.proxy() {
     return 1
 }
 
-# C2.3.1 (1 GiB upload/download) and C2.3.5 (RSS bound) are heavyweight and
-# contend for bandwidth; run them serially, then the rest in parallel.
-for id in C2.3.1 C2.3.5; do
+# Timing-sensitive: C2.3.2 measures per-event added delay against a 2 ms
+# p99 bound and C2.3.1/C2.3.5 push a GiB through the pipe, so jobs run
+# serially — parallel lint/build load was enough to skew the measurement.
+for id in C2.3.1 C2.3.2 C2.3.3 C2.3.4 C2.3.5 lint.proxy; do
     ( "job_$id" "$id" >"$WORK/$id.out" 2>&1; echo $? >"$WORK/$id.rc" )
 done
-for id in C2.3.2 C2.3.3 C2.3.4 lint.proxy; do
-    ( "job_$id" "$id" >"$WORK/$id.out" 2>&1; echo $? >"$WORK/$id.rc" ) &
-done
-wait
 
 for id in C2.3.1 C2.3.2 C2.3.3 C2.3.4 C2.3.5 lint.proxy; do
     if [ "$(cat "$WORK/$id.rc" 2>/dev/null)" = "0" ]; then

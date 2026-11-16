@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/countersign/countersign/internal/names"
 	"github.com/countersign/countersign/internal/policy"
 )
 
@@ -130,7 +131,7 @@ func (s *Server) upstreamRoots() *x509.CertPool {
 // the subset of 05 §1 rules that exist before M5 lands (boundary endpoint
 // and control hosts; safe reads; everything else irreversible).
 func classify(authority, method string) string {
-	if strings.EqualFold(authority, "countersign.internal") {
+	if strings.EqualFold(authority, names.BoundaryHost) {
 		return "control"
 	}
 	switch method {

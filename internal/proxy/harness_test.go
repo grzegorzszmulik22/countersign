@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/countersign/countersign/internal/names"
 	"github.com/countersign/countersign/test/fixtures/echo"
 	"github.com/countersign/countersign/test/fixtures/fxlib"
 	"github.com/countersign/countersign/test/fixtures/fxres"
@@ -133,7 +134,7 @@ func newTestEnvRoots(t *testing.T, entries []SessionEntry, routes map[string]str
 // its path (for the session table). Call before newTestEnv.
 func writePolicy(t *testing.T, dir, name, grantsYAML string) string {
 	t.Helper()
-	doc := "apiVersion: countersign.dev/v1alpha1\n" +
+	doc := "apiVersion: " + names.APIGroup + "/v1alpha1\n" +
 		"kind: SessionPolicy\n" +
 		"metadata: {name: " + name + "}\n" +
 		"spec:\n" + grantsYAML

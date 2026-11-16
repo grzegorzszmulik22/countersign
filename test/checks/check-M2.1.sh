@@ -44,7 +44,8 @@ job_C2.1.5() { gotest "$1" '^TestC215PlainHTTPScheme$'; }
 # fixtures-tagged lint of the package this chunk owns.
 job_lint.proxy() {
     command -v golangci-lint >/dev/null 2>&1 || { echo "golangci-lint not on PATH"; return 1; }
-    if golangci-lint run --build-tags fixtures ./internal/proxy ./cmd/csbroker >"$WORK/lint.proxy.detail.log" 2>&1; then
+    if GOLANGCI_LINT_CACHE="$ROOT/.check-work/golangci-lint-cache-M2.1" TMPDIR="$ROOT/.check-work/tmp" \
+        golangci-lint run --build-tags fixtures ./internal/proxy ./cmd/csbroker >"$WORK/lint.proxy.detail.log" 2>&1; then
         return 0
     fi
     tail -8 "$WORK/lint.proxy.detail.log"

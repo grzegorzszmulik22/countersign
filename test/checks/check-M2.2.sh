@@ -57,7 +57,7 @@ job_C2.2.7() { gotest "$1" '^TestC227LeafMinting$'; }
 job_lint.proxy() {
     command -v golangci-lint >/dev/null 2>&1 || { echo "golangci-lint not on PATH"; return 1; }
     mkdir -p "$ROOT/.check-work/tmp"
-    if GOLANGCI_LINT_CACHE="$ROOT/.check-work/golangci-lint-cache" TMPDIR="$ROOT/.check-work/tmp" \
+    if GOLANGCI_LINT_CACHE="$ROOT/.check-work/golangci-lint-cache-M2.2" TMPDIR="$ROOT/.check-work/tmp" \
         golangci-lint run --build-tags fixtures ./internal/proxy ./cmd/csbroker >"$WORK/lint.proxy.detail.log" 2>&1; then
         return 0
     fi
