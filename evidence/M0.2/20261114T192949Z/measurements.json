@@ -1,0 +1,20 @@
+{
+  "chunk": "M0.2",
+  "check": "C0.2.3",
+  "metric": "make cluster-up duration on existing cluster (idempotent)",
+  "command": "make cluster-up",
+  "unit": "seconds",
+  "target": 300,
+  "runs": 5,
+  "samples": [
+    21.0,
+    26.0,
+    12.0,
+    22.0,
+    17.0
+  ],
+  "median": 21.0,
+  "coefficient_of_variation": 0.2428,
+  "met": true,
+  "machine": "see sysinfo.txt in this evidence folder"
+}

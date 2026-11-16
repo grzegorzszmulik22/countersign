@@ -1,0 +1,19 @@
+# Copyright 2026 The Countersign Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# kind cluster `countersign` (M0.2): one control-plane node, two workers, and
+# no built-in CNI — Calico is installed from the pinned manifest
+# deploy/kind/calico-v3.33.0.yaml so NetworkPolicy is enforced (proven by
+# C0.2.1). podSubnet matches the Calico default IPv4 pool (192.168.0.0/16),
+# which is free on this host; serviceSubnet is the kind default.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: countersign
+nodes:
+  - role: control-plane
+  - role: worker
+  - role: worker
+networking:
+  disableDefaultCNI: true
+  podSubnet: "192.168.0.0/16"
+  serviceSubnet: "10.96.0.0/12"

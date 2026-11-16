@@ -1,0 +1,10 @@
+diff --git a/deploy/kind/policies/deny-all-egress.yaml b/deploy/kind/policies/deny-all-egress.yaml
+--- a/deploy/kind/policies/deny-all-egress.yaml
++++ b/deploy/kind/policies/deny-all-egress.yaml
+@@ -15,4 +15,6 @@ metadata:
+ spec:
+   podSelector: {}
+   policyTypes:
+     - Egress
++  egress:
++    - {}

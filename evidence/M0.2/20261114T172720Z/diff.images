@@ -1,0 +1,10 @@
+--- /tmp/tmp.7pz7Dre6yh/before.images	2026-11-14 17:39:24.615391309 +0000
++++ /tmp/tmp.7pz7Dre6yh/after.images	2026-11-14 17:39:29.328426079 +0000
+@@ -1,6 +1,6 @@
+ alpine:3.20 alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+ alpine:latest alpine@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
+-cs-sandbox-m04:local cs-sandbox-m04@sha256:ef9a61cbbcddcb4a329e30809bbaa1db92d4775fb17f920c2266ec033fae5490
++cs-sandbox-m04:local cs-sandbox-m04@sha256:de7290462daa3838e2378160624a88a99ab648b2c74b6b6c9faade2912e79f05
+ curlimages/curl:latest curlimages/curl@sha256:3fb7e13e5d179a845c97d78204f3f1064d1907037f26a3ebf91710571151fd93
+ cyberharness/bbgate:drill cyberharness/bbgate@sha256:c40196e7bc956d4e922317d31a4bda3cde244dde4acb220e39280114323a74fc
+ cyberharness/bbgate:latest cyberharness/bbgate@sha256:84119ad9146bd3d103c7e5cf53bed5b79c477a7e21c7d1eff2354b230b36c054

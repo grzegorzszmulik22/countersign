@@ -1,0 +1,15 @@
+CHECK C0.3.1.echo PASS
+CHECK C0.3.1.sink PASS
+CHECK C0.3.1.fakehub PASS
+CHECK C0.3.1.fakereg FAIL — --- FAIL: TestC031Fakereg (98.53s)     fakereg_test.go:97: resolve npm: npm not found on SubEnv PATH FAIL FAIL	github.com/countersign/countersign/test/fixtures/fakereg	99.173s FAIL 
+CHECK C0.3.1.fakemsg PASS
+CHECK C0.3.1.mockllm PASS
+CHECK C0.3.1.mcpdemo PASS
+CHECK C0.3.2 PASS
+CHECK C0.3.3 PASS
+CHECK C0.3.4 PASS
+CHECK C0.3.5 PASS
+CHECK lint.fixtures PASS
+CHECK tools.provision PASS
+CHECK C0.3.1.binaries PASS
+M0.3 suite: FAILURES
