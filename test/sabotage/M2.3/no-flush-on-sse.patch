@@ -1,0 +1,20 @@
+diff --git a/internal/proxy/pipeline.go b/internal/proxy/pipeline.go
+index e6188c3..323405d 100644
+--- a/internal/proxy/pipeline.go
++++ b/internal/proxy/pipeline.go
+@@ -358,15 +358,11 @@ func (e *writeErr) Unwrap() error { return e.err }
+ // coalesced or held back (M2.3). It counts and hashes the bytes.
+ func relayStream(w http.ResponseWriter, src io.Reader, dst *hashCounter) error {
+ 	buf := make([]byte, 32*1024)
+-	fl, _ := w.(http.Flusher)
+ 	for {
+ 		m, rerr := src.Read(buf)
+ 		if m > 0 {
+ 			wm, werr := w.Write(buf[:m])
+ 			_, _ = dst.Write(buf[:wm])
+-			if fl != nil {
+-				fl.Flush()
+-			}
+ 			if werr != nil {
+ 				return &writeErr{werr}
+ 			}

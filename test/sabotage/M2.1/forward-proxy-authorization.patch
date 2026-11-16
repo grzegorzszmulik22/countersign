@@ -1,0 +1,12 @@
+diff --git a/internal/proxy/headers.go b/internal/proxy/headers.go
+index 1c49dd5..fdcb564 100644
+--- a/internal/proxy/headers.go
++++ b/internal/proxy/headers.go
+@@ -19,7 +19,6 @@ var hopByHop = map[string]bool{
+ 	"Connection":          true,
+ 	"Keep-Alive":          true,
+ 	"Proxy-Authenticate":  true,
+-	"Proxy-Authorization": true,
+ 	"Te":                  true,
+ 	"Trailer":             true,
+ 	"Transfer-Encoding":   true,
