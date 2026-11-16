@@ -1,0 +1,29 @@
+# Copyright 2026 The Countersign Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# Deployment topology of 02-architecture.md §8. countersign-system holds the
+# trusted components; sandboxes the protected pods; fixtures the fixture
+# services; attacker the sink.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: countersign-system
+  labels: {countersign.dev/role: system}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sandboxes
+  labels: {countersign.dev/role: sandbox}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fixtures
+  labels: {countersign.dev/role: fixtures}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: attacker
+  labels: {countersign.dev/role: attacker}

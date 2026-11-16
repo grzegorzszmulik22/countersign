@@ -155,6 +155,29 @@ func (s *Server) mcp(w http.ResponseWriter, r *http.Request) {
 		fxlib.WriteJSON(w, 400, rpcError(req.ID, -32600, "unsupported protocol revision "+req.Meta.ProtocolVersion))
 		return
 	}
+	if req.Method == "tools/call" {
+		var p struct {
+			Name      string         `json:"name"`
+			Arguments map[string]any `json:"arguments"`
+		}
+		if err := json.Unmarshal(req.Params, &p); err != nil {
+			// Well-formed JSON-RPC with malformed params: invalid-params
+			// (-32602) in the result body at HTTP 200, and the observation
+			// records the rejection rather than an empty tool call.
+			entry["rejected"] = "bad-params"
+			fxlib.WriteJSON(w, 200, rpcError(req.ID, -32602, "invalid params"))
+			return
+		}
+		entry["tool"], entry["args"] = p.Name, p.Arguments
+		if hn := r.Header.Get("Mcp-Name"); hn != "" {
+			entry["hdr_name"] = hn
+			if p.Name != "" && hn != p.Name {
+				entry["rejected"] = "name-mismatch"
+				fxlib.WriteJSON(w, 400, rpcError(req.ID, -32600, "Mcp-Name header does not match tool name"))
+				return
+			}
+		}
+	}
 	if s.Opts.Flags.IdlePhoneHome {
 		s.phoneHome(r.Context())
 	}

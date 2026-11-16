@@ -48,7 +48,9 @@ func respExtract(body []byte) (map[string]string, string, bool, error) {
 	raw := req.Input
 	if len(raw) > 0 && raw[0] == '"' {
 		var s string
-		_ = json.Unmarshal(raw, &s)
+		if err := json.Unmarshal(raw, &s); err != nil {
+			return nil, "", false, fmt.Errorf("bad input string: %w", err)
+		}
 		return results, s, req.Stream, nil
 	}
 	if err := json.Unmarshal(raw, &items); err != nil {
@@ -59,12 +61,16 @@ func respExtract(body []byte) (map[string]string, string, bool, error) {
 		case "function_call_output":
 			var out string
 			if len(it.Output) > 0 && it.Output[0] == '"' {
-				_ = json.Unmarshal(it.Output, &out)
-			} else {
+				if err := json.Unmarshal(it.Output, &out); err != nil {
+					return nil, "", false, fmt.Errorf("bad call output: %w", err)
+				}
+			} else if len(it.Output) > 0 {
 				var parts []struct {
 					Text string `json:"text"`
 				}
-				_ = json.Unmarshal(it.Output, &parts)
+				if err := json.Unmarshal(it.Output, &parts); err != nil {
+					return nil, "", false, fmt.Errorf("bad call output: %w", err)
+				}
 				for _, p := range parts {
 					out += p.Text
 				}
@@ -74,12 +80,16 @@ func respExtract(body []byte) (map[string]string, string, bool, error) {
 			if it.Role == "user" {
 				var c string
 				if len(it.Content) > 0 && it.Content[0] == '"' {
-					_ = json.Unmarshal(it.Content, &c)
-				} else {
+					if err := json.Unmarshal(it.Content, &c); err != nil {
+						return nil, "", false, fmt.Errorf("bad message content: %w", err)
+					}
+				} else if len(it.Content) > 0 {
 					var parts []struct {
 						Text string `json:"text"`
 					}
-					_ = json.Unmarshal(it.Content, &parts)
+					if err := json.Unmarshal(it.Content, &parts); err != nil {
+						return nil, "", false, fmt.Errorf("bad message content: %w", err)
+					}
 					for _, p := range parts {
 						c += p.Text
 					}
@@ -210,12 +220,16 @@ func chatExtract(body []byte) (map[string]string, string, bool, error) {
 	for _, msg := range req.Messages {
 		var content string
 		if len(msg.Content) > 0 && msg.Content[0] == '"' {
-			_ = json.Unmarshal(msg.Content, &content)
+			if err := json.Unmarshal(msg.Content, &content); err != nil {
+				return nil, "", false, fmt.Errorf("bad tool message content: %w", err)
+			}
 		} else if len(msg.Content) > 0 {
 			var parts []struct {
 				Text string `json:"text"`
 			}
-			_ = json.Unmarshal(msg.Content, &parts)
+			if err := json.Unmarshal(msg.Content, &parts); err != nil {
+				return nil, "", false, fmt.Errorf("bad tool message content: %w", err)
+			}
 			for _, p := range parts {
 				content += p.Text
 			}

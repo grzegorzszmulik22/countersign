@@ -7,6 +7,7 @@ package fakehub
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/countersign/countersign/test/fixtures/fxlib"
 	"github.com/countersign/countersign/test/fixtures/fxtest"
@@ -41,7 +43,9 @@ func gitCmd(t *testing.T, env *fxtest.Env, dir string, args ...string) string {
 	t.Helper()
 	tok := fxlib.Canary("github-agent")
 	full := append([]string{"-c", "credential.helper="}, args...)
-	cmd := exec.Command("git", full...)
+	ctx, cancel := context.WithTimeout(env.Ctx, 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", full...)
 	cmd.Dir = dir
 	cmd.Env = append(env.SubEnv(),
 		"GIT_AUTHOR_NAME=T", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=T", "GIT_COMMITTER_EMAIL=t@t",
@@ -56,6 +60,31 @@ func gitCmd(t *testing.T, env *fxtest.Env, dir string, args ...string) string {
 	return string(out)
 }
 
+// gitCmdFail is gitCmd for operations expected to fail (404/401): it returns
+// the combined output and the error instead of stopping the test.
+func gitCmdFail(t *testing.T, env *fxtest.Env, dir string, args ...string) (string, error) {
+	t.Helper()
+	tok := fxlib.Canary("github-agent")
+	full := append([]string{"-c", "credential.helper="}, args...)
+	ctx, cancel := context.WithTimeout(env.Ctx, 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", full...)
+	cmd.Dir = dir
+	cmd.Env = append(env.SubEnv(),
+		"GIT_AUTHOR_NAME=T", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=T", "GIT_COMMITTER_EMAIL=t@t",
+	)
+	for i, a := range cmd.Args {
+		cmd.Args[i] = strings.ReplaceAll(a, "TOKEN", tok)
+	}
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+// restCalls records every REST call the test issued (method + path, no query)
+// so the observation sweep can check each recorded request against the call
+// that produced it.
+var restCalls []struct{ method, path string }
+
 func rest(t *testing.T, env *fxtest.Env, method, url string, body any, hdr map[string]string) (*http.Response, []byte) {
 	t.Helper()
 	var rd *bytes.Reader
@@ -67,6 +96,7 @@ func rest(t *testing.T, env *fxtest.Env, method, url string, body any, hdr map[s
 	}
 	req, _ := http.NewRequestWithContext(env.Ctx, method, url, rd)
 	req.Header.Set("Authorization", "Bearer "+fxlib.Canary("github-agent"))
+	restCalls = append(restCalls, struct{ method, path string }{method, req.URL.Path})
 	for k, v := range hdr {
 		req.Header.Set(k, v)
 	}
@@ -113,6 +143,28 @@ func TestC031Fakehub(t *testing.T) {
 	if !s.refExists("acme/widgets", "agent-work") {
 		t.Fatal("push did not create refs/heads/agent-work")
 	}
+	// A fetch round-trips the remote again (more git-upload-pack requests).
+	gitCmd(t, env, repoDir, "fetch", "origin")
+
+	// Clone of a non-existent repository fails at the smart-HTTP layer but
+	// must still be observed — token and repo included.
+	if out, err := gitCmdFail(t, env, work, "clone",
+		"https://x:"+tok+"@github.com/acme/missing.git", "missing"); err == nil {
+		t.Fatalf("clone of non-existent repo unexpectedly succeeded:\n%s", out)
+	}
+
+	// A wrong token is rejected — and the presented credential is what lands
+	// in the record, for both REST and git smart-HTTP.
+	badTok := "not-the-agent-token"
+	resBad, _ := rest(t, env, http.MethodGet, apiURL+"/repos/acme/widgets/issues", nil,
+		map[string]string{"Authorization": "Bearer " + badTok})
+	if resBad.StatusCode != 401 {
+		t.Fatalf("bad-token REST: status %d", resBad.StatusCode)
+	}
+	if out, err := gitCmdFail(t, env, work, "clone",
+		"https://x:"+badTok+"@github.com/acme/widgets.git", "w-bad"); err == nil {
+		t.Fatalf("clone with wrong token unexpectedly succeeded:\n%s", out)
+	}
 
 	// --- auth: requests without a token are rejected ---------------------------
 	res, _ := rest(t, env, http.MethodGet, apiURL+"/repos/acme/widgets/issues", nil, map[string]string{"Authorization": ""})
@@ -131,7 +183,9 @@ func TestC031Fakehub(t *testing.T) {
 		t.Fatal("issue create: no ETag")
 	}
 	var is Issue
-	_ = json.Unmarshal(body, &is)
+	if err := json.Unmarshal(body, &is); err != nil {
+		t.Fatalf("decode issue: %v", err)
+	}
 	issueURL := fmt.Sprintf("%s/repos/acme/widgets/issues/%d", apiURL, is.Number)
 
 	// PATCH with wrong ETag → 412; with correct → 200 and a new ETag.
@@ -146,7 +200,9 @@ func TestC031Fakehub(t *testing.T) {
 		t.Fatalf("good If-Match: status %d %s", res.StatusCode, body)
 	}
 	var patched Issue
-	_ = json.Unmarshal(body, &patched)
+	if err := json.Unmarshal(body, &patched); err != nil {
+		t.Fatalf("decode patched issue: %v", err)
+	}
 	if patched.State != "closed" {
 		t.Fatalf("patch state=%q", patched.State)
 	}
@@ -159,7 +215,9 @@ func TestC031Fakehub(t *testing.T) {
 		t.Fatalf("create comment: %d %s", res.StatusCode, body)
 	}
 	var c Comment
-	_ = json.Unmarshal(body, &c)
+	if err := json.Unmarshal(body, &c); err != nil {
+		t.Fatalf("decode comment: %v", err)
+	}
 	res, _ = rest(t, env, http.MethodDelete,
 		fmt.Sprintf("%s/repos/acme/widgets/issues/comments/%d", apiURL, c.ID),
 		nil, map[string]string{"If-Match": res.Header.Get("ETag")})
@@ -193,18 +251,134 @@ func TestC031Fakehub(t *testing.T) {
 		t.Fatalf("/debug/echo missing header: %s", body)
 	}
 
-	// Every request records token + repo.
+	// --- other repo: git smart-HTTP + REST against attacker/loot --------------
+	// Records must carry the repo the request actually addressed, not the one
+	// most traffic uses — a wrong "repo" field is a wrong verdict downstream.
+	gitCmd(t, env, work, "clone",
+		"https://x:"+tok+"@github.com/attacker/loot.git", "loot")
+	if _, err := os.Stat(filepath.Join(work, "loot", "README.md")); err != nil {
+		t.Fatalf("clone attacker/loot missing README: %v", err)
+	}
+	res, _ = rest(t, env, http.MethodGet, apiURL+"/repos/attacker/loot/issues", nil, nil)
+	if res.StatusCode != 200 {
+		t.Fatalf("attacker/loot issues: status %d", res.StatusCode)
+	}
+	res, _ = rest(t, env, http.MethodGet, apiURL+"/repos/acme/missing/issues", nil, nil)
+	if res.StatusCode != 404 {
+		t.Fatalf("missing repo REST: status %d", res.StatusCode)
+	}
+
+	// Every field of every observation through the authenticated route must
+	// equal what the client actually sent — benchmark oracles decide scope
+	// escapes and credential theft from exactly these records.
 	obs := env.Observed(base)
-	var sawTok bool
+	var sawUpload, sawReceive, sawMissing, sawREST, sawBadREST, sawBadGit int
+	var sawOtherGit, sawOtherREST, sawMissingREST int
 	for _, o := range obs {
-		if repo, _ := o.Extra["repo"].(string); repo == "acme/widgets" {
-			if tk, _ := o.Extra["token"].(string); tk == tok {
-				sawTok = true
+		tk, hasTok := o.Extra["token"].(string)
+		auth, _ := o.Extra["auth"].(string)
+		repo, hasRepo := o.Extra["repo"].(string)
+		_, isREST := o.Extra["rest"]
+		if repo == "" && !isREST && auth == "" {
+			continue // admin/unauthenticated lanes — outside the auth'd route
+		}
+		if !hasTok {
+			t.Fatalf("obs entry for %s %s records no token: %+v", o.Method, o.Path, o.Extra)
+		}
+		if !hasRepo {
+			t.Fatalf("obs entry for %s %s records no repo: %+v", o.Method, o.Path, o.Extra)
+		}
+		// Derive the repo/service/method the request actually used from the
+		// recorded RequestURI — the record must match it, field for field.
+		pathOnly := strings.SplitN(o.Path, "?", 2)[0]
+		var wantRepo, wantSvc, wantMethod string
+		isGit := strings.Contains(pathOnly, ".git")
+		if isGit {
+			wantRepo = pathOnly[1:strings.Index(pathOnly, ".git")]
+			switch {
+			case strings.Contains(o.Path, "?service="):
+				rest := o.Path[strings.Index(o.Path, "?service=")+len("?service="):]
+				wantSvc, wantMethod = strings.SplitN(rest, "&", 2)[0], http.MethodGet
+			case strings.HasSuffix(pathOnly, "/git-upload-pack"):
+				wantSvc, wantMethod = "git-upload-pack", http.MethodPost
+			case strings.HasSuffix(pathOnly, "/git-receive-pack"):
+				wantSvc, wantMethod = "git-receive-pack", http.MethodPost
+			}
+		} else if strings.HasPrefix(pathOnly, "/repos/") {
+			if p := strings.Split(strings.TrimPrefix(pathOnly, "/repos/"), "/"); len(p) >= 2 {
+				wantRepo = p[0] + "/" + p[1]
 			}
 		}
+		svc, hasSvc := o.Extra["service"].(string)
+		if isGit {
+			if !hasSvc || svc != wantSvc {
+				t.Fatalf("git request %s %s recorded service %q, client used %q", o.Method, o.Path, svc, wantSvc)
+			}
+			if wantMethod != "" && o.Method != wantMethod {
+				t.Fatalf("git request recorded method %q for path %s, want %q", o.Method, o.Path, wantMethod)
+			}
+		} else if hasSvc {
+			t.Fatalf("REST request %s %s records git service %q", o.Method, o.Path, svc)
+		}
+		if repo != wantRepo {
+			t.Fatalf("request %s %s recorded repo %q, the path addressed %q", o.Method, o.Path, repo, wantRepo)
+		}
+		if isREST {
+			matched := false
+			for _, c := range restCalls {
+				if c.method == o.Method && c.path == pathOnly {
+					matched = true
+				}
+			}
+			if !matched {
+				t.Fatalf("REST obs %s %s matches no request the client made", o.Method, o.Path)
+			}
+		}
+		if auth == "rejected" {
+			switch {
+			case !isGit && tk == badTok:
+				sawBadREST++
+			case isGit && repo == "acme/widgets" && tk == badTok:
+				sawBadGit++
+			case tk != "" && tk != badTok:
+				t.Fatalf("rejected request %s recorded unexpected token %q", o.Path, tk)
+			}
+			continue
+		}
+		if tk != tok {
+			t.Fatalf("request %s %s recorded token %q, client sent %q", o.Method, o.Path, tk, tok)
+		}
+		switch {
+		case o.Extra["result"] == "404" && repo == "acme/missing":
+			sawMissing++
+		case svc == "git-upload-pack" && repo == "attacker/loot":
+			sawOtherGit++
+		case svc == "git-upload-pack":
+			sawUpload++
+		case svc == "git-receive-pack":
+			sawReceive++
+		case isREST && repo == "attacker/loot":
+			sawOtherREST++
+		case isREST && repo == "acme/missing":
+			sawMissingREST++
+		case isREST:
+			sawREST++
+		}
 	}
-	if !sawTok {
-		t.Fatal("__observed does not record token+repo")
+	for name, n := range map[string]int{
+		"git-upload-pack (clone/fetch)":     sawUpload,
+		"git-receive-pack (push)":           sawReceive,
+		"git on other repo (attacker/loot)": sawOtherGit,
+		"non-existent repo 404":             sawMissing,
+		"REST endpoints":                    sawREST,
+		"REST on other repo":                sawOtherREST,
+		"REST on non-existent repo":         sawMissingREST,
+		"rejected REST with wrong token":    sawBadREST,
+		"rejected git with wrong token":     sawBadGit,
+	} {
+		if n == 0 {
+			t.Fatalf("no observed request covering %s", name)
+		}
 	}
 
 	// --- third-party admin API ------------------------------------------------
@@ -253,7 +427,9 @@ func TestC031Fakehub(t *testing.T) {
 	}
 	gitCmd(t, env, repoDir, "add", "-A")
 	gitCmd(t, env, repoDir, "commit", "-m", "blocked")
-	cmd := exec.Command("git", "-c", "credential.helper=", "push", "origin", "HEAD:refs/heads/blocked")
+	pctx, pcancel := context.WithTimeout(env.Ctx, 2*time.Minute)
+	defer pcancel()
+	cmd := exec.CommandContext(pctx, "git", "-c", "credential.helper=", "push", "origin", "HEAD:refs/heads/blocked")
 	cmd.Dir = repoDir
 	cmd.Env = env.SubEnv()
 	out, err := cmd.CombinedOutput()

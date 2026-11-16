@@ -1,0 +1,8 @@
+--- /tmp/tmp.7pz7Dre6yh/before.networks	2026-11-14 17:39:23.405382382 +0000
++++ /tmp/tmp.7pz7Dre6yh/after.networks	2026-11-14 17:39:27.600413330 +0000
+@@ -1,4 +1,5 @@
+ bridge
++cs-m04-net-669804
+ cyberharness-prod_edge
+ cyberharness-prod_internal
+ cyberharness-prod_workers

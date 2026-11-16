@@ -32,6 +32,36 @@ chk kubectl       "$KUBECTL_VERSION"              "$("$TOOLS/bin/kubectl" versio
 chk helm          "$HELM_VERSION"                 "$("$TOOLS/bin/helm" version 2>&1)"
 chk golangci-lint "${GOLANGCI_LINT_VERSION#v} "   "$("$TOOLS/bin/golangci-lint" version 2>&1)"
 chk python        "Python $PYTHON_VERSION"        "$("$TOOLS/python/bin/python3" --version 2>&1)"
+chk node          "$NODE_VERSION"                 "$("$TOOLS/bin/node" --version 2>&1)"
+# node links libatomic.so.1; the toolchain must provide it for hosts that
+# lack the system lib (see install-tools.sh). ldd spawns a subshell loader,
+# which intermittently fails under the fd/process pressure of nested check
+# runs — retry so a transient exec failure cannot produce a false MISMATCH.
+libatomic_ok() {
+    local i
+    for i in 1 2 3 4; do
+        [ -f "$TOOLS/lib/libatomic.so.1.2.0" ] || return 1
+        env "LD_LIBRARY_PATH=$TOOLS/lib" ldd "$TOOLS/node/bin/node" 2>/dev/null \
+            | grep -q "libatomic.so.1 => $TOOLS/lib/" && return 0
+        sleep 0.5
+    done
+    return 1
+}
+if libatomic_ok; then
+    printf 'version ok: libatomic bundled for node\n'
+else
+    printf 'version MISMATCH: .tools/lib/libatomic.so.1 missing or not resolved\n' >&2
+    fail=1
+fi
+# npm is bundled with the pinned node release; assert it runs and reports a
+# semver (the node pin determines the npm version).
+npmv="$(PATH="$TOOLS/bin:$PATH" "$TOOLS/bin/npm" --version 2>&1)"
+if printf '%s' "$npmv" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+'; then
+    printf 'version ok: npm %s\n' "$npmv"
+else
+    printf 'version MISMATCH: npm (bundled with %s, got %s)\n' "$NODE_VERSION" "$npmv" >&2
+    fail=1
+fi
 chk cryptography  "$CRYPTOGRAPHY_VERSION"         "$("$TOOLS/python/bin/python3" -c 'import cryptography; print(cryptography.__version__)' 2>&1)"
 
 # The wheel file pin must match the file we install from (cache).

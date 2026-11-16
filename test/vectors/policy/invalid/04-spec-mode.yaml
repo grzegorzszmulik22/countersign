@@ -1,0 +1,10 @@
+# field: spec.mode
+# rule: spec.mode must be enforce|audit|learn
+apiVersion: "countersign.dev/v1alpha1"
+kind: "SessionPolicy"
+metadata: {name: bad}
+spec:
+  mode: "yolo"
+  scenario: "agent"
+  grants:
+    - {id: g1, match: {hosts: ["api.example.com"]}}

@@ -49,6 +49,16 @@ type driver struct {
 	model       string
 	texts       []string // user texts per turn (index 0 = initial prompt)
 	dropResults bool     // omit tool_result/output items (provokes validation)
+	// resultWrong overrides the reported content of the named call's tool
+	// result (provokes the "missing expected content" validation path).
+	resultWrong map[string]string
+}
+
+func (d *driver) resultFor(key string) string {
+	if w, ok := d.resultWrong[key]; ok {
+		return w
+	}
+	return turnResults[key]
 }
 
 // turnResults maps transcript key -> result content the client reports.
@@ -73,7 +83,7 @@ func (d *driver) body(t *Transcript, turn int, stream bool) []byte {
 			for _, c := range resp.Calls {
 				content = append(content, map[string]any{"type": "tool_use", "id": "toolu_" + c.Key, "name": c.Tool, "input": c.Input})
 				if !d.dropResults {
-					results = append(results, map[string]any{"type": "tool_result", "tool_use_id": "toolu_" + c.Key, "content": turnResults[c.Key]})
+					results = append(results, map[string]any{"type": "tool_result", "tool_use_id": "toolu_" + c.Key, "content": d.resultFor(c.Key)})
 				}
 			}
 			msgs = append(msgs, map[string]any{"role": "assistant", "content": content})
@@ -91,7 +101,7 @@ func (d *driver) body(t *Transcript, turn int, stream bool) []byte {
 			for _, c := range t.Turns[i].Response.Calls {
 				input = append(input, map[string]any{"type": "function_call", "id": "fc_" + c.Key, "call_id": "call_" + c.Key, "name": c.Tool, "arguments": string(c.Input), "status": "completed"})
 				if !d.dropResults {
-					input = append(input, map[string]any{"type": "function_call_output", "call_id": "call_" + c.Key, "output": turnResults[c.Key]})
+					input = append(input, map[string]any{"type": "function_call_output", "call_id": "call_" + c.Key, "output": d.resultFor(c.Key)})
 				}
 			}
 		}
@@ -117,7 +127,7 @@ func (d *driver) body(t *Transcript, turn int, stream bool) []byte {
 			msgs = append(msgs, msg)
 			if !d.dropResults {
 				for _, c := range resp.Calls {
-					msgs = append(msgs, map[string]any{"role": "tool", "tool_call_id": "call_" + c.Key, "content": turnResults[c.Key]})
+					msgs = append(msgs, map[string]any{"role": "tool", "tool_call_id": "call_" + c.Key, "content": d.resultFor(c.Key)})
 				}
 			}
 		}
@@ -155,6 +165,25 @@ func (d *driver) post(t *testing.T, env *fxtest.Env, base string, body []byte) [
 		t.Fatalf("%s: status %d: %s", d.path(), res.StatusCode, buf.String())
 	}
 	return buf.Bytes()
+}
+
+// postInvalid posts a body that must be rejected with 400 and returns the
+// response body for reason inspection.
+func (d *driver) postInvalid(t *testing.T, env *fxtest.Env, base string, body []byte) string {
+	t.Helper()
+	req, _ := http.NewRequestWithContext(env.Ctx, http.MethodPost, base+d.path(), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := env.Direct().Do(req)
+	if err != nil {
+		t.Fatalf("post %s: %v", d.path(), err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	buf := new(bytes.Buffer)
+	_, _ = buf.ReadFrom(res.Body)
+	if res.StatusCode != 400 {
+		t.Fatalf("%s: invalid request accepted: status %d: %s", d.path(), res.StatusCode, buf.String())
+	}
+	return buf.String()
 }
 
 func TestC031Mockllm(t *testing.T) {
@@ -204,23 +233,16 @@ func TestC031Mockllm(t *testing.T) {
 	}
 
 	// Validation: a turn sent without the expected tool result is rejected
-	// with an error and recorded as invalid.
+	// with a "missing tool result" error and recorded as invalid.
 	env3 := fxtest.NewEnv(t)
 	base3 := startLLM(t, env3, tr, Options{})
 	d3 := &driver{shape: "anthropic", model: tr.Model, texts: d.texts}
 	d3.post(t, env3, base3, d3.body(tr, 0, false))
 	// Turn 1 expects r1's tool_result; send a body without it → reject.
 	d3.dropResults = true
-	bad := d3.body(tr, 1, false)
-	req, _ := http.NewRequestWithContext(env3.Ctx, http.MethodPost, base3+"/v1/messages", bytes.NewReader(bad))
-	req.Header.Set("Content-Type", "application/json")
-	res, err := env3.Direct().Do(req)
-	if err != nil {
-		t.Fatalf("bad turn: %v", err)
-	}
-	_ = res.Body.Close()
-	if res.StatusCode != 400 {
-		t.Fatalf("missing tool result: status %d", res.StatusCode)
+	badBody := d3.postInvalid(t, env3, base3, d3.body(tr, 1, false))
+	if !strings.Contains(badBody, "missing tool result") {
+		t.Fatalf("missing-result rejection has wrong reason: %s", badBody)
 	}
 	var sawInvalid bool
 	for _, o := range env3.Observed(base3) {
@@ -234,14 +256,42 @@ func TestC031Mockllm(t *testing.T) {
 		t.Fatal("rejected turn not recorded as invalid")
 	}
 
+	// Validation: a turn carrying the tool result but with content that does
+	// not match expect_results is rejected with "missing expected content".
+	// Turn 2 wants w1's result to contain "open"; report "closed" instead.
+	env5 := fxtest.NewEnv(t)
+	base5 := startLLM(t, env5, tr, Options{})
+	d5 := &driver{shape: "anthropic", model: tr.Model, texts: d.texts}
+	d5.post(t, env5, base5, d5.body(tr, 0, false))
+	d5.post(t, env5, base5, d5.body(tr, 1, false))
+	d5.resultWrong = map[string]string{"w1": `{"number":1,"title":"Widget flanges stick","state":"closed"}`}
+	wrongBody := d5.postInvalid(t, env5, base5, d5.body(tr, 2, false))
+	if !strings.Contains(wrongBody, "missing expected content") {
+		t.Fatalf("wrong-content rejection has wrong reason: %s", wrongBody)
+	}
+	// The same wrong content must be rejected in the other two shapes too —
+	// validation is shape-agnostic (call_w1 carries the reported output).
+	for _, shape := range []string{"responses", "chat"} {
+		envS := fxtest.NewEnv(t)
+		baseS := startLLM(t, envS, tr, Options{})
+		dS := &driver{shape: shape, model: tr.Model, texts: d.texts}
+		dS.post(t, envS, baseS, dS.body(tr, 0, false))
+		dS.post(t, envS, baseS, dS.body(tr, 1, false))
+		dS.resultWrong = d5.resultWrong
+		wb := dS.postInvalid(t, envS, baseS, dS.body(tr, 2, false))
+		if !strings.Contains(wb, "missing expected content") {
+			t.Fatalf("%s wrong-content rejection has wrong reason: %s", shape, wb)
+		}
+	}
+
 	// /v1/files accepts any key and records which key uploaded what.
 	env4 := fxtest.NewEnv(t)
 	base4 := startLLM(t, env4, tr, Options{})
 	key := fxlib.Canary("file-uploader")
-	req, _ = http.NewRequestWithContext(env4.Ctx, http.MethodPost, base4+"/v1/files?name=data.csv&purpose=fine-tune",
+	req, _ := http.NewRequestWithContext(env4.Ctx, http.MethodPost, base4+"/v1/files?name=data.csv&purpose=fine-tune",
 		strings.NewReader("a,b\n1,2\n"))
 	req.Header.Set("Authorization", "Bearer "+key)
-	res, err = env4.Direct().Do(req)
+	res, err := env4.Direct().Do(req)
 	if err != nil {
 		t.Fatalf("files: %v", err)
 	}

@@ -1,0 +1,647 @@
+# test/vectors/policy/matching.yaml — decision table for spec/04 §2
+# steps 1-2 (M3.1). At least 200 rows: the cross product of the
+# dimensions in spec/milestones/M3 (hosts, paths, methods, order,
+# scheme/ports) plus hand-written rows.
+#
+# The expected column was derived by reasoning from the spec text
+# (04 §1 defaults, §2 steps 1-2), never by running the Go matcher:
+# test/gen/matching_table.py contains an independent expression of
+# the rules and this file was reviewed by reading after generation.
+#
+# Row format: {name, policy, request, expected:{grant|null,reason}}.
+# reason is null (allow) | DENY_GRANT | NO_GRANT | SMUGGLING_SUSPECT.
+policies:
+  main: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "main"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "deny-admin", match: {hosts: ["api.example.com"], paths: ["/admin/**"]}, action: "deny"}
+        - {id: "api-read", match: {hosts: ["api.example.com"], methods: ["GET", "HEAD"], paths: ["/v1/**", "/v*/items"]}}
+        - {id: "api-write", match: {hosts: ["api.example.com"], methods: ["POST", "PUT"], paths: ["/v1/items", "/v1/items/*/comments"]}}
+        - {id: "wild-pub", match: {hosts: ["*.example.com"], methods: ["GET"], paths: ["/pub/**"]}}
+        - {id: "api-any", match: {hosts: ["api.example.com"]}}
+  order-a: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "order-a"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "broad", match: {hosts: ["shop.test"], paths: ["/**"]}}
+        - {id: "narrow", match: {hosts: ["shop.test"], methods: ["POST"]}}
+  order-b: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "order-b"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "narrow", match: {hosts: ["shop.test"], methods: ["POST"]}}
+        - {id: "broad", match: {hosts: ["shop.test"], paths: ["/**"]}}
+  deny-first: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "deny-first"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "deny-x", match: {hosts: ["svc.test"], paths: ["/x/**"]}, action: "deny"}
+        - {id: "allow-x", match: {hosts: ["svc.test"], paths: ["/x/**"]}}
+  deny-last: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "deny-last"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "allow-x", match: {hosts: ["svc.test"], paths: ["/x/**"]}}
+        - {id: "deny-x", match: {hosts: ["svc.test"], paths: ["/x/**"]}, action: "deny"}
+  schemes: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "schemes"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "secure", match: {hosts: ["secure.test"]}}
+        - {id: "plain", match: {hosts: ["insecure.test"], scheme: "http"}}
+        - {id: "both-p", match: {hosts: ["multi.test"], ports: [443, 8443]}}
+        - {id: "p8443", match: {hosts: ["alt.test"], ports: [8443]}}
+        - {id: "httpx", match: {hosts: ["odd.test"], scheme: "http", ports: [8080]}}
+  ip: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "ip"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "ipgrant", match: {hosts: ["203.0.113.7"]}}
+        - {id: "ipwild", match: {hosts: ["*.example.com"]}}
+        - {id: "v6", match: {hosts: ["::1"]}}
+  idn: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "idn"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "idn", match: {hosts: ["xn--nxasmq6b.example", "xn--bcher-kva.test"]}}
+  pass: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "pass"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "tunnel", match: {hosts: ["vpn.test"]}, mode: "passthrough"}
+  star: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "star"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "any", match: {hosts: ["*"]}}
+  learn: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "learn"}
+    spec:
+      mode: "learn"
+      scenario: "agent"
+      grants:
+        - {id: "any-cred", match: {hosts: ["*"]}, credential: {ref: {secret: "s", key: "k"}, inject: {header: "x-api-key"}, placeholderEnv: "X_KEY"}}
+  gitlike: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "gitlike"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "repo", match: {hosts: ["code.test"], methods: ["GET"], paths: ["/repos/acme/widgets", "/repos/acme/*/info/refs"]}}
+        - {id: "repog", match: {hosts: ["code.test"], methods: ["POST"], paths: ["/repos/acme/*"]}}
+  empty-lists: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "empty-lists"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "e-methods", match: {hosts: ["em.test"], methods: []}}
+        - {id: "e-paths", match: {hosts: ["ep.test"], paths: []}}
+        - {id: "e-ports", match: {hosts: ["epo.test"], ports: []}}
+        - {id: "e-ok", match: {hosts: ["e.test"]}}
+  gitread: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "gitread"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "repo-r", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/widgets"], access: "read"}}}}
+  gitwrite: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "gitwrite"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "repo-w", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/widgets"], access: "write"}}}}
+  gitmulti: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "gitmulti"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "multi", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/widgets", "acme/gadgets"], access: "write"}}}}
+  gittwo: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "gittwo"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "r-read", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/widgets"], access: "read"}}}}
+        - {id: "r-write", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/gadgets"], access: "write"}}}}
+  gitorder: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "gitorder"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "broad", match: {hosts: ["code.test"], paths: ["/**"]}}
+        - {id: "repo", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/widgets"], access: "read"}}}}
+  gitdeny: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "gitdeny"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "deny-git", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/secret"], access: "write"}}}, action: "deny"}
+        - {id: "repo", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/secret", "acme/widgets"], access: "read"}}}}
+  gitdeny2: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "gitdeny2"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "deny-r", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/secret"], access: "read"}}}, action: "deny"}
+        - {id: "repo", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/secret"], access: "write"}}}}
+  gitdot: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "gitdot"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "dot", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/widgets.git"], access: "read"}}}}
+rows:
+  - {name: "main-001", policy: "main", request: {method: "GET", host: "api.example.com", path: "/v1/messages"}, expected: {grant: "api-read", reason: null}}
+  - {name: "main-002", policy: "main", request: {method: "GET", host: "api.example.com", path: "/v1/items"}, expected: {grant: "api-read", reason: null}}
+  - {name: "main-003", policy: "main", request: {method: "GET", host: "api.example.com", path: "/v1/items/x/comments"}, expected: {grant: "api-read", reason: null}}
+  - {name: "main-004", policy: "main", request: {method: "GET", host: "api.example.com", path: "/v1/items/a/b/comments"}, expected: {grant: "api-read", reason: null}}
+  - {name: "main-005", policy: "main", request: {method: "GET", host: "api.example.com", path: "/admin/x"}, expected: {grant: "deny-admin", reason: "DENY_GRANT"}}
+  - {name: "main-006", policy: "main", request: {method: "GET", host: "api.example.com", path: "/admin"}, expected: {grant: "deny-admin", reason: "DENY_GRANT"}}
+  - {name: "main-007", policy: "main", request: {method: "GET", host: "api.example.com", path: "/pub/x"}, expected: {grant: "wild-pub", reason: null}}
+  - {name: "main-008", policy: "main", request: {method: "GET", host: "api.example.com", path: "/v2/messages"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-009", policy: "main", request: {method: "GET", host: "api.example.com", path: "/v1/"}, expected: {grant: "api-read", reason: null}}
+  - {name: "main-010", policy: "main", request: {method: "GET", host: "api.example.com", path: "/x/../y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "main-011", policy: "main", request: {method: "POST", host: "api.example.com", path: "/v1/messages"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-012", policy: "main", request: {method: "POST", host: "api.example.com", path: "/v1/items"}, expected: {grant: "api-write", reason: null}}
+  - {name: "main-013", policy: "main", request: {method: "POST", host: "api.example.com", path: "/v1/items/x/comments"}, expected: {grant: "api-write", reason: null}}
+  - {name: "main-014", policy: "main", request: {method: "POST", host: "api.example.com", path: "/v1/items/a/b/comments"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-015", policy: "main", request: {method: "POST", host: "api.example.com", path: "/admin/x"}, expected: {grant: "deny-admin", reason: "DENY_GRANT"}}
+  - {name: "main-016", policy: "main", request: {method: "POST", host: "api.example.com", path: "/admin"}, expected: {grant: "deny-admin", reason: "DENY_GRANT"}}
+  - {name: "main-017", policy: "main", request: {method: "POST", host: "api.example.com", path: "/pub/x"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-018", policy: "main", request: {method: "POST", host: "api.example.com", path: "/v2/messages"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-019", policy: "main", request: {method: "POST", host: "api.example.com", path: "/v1/"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-020", policy: "main", request: {method: "POST", host: "api.example.com", path: "/x/../y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "main-021", policy: "main", request: {method: "get", host: "api.example.com", path: "/v1/messages"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-022", policy: "main", request: {method: "get", host: "api.example.com", path: "/v1/items"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-023", policy: "main", request: {method: "get", host: "api.example.com", path: "/v1/items/x/comments"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-024", policy: "main", request: {method: "get", host: "api.example.com", path: "/v1/items/a/b/comments"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-025", policy: "main", request: {method: "get", host: "api.example.com", path: "/admin/x"}, expected: {grant: "deny-admin", reason: "DENY_GRANT"}}
+  - {name: "main-026", policy: "main", request: {method: "get", host: "api.example.com", path: "/admin"}, expected: {grant: "deny-admin", reason: "DENY_GRANT"}}
+  - {name: "main-027", policy: "main", request: {method: "get", host: "api.example.com", path: "/pub/x"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-028", policy: "main", request: {method: "get", host: "api.example.com", path: "/v2/messages"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-029", policy: "main", request: {method: "get", host: "api.example.com", path: "/v1/"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-030", policy: "main", request: {method: "get", host: "api.example.com", path: "/x/../y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "main-031", policy: "main", request: {method: "GET", host: "API.EXAMPLE.COM", path: "/v1/messages"}, expected: {grant: "api-read", reason: null}}
+  - {name: "main-032", policy: "main", request: {method: "GET", host: "API.EXAMPLE.COM", path: "/v1/items"}, expected: {grant: "api-read", reason: null}}
+  - {name: "main-033", policy: "main", request: {method: "GET", host: "API.EXAMPLE.COM", path: "/v1/items/x/comments"}, expected: {grant: "api-read", reason: null}}
+  - {name: "main-034", policy: "main", request: {method: "GET", host: "API.EXAMPLE.COM", path: "/v1/items/a/b/comments"}, expected: {grant: "api-read", reason: null}}
+  - {name: "main-035", policy: "main", request: {method: "GET", host: "API.EXAMPLE.COM", path: "/admin/x"}, expected: {grant: "deny-admin", reason: "DENY_GRANT"}}
+  - {name: "main-036", policy: "main", request: {method: "GET", host: "API.EXAMPLE.COM", path: "/admin"}, expected: {grant: "deny-admin", reason: "DENY_GRANT"}}
+  - {name: "main-037", policy: "main", request: {method: "GET", host: "API.EXAMPLE.COM", path: "/pub/x"}, expected: {grant: "wild-pub", reason: null}}
+  - {name: "main-038", policy: "main", request: {method: "GET", host: "API.EXAMPLE.COM", path: "/v2/messages"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-039", policy: "main", request: {method: "GET", host: "API.EXAMPLE.COM", path: "/v1/"}, expected: {grant: "api-read", reason: null}}
+  - {name: "main-040", policy: "main", request: {method: "GET", host: "API.EXAMPLE.COM", path: "/x/../y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "main-041", policy: "main", request: {method: "POST", host: "API.EXAMPLE.COM", path: "/v1/messages"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-042", policy: "main", request: {method: "POST", host: "API.EXAMPLE.COM", path: "/v1/items"}, expected: {grant: "api-write", reason: null}}
+  - {name: "main-043", policy: "main", request: {method: "POST", host: "API.EXAMPLE.COM", path: "/v1/items/x/comments"}, expected: {grant: "api-write", reason: null}}
+  - {name: "main-044", policy: "main", request: {method: "POST", host: "API.EXAMPLE.COM", path: "/v1/items/a/b/comments"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-045", policy: "main", request: {method: "POST", host: "API.EXAMPLE.COM", path: "/admin/x"}, expected: {grant: "deny-admin", reason: "DENY_GRANT"}}
+  - {name: "main-046", policy: "main", request: {method: "POST", host: "API.EXAMPLE.COM", path: "/admin"}, expected: {grant: "deny-admin", reason: "DENY_GRANT"}}
+  - {name: "main-047", policy: "main", request: {method: "POST", host: "API.EXAMPLE.COM", path: "/pub/x"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-048", policy: "main", request: {method: "POST", host: "API.EXAMPLE.COM", path: "/v2/messages"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-049", policy: "main", request: {method: "POST", host: "API.EXAMPLE.COM", path: "/v1/"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-050", policy: "main", request: {method: "POST", host: "API.EXAMPLE.COM", path: "/x/../y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "main-051", policy: "main", request: {method: "get", host: "API.EXAMPLE.COM", path: "/v1/messages"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-052", policy: "main", request: {method: "get", host: "API.EXAMPLE.COM", path: "/v1/items"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-053", policy: "main", request: {method: "get", host: "API.EXAMPLE.COM", path: "/v1/items/x/comments"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-054", policy: "main", request: {method: "get", host: "API.EXAMPLE.COM", path: "/v1/items/a/b/comments"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-055", policy: "main", request: {method: "get", host: "API.EXAMPLE.COM", path: "/admin/x"}, expected: {grant: "deny-admin", reason: "DENY_GRANT"}}
+  - {name: "main-056", policy: "main", request: {method: "get", host: "API.EXAMPLE.COM", path: "/admin"}, expected: {grant: "deny-admin", reason: "DENY_GRANT"}}
+  - {name: "main-057", policy: "main", request: {method: "get", host: "API.EXAMPLE.COM", path: "/pub/x"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-058", policy: "main", request: {method: "get", host: "API.EXAMPLE.COM", path: "/v2/messages"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-059", policy: "main", request: {method: "get", host: "API.EXAMPLE.COM", path: "/v1/"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-060", policy: "main", request: {method: "get", host: "API.EXAMPLE.COM", path: "/x/../y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "main-061", policy: "main", request: {method: "GET", host: "api.example.com.", path: "/v1/messages"}, expected: {grant: "api-read", reason: null}}
+  - {name: "main-062", policy: "main", request: {method: "GET", host: "api.example.com.", path: "/v1/items"}, expected: {grant: "api-read", reason: null}}
+  - {name: "main-063", policy: "main", request: {method: "GET", host: "api.example.com.", path: "/v1/items/x/comments"}, expected: {grant: "api-read", reason: null}}
+  - {name: "main-064", policy: "main", request: {method: "GET", host: "api.example.com.", path: "/v1/items/a/b/comments"}, expected: {grant: "api-read", reason: null}}
+  - {name: "main-065", policy: "main", request: {method: "GET", host: "api.example.com.", path: "/admin/x"}, expected: {grant: "deny-admin", reason: "DENY_GRANT"}}
+  - {name: "main-066", policy: "main", request: {method: "GET", host: "api.example.com.", path: "/admin"}, expected: {grant: "deny-admin", reason: "DENY_GRANT"}}
+  - {name: "main-067", policy: "main", request: {method: "GET", host: "api.example.com.", path: "/pub/x"}, expected: {grant: "wild-pub", reason: null}}
+  - {name: "main-068", policy: "main", request: {method: "GET", host: "api.example.com.", path: "/v2/messages"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-069", policy: "main", request: {method: "GET", host: "api.example.com.", path: "/v1/"}, expected: {grant: "api-read", reason: null}}
+  - {name: "main-070", policy: "main", request: {method: "GET", host: "api.example.com.", path: "/x/../y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "main-071", policy: "main", request: {method: "POST", host: "api.example.com.", path: "/v1/messages"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-072", policy: "main", request: {method: "POST", host: "api.example.com.", path: "/v1/items"}, expected: {grant: "api-write", reason: null}}
+  - {name: "main-073", policy: "main", request: {method: "POST", host: "api.example.com.", path: "/v1/items/x/comments"}, expected: {grant: "api-write", reason: null}}
+  - {name: "main-074", policy: "main", request: {method: "POST", host: "api.example.com.", path: "/v1/items/a/b/comments"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-075", policy: "main", request: {method: "POST", host: "api.example.com.", path: "/admin/x"}, expected: {grant: "deny-admin", reason: "DENY_GRANT"}}
+  - {name: "main-076", policy: "main", request: {method: "POST", host: "api.example.com.", path: "/admin"}, expected: {grant: "deny-admin", reason: "DENY_GRANT"}}
+  - {name: "main-077", policy: "main", request: {method: "POST", host: "api.example.com.", path: "/pub/x"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-078", policy: "main", request: {method: "POST", host: "api.example.com.", path: "/v2/messages"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-079", policy: "main", request: {method: "POST", host: "api.example.com.", path: "/v1/"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-080", policy: "main", request: {method: "POST", host: "api.example.com.", path: "/x/../y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "main-081", policy: "main", request: {method: "get", host: "api.example.com.", path: "/v1/messages"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-082", policy: "main", request: {method: "get", host: "api.example.com.", path: "/v1/items"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-083", policy: "main", request: {method: "get", host: "api.example.com.", path: "/v1/items/x/comments"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-084", policy: "main", request: {method: "get", host: "api.example.com.", path: "/v1/items/a/b/comments"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-085", policy: "main", request: {method: "get", host: "api.example.com.", path: "/admin/x"}, expected: {grant: "deny-admin", reason: "DENY_GRANT"}}
+  - {name: "main-086", policy: "main", request: {method: "get", host: "api.example.com.", path: "/admin"}, expected: {grant: "deny-admin", reason: "DENY_GRANT"}}
+  - {name: "main-087", policy: "main", request: {method: "get", host: "api.example.com.", path: "/pub/x"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-088", policy: "main", request: {method: "get", host: "api.example.com.", path: "/v2/messages"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-089", policy: "main", request: {method: "get", host: "api.example.com.", path: "/v1/"}, expected: {grant: "api-any", reason: null}}
+  - {name: "main-090", policy: "main", request: {method: "get", host: "api.example.com.", path: "/x/../y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "main-091", policy: "main", request: {method: "GET", host: "a.example.com", path: "/v1/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-092", policy: "main", request: {method: "GET", host: "a.example.com", path: "/v1/items"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-093", policy: "main", request: {method: "GET", host: "a.example.com", path: "/v1/items/x/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-094", policy: "main", request: {method: "GET", host: "a.example.com", path: "/v1/items/a/b/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-095", policy: "main", request: {method: "GET", host: "a.example.com", path: "/admin/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-096", policy: "main", request: {method: "GET", host: "a.example.com", path: "/admin"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-097", policy: "main", request: {method: "GET", host: "a.example.com", path: "/pub/x"}, expected: {grant: "wild-pub", reason: null}}
+  - {name: "main-098", policy: "main", request: {method: "GET", host: "a.example.com", path: "/v2/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-099", policy: "main", request: {method: "GET", host: "a.example.com", path: "/v1/"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-100", policy: "main", request: {method: "GET", host: "a.example.com", path: "/x/../y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "main-101", policy: "main", request: {method: "POST", host: "a.example.com", path: "/v1/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-102", policy: "main", request: {method: "POST", host: "a.example.com", path: "/v1/items"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-103", policy: "main", request: {method: "POST", host: "a.example.com", path: "/v1/items/x/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-104", policy: "main", request: {method: "POST", host: "a.example.com", path: "/v1/items/a/b/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-105", policy: "main", request: {method: "POST", host: "a.example.com", path: "/admin/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-106", policy: "main", request: {method: "POST", host: "a.example.com", path: "/admin"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-107", policy: "main", request: {method: "POST", host: "a.example.com", path: "/pub/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-108", policy: "main", request: {method: "POST", host: "a.example.com", path: "/v2/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-109", policy: "main", request: {method: "POST", host: "a.example.com", path: "/v1/"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-110", policy: "main", request: {method: "POST", host: "a.example.com", path: "/x/../y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "main-111", policy: "main", request: {method: "get", host: "a.example.com", path: "/v1/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-112", policy: "main", request: {method: "get", host: "a.example.com", path: "/v1/items"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-113", policy: "main", request: {method: "get", host: "a.example.com", path: "/v1/items/x/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-114", policy: "main", request: {method: "get", host: "a.example.com", path: "/v1/items/a/b/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-115", policy: "main", request: {method: "get", host: "a.example.com", path: "/admin/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-116", policy: "main", request: {method: "get", host: "a.example.com", path: "/admin"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-117", policy: "main", request: {method: "get", host: "a.example.com", path: "/pub/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-118", policy: "main", request: {method: "get", host: "a.example.com", path: "/v2/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-119", policy: "main", request: {method: "get", host: "a.example.com", path: "/v1/"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-120", policy: "main", request: {method: "get", host: "a.example.com", path: "/x/../y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "main-121", policy: "main", request: {method: "GET", host: "a.b.example.com", path: "/v1/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-122", policy: "main", request: {method: "GET", host: "a.b.example.com", path: "/v1/items"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-123", policy: "main", request: {method: "GET", host: "a.b.example.com", path: "/v1/items/x/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-124", policy: "main", request: {method: "GET", host: "a.b.example.com", path: "/v1/items/a/b/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-125", policy: "main", request: {method: "GET", host: "a.b.example.com", path: "/admin/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-126", policy: "main", request: {method: "GET", host: "a.b.example.com", path: "/admin"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-127", policy: "main", request: {method: "GET", host: "a.b.example.com", path: "/pub/x"}, expected: {grant: "wild-pub", reason: null}}
+  - {name: "main-128", policy: "main", request: {method: "GET", host: "a.b.example.com", path: "/v2/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-129", policy: "main", request: {method: "GET", host: "a.b.example.com", path: "/v1/"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-130", policy: "main", request: {method: "GET", host: "a.b.example.com", path: "/x/../y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "main-131", policy: "main", request: {method: "POST", host: "a.b.example.com", path: "/v1/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-132", policy: "main", request: {method: "POST", host: "a.b.example.com", path: "/v1/items"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-133", policy: "main", request: {method: "POST", host: "a.b.example.com", path: "/v1/items/x/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-134", policy: "main", request: {method: "POST", host: "a.b.example.com", path: "/v1/items/a/b/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-135", policy: "main", request: {method: "POST", host: "a.b.example.com", path: "/admin/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-136", policy: "main", request: {method: "POST", host: "a.b.example.com", path: "/admin"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-137", policy: "main", request: {method: "POST", host: "a.b.example.com", path: "/pub/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-138", policy: "main", request: {method: "POST", host: "a.b.example.com", path: "/v2/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-139", policy: "main", request: {method: "POST", host: "a.b.example.com", path: "/v1/"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-140", policy: "main", request: {method: "POST", host: "a.b.example.com", path: "/x/../y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "main-141", policy: "main", request: {method: "get", host: "a.b.example.com", path: "/v1/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-142", policy: "main", request: {method: "get", host: "a.b.example.com", path: "/v1/items"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-143", policy: "main", request: {method: "get", host: "a.b.example.com", path: "/v1/items/x/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-144", policy: "main", request: {method: "get", host: "a.b.example.com", path: "/v1/items/a/b/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-145", policy: "main", request: {method: "get", host: "a.b.example.com", path: "/admin/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-146", policy: "main", request: {method: "get", host: "a.b.example.com", path: "/admin"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-147", policy: "main", request: {method: "get", host: "a.b.example.com", path: "/pub/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-148", policy: "main", request: {method: "get", host: "a.b.example.com", path: "/v2/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-149", policy: "main", request: {method: "get", host: "a.b.example.com", path: "/v1/"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-150", policy: "main", request: {method: "get", host: "a.b.example.com", path: "/x/../y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "main-151", policy: "main", request: {method: "GET", host: "example.com", path: "/v1/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-152", policy: "main", request: {method: "GET", host: "example.com", path: "/v1/items"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-153", policy: "main", request: {method: "GET", host: "example.com", path: "/v1/items/x/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-154", policy: "main", request: {method: "GET", host: "example.com", path: "/v1/items/a/b/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-155", policy: "main", request: {method: "GET", host: "example.com", path: "/admin/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-156", policy: "main", request: {method: "GET", host: "example.com", path: "/admin"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-157", policy: "main", request: {method: "GET", host: "example.com", path: "/pub/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-158", policy: "main", request: {method: "GET", host: "example.com", path: "/v2/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-159", policy: "main", request: {method: "GET", host: "example.com", path: "/v1/"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-160", policy: "main", request: {method: "GET", host: "example.com", path: "/x/../y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "main-161", policy: "main", request: {method: "POST", host: "example.com", path: "/v1/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-162", policy: "main", request: {method: "POST", host: "example.com", path: "/v1/items"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-163", policy: "main", request: {method: "POST", host: "example.com", path: "/v1/items/x/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-164", policy: "main", request: {method: "POST", host: "example.com", path: "/v1/items/a/b/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-165", policy: "main", request: {method: "POST", host: "example.com", path: "/admin/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-166", policy: "main", request: {method: "POST", host: "example.com", path: "/admin"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-167", policy: "main", request: {method: "POST", host: "example.com", path: "/pub/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-168", policy: "main", request: {method: "POST", host: "example.com", path: "/v2/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-169", policy: "main", request: {method: "POST", host: "example.com", path: "/v1/"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-170", policy: "main", request: {method: "POST", host: "example.com", path: "/x/../y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "main-171", policy: "main", request: {method: "get", host: "example.com", path: "/v1/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-172", policy: "main", request: {method: "get", host: "example.com", path: "/v1/items"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-173", policy: "main", request: {method: "get", host: "example.com", path: "/v1/items/x/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-174", policy: "main", request: {method: "get", host: "example.com", path: "/v1/items/a/b/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-175", policy: "main", request: {method: "get", host: "example.com", path: "/admin/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-176", policy: "main", request: {method: "get", host: "example.com", path: "/admin"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-177", policy: "main", request: {method: "get", host: "example.com", path: "/pub/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-178", policy: "main", request: {method: "get", host: "example.com", path: "/v2/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-179", policy: "main", request: {method: "get", host: "example.com", path: "/v1/"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-180", policy: "main", request: {method: "get", host: "example.com", path: "/x/../y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "main-181", policy: "main", request: {method: "GET", host: "other.test", path: "/v1/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-182", policy: "main", request: {method: "GET", host: "other.test", path: "/v1/items"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-183", policy: "main", request: {method: "GET", host: "other.test", path: "/v1/items/x/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-184", policy: "main", request: {method: "GET", host: "other.test", path: "/v1/items/a/b/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-185", policy: "main", request: {method: "GET", host: "other.test", path: "/admin/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-186", policy: "main", request: {method: "GET", host: "other.test", path: "/admin"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-187", policy: "main", request: {method: "GET", host: "other.test", path: "/pub/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-188", policy: "main", request: {method: "GET", host: "other.test", path: "/v2/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-189", policy: "main", request: {method: "GET", host: "other.test", path: "/v1/"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-190", policy: "main", request: {method: "GET", host: "other.test", path: "/x/../y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "main-191", policy: "main", request: {method: "POST", host: "other.test", path: "/v1/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-192", policy: "main", request: {method: "POST", host: "other.test", path: "/v1/items"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-193", policy: "main", request: {method: "POST", host: "other.test", path: "/v1/items/x/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-194", policy: "main", request: {method: "POST", host: "other.test", path: "/v1/items/a/b/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-195", policy: "main", request: {method: "POST", host: "other.test", path: "/admin/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-196", policy: "main", request: {method: "POST", host: "other.test", path: "/admin"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-197", policy: "main", request: {method: "POST", host: "other.test", path: "/pub/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-198", policy: "main", request: {method: "POST", host: "other.test", path: "/v2/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-199", policy: "main", request: {method: "POST", host: "other.test", path: "/v1/"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-200", policy: "main", request: {method: "POST", host: "other.test", path: "/x/../y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "main-201", policy: "main", request: {method: "get", host: "other.test", path: "/v1/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-202", policy: "main", request: {method: "get", host: "other.test", path: "/v1/items"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-203", policy: "main", request: {method: "get", host: "other.test", path: "/v1/items/x/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-204", policy: "main", request: {method: "get", host: "other.test", path: "/v1/items/a/b/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-205", policy: "main", request: {method: "get", host: "other.test", path: "/admin/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-206", policy: "main", request: {method: "get", host: "other.test", path: "/admin"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-207", policy: "main", request: {method: "get", host: "other.test", path: "/pub/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-208", policy: "main", request: {method: "get", host: "other.test", path: "/v2/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-209", policy: "main", request: {method: "get", host: "other.test", path: "/v1/"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-210", policy: "main", request: {method: "get", host: "other.test", path: "/x/../y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "main-211", policy: "main", request: {method: "GET", host: "203.0.113.9", path: "/v1/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-212", policy: "main", request: {method: "GET", host: "203.0.113.9", path: "/v1/items"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-213", policy: "main", request: {method: "GET", host: "203.0.113.9", path: "/v1/items/x/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-214", policy: "main", request: {method: "GET", host: "203.0.113.9", path: "/v1/items/a/b/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-215", policy: "main", request: {method: "GET", host: "203.0.113.9", path: "/admin/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-216", policy: "main", request: {method: "GET", host: "203.0.113.9", path: "/admin"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-217", policy: "main", request: {method: "GET", host: "203.0.113.9", path: "/pub/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-218", policy: "main", request: {method: "GET", host: "203.0.113.9", path: "/v2/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-219", policy: "main", request: {method: "GET", host: "203.0.113.9", path: "/v1/"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-220", policy: "main", request: {method: "GET", host: "203.0.113.9", path: "/x/../y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "main-221", policy: "main", request: {method: "POST", host: "203.0.113.9", path: "/v1/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-222", policy: "main", request: {method: "POST", host: "203.0.113.9", path: "/v1/items"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-223", policy: "main", request: {method: "POST", host: "203.0.113.9", path: "/v1/items/x/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-224", policy: "main", request: {method: "POST", host: "203.0.113.9", path: "/v1/items/a/b/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-225", policy: "main", request: {method: "POST", host: "203.0.113.9", path: "/admin/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-226", policy: "main", request: {method: "POST", host: "203.0.113.9", path: "/admin"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-227", policy: "main", request: {method: "POST", host: "203.0.113.9", path: "/pub/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-228", policy: "main", request: {method: "POST", host: "203.0.113.9", path: "/v2/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-229", policy: "main", request: {method: "POST", host: "203.0.113.9", path: "/v1/"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-230", policy: "main", request: {method: "POST", host: "203.0.113.9", path: "/x/../y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "main-231", policy: "main", request: {method: "get", host: "203.0.113.9", path: "/v1/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-232", policy: "main", request: {method: "get", host: "203.0.113.9", path: "/v1/items"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-233", policy: "main", request: {method: "get", host: "203.0.113.9", path: "/v1/items/x/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-234", policy: "main", request: {method: "get", host: "203.0.113.9", path: "/v1/items/a/b/comments"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-235", policy: "main", request: {method: "get", host: "203.0.113.9", path: "/admin/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-236", policy: "main", request: {method: "get", host: "203.0.113.9", path: "/admin"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-237", policy: "main", request: {method: "get", host: "203.0.113.9", path: "/pub/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-238", policy: "main", request: {method: "get", host: "203.0.113.9", path: "/v2/messages"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-239", policy: "main", request: {method: "get", host: "203.0.113.9", path: "/v1/"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "main-240", policy: "main", request: {method: "get", host: "203.0.113.9", path: "/x/../y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "sch-01", policy: "schemes", request: {method: "GET", host: "secure.test", path: "/x", scheme: "https"}, expected: {grant: "secure", reason: null}}
+  - {name: "sch-02", policy: "schemes", request: {method: "GET", host: "secure.test", path: "/x", scheme: "https", port: 443}, expected: {grant: "secure", reason: null}}
+  - {name: "sch-03", policy: "schemes", request: {method: "GET", host: "secure.test", path: "/x", scheme: "https", port: 8443}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-04", policy: "schemes", request: {method: "GET", host: "secure.test", path: "/x", scheme: "https", port: 8080}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-05", policy: "schemes", request: {method: "GET", host: "secure.test", path: "/x", scheme: "https", port: 80}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-06", policy: "schemes", request: {method: "GET", host: "secure.test", path: "/x", scheme: "http"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-07", policy: "schemes", request: {method: "GET", host: "secure.test", path: "/x", scheme: "http", port: 443}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-08", policy: "schemes", request: {method: "GET", host: "secure.test", path: "/x", scheme: "http", port: 8443}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-09", policy: "schemes", request: {method: "GET", host: "secure.test", path: "/x", scheme: "http", port: 8080}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-10", policy: "schemes", request: {method: "GET", host: "secure.test", path: "/x", scheme: "http", port: 80}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-11", policy: "schemes", request: {method: "GET", host: "insecure.test", path: "/x", scheme: "https"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-12", policy: "schemes", request: {method: "GET", host: "insecure.test", path: "/x", scheme: "https", port: 443}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-13", policy: "schemes", request: {method: "GET", host: "insecure.test", path: "/x", scheme: "https", port: 8443}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-14", policy: "schemes", request: {method: "GET", host: "insecure.test", path: "/x", scheme: "https", port: 8080}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-15", policy: "schemes", request: {method: "GET", host: "insecure.test", path: "/x", scheme: "https", port: 80}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-16", policy: "schemes", request: {method: "GET", host: "insecure.test", path: "/x", scheme: "http"}, expected: {grant: "plain", reason: null}}
+  - {name: "sch-17", policy: "schemes", request: {method: "GET", host: "insecure.test", path: "/x", scheme: "http", port: 443}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-18", policy: "schemes", request: {method: "GET", host: "insecure.test", path: "/x", scheme: "http", port: 8443}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-19", policy: "schemes", request: {method: "GET", host: "insecure.test", path: "/x", scheme: "http", port: 8080}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-20", policy: "schemes", request: {method: "GET", host: "insecure.test", path: "/x", scheme: "http", port: 80}, expected: {grant: "plain", reason: null}}
+  - {name: "sch-21", policy: "schemes", request: {method: "GET", host: "multi.test", path: "/x", scheme: "https"}, expected: {grant: "both-p", reason: null}}
+  - {name: "sch-22", policy: "schemes", request: {method: "GET", host: "multi.test", path: "/x", scheme: "https", port: 443}, expected: {grant: "both-p", reason: null}}
+  - {name: "sch-23", policy: "schemes", request: {method: "GET", host: "multi.test", path: "/x", scheme: "https", port: 8443}, expected: {grant: "both-p", reason: null}}
+  - {name: "sch-24", policy: "schemes", request: {method: "GET", host: "multi.test", path: "/x", scheme: "https", port: 8080}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-25", policy: "schemes", request: {method: "GET", host: "multi.test", path: "/x", scheme: "https", port: 80}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-26", policy: "schemes", request: {method: "GET", host: "multi.test", path: "/x", scheme: "http"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-27", policy: "schemes", request: {method: "GET", host: "multi.test", path: "/x", scheme: "http", port: 443}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-28", policy: "schemes", request: {method: "GET", host: "multi.test", path: "/x", scheme: "http", port: 8443}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-29", policy: "schemes", request: {method: "GET", host: "multi.test", path: "/x", scheme: "http", port: 8080}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-30", policy: "schemes", request: {method: "GET", host: "multi.test", path: "/x", scheme: "http", port: 80}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-31", policy: "schemes", request: {method: "GET", host: "alt.test", path: "/x", scheme: "https"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-32", policy: "schemes", request: {method: "GET", host: "alt.test", path: "/x", scheme: "https", port: 443}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-33", policy: "schemes", request: {method: "GET", host: "alt.test", path: "/x", scheme: "https", port: 8443}, expected: {grant: "p8443", reason: null}}
+  - {name: "sch-34", policy: "schemes", request: {method: "GET", host: "alt.test", path: "/x", scheme: "https", port: 8080}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-35", policy: "schemes", request: {method: "GET", host: "alt.test", path: "/x", scheme: "https", port: 80}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-36", policy: "schemes", request: {method: "GET", host: "alt.test", path: "/x", scheme: "http"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-37", policy: "schemes", request: {method: "GET", host: "alt.test", path: "/x", scheme: "http", port: 443}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-38", policy: "schemes", request: {method: "GET", host: "alt.test", path: "/x", scheme: "http", port: 8443}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-39", policy: "schemes", request: {method: "GET", host: "alt.test", path: "/x", scheme: "http", port: 8080}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-40", policy: "schemes", request: {method: "GET", host: "alt.test", path: "/x", scheme: "http", port: 80}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-41", policy: "schemes", request: {method: "GET", host: "odd.test", path: "/x", scheme: "https"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-42", policy: "schemes", request: {method: "GET", host: "odd.test", path: "/x", scheme: "https", port: 443}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-43", policy: "schemes", request: {method: "GET", host: "odd.test", path: "/x", scheme: "https", port: 8443}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-44", policy: "schemes", request: {method: "GET", host: "odd.test", path: "/x", scheme: "https", port: 8080}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-45", policy: "schemes", request: {method: "GET", host: "odd.test", path: "/x", scheme: "https", port: 80}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-46", policy: "schemes", request: {method: "GET", host: "odd.test", path: "/x", scheme: "http"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-47", policy: "schemes", request: {method: "GET", host: "odd.test", path: "/x", scheme: "http", port: 443}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-48", policy: "schemes", request: {method: "GET", host: "odd.test", path: "/x", scheme: "http", port: 8443}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "sch-49", policy: "schemes", request: {method: "GET", host: "odd.test", path: "/x", scheme: "http", port: 8080}, expected: {grant: "httpx", reason: null}}
+  - {name: "sch-50", policy: "schemes", request: {method: "GET", host: "odd.test", path: "/x", scheme: "http", port: 80}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "order-a-post", policy: "order-a", request: {method: "POST", host: "shop.test", path: "/cart"}, expected: {grant: "broad", reason: null}}
+  - {name: "order-a-get", policy: "order-a", request: {method: "GET", host: "shop.test", path: "/cart"}, expected: {grant: "broad", reason: null}}
+  - {name: "order-a-put", policy: "order-a", request: {method: "PUT", host: "shop.test", path: "/cart"}, expected: {grant: "broad", reason: null}}
+  - {name: "order-b-post", policy: "order-b", request: {method: "POST", host: "shop.test", path: "/cart"}, expected: {grant: "narrow", reason: null}}
+  - {name: "order-b-get", policy: "order-b", request: {method: "GET", host: "shop.test", path: "/cart"}, expected: {grant: "broad", reason: null}}
+  - {name: "order-b-put", policy: "order-b", request: {method: "PUT", host: "shop.test", path: "/cart"}, expected: {grant: "broad", reason: null}}
+  - {name: "deny-first-hit", policy: "deny-first", request: {method: "GET", host: "svc.test", path: "/x/y"}, expected: {grant: "deny-x", reason: "DENY_GRANT"}}
+  - {name: "deny-first-miss", policy: "deny-first", request: {method: "GET", host: "svc.test", path: "/z"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "deny-last-hit", policy: "deny-last", request: {method: "GET", host: "svc.test", path: "/x/y"}, expected: {grant: "allow-x", reason: null}}
+  - {name: "deny-last-miss", policy: "deny-last", request: {method: "GET", host: "svc.test", path: "/z"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "wild-apex", policy: "star", request: {method: "GET", host: "anything.else.test", path: "/"}, expected: {grant: "any", reason: null}}
+  - {name: "star-ip", policy: "star", request: {method: "GET", host: "192.0.2.1", path: "/"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "star-v6", policy: "star", request: {method: "GET", host: "[::1]", path: "/"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "learn-any", policy: "learn", request: {method: "GET", host: "totally.unknown.example", path: "/"}, expected: {grant: "any-cred", reason: null}}
+  - {name: "learn-ip", policy: "learn", request: {method: "GET", host: "198.51.100.2", path: "/"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "ip-listed", policy: "ip", request: {method: "GET", host: "203.0.113.7", path: "/"}, expected: {grant: "ipgrant", reason: null}}
+  - {name: "ip-listed-dot", policy: "ip", request: {method: "GET", host: "203.0.113.7.", path: "/"}, expected: {grant: "ipgrant", reason: null}}
+  - {name: "ip-unlisted", policy: "ip", request: {method: "GET", host: "203.0.113.8", path: "/"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "ip-wild-no", policy: "ip", request: {method: "GET", host: "8.8.8.8", path: "/"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "ip-v6", policy: "ip", request: {method: "GET", host: "[::1]", path: "/"}, expected: {grant: "v6", reason: null}}
+  - {name: "ip-v6-nobr", policy: "ip", request: {method: "GET", host: "::1", path: "/"}, expected: {grant: "v6", reason: null}}
+  - {name: "idn-alabel", policy: "idn", request: {method: "GET", host: "xn--nxasmq6b.example", path: "/"}, expected: {grant: "idn", reason: null}}
+  - {name: "idn-alabel2", policy: "idn", request: {method: "GET", host: "xn--bcher-kva.test", path: "/"}, expected: {grant: "idn", reason: null}}
+  - {name: "idn-other", policy: "idn", request: {method: "GET", host: "xn--other.example", path: "/"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "pass-any", policy: "pass", request: {method: "POST", host: "vpn.test", path: "/anything/here"}, expected: {grant: "tunnel", reason: null}}
+  - {name: "pass-http", policy: "pass", request: {method: "GET", host: "vpn.test", path: "/", scheme: "http"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "git-exact", policy: "gitlike", request: {method: "GET", host: "code.test", path: "/repos/acme/widgets"}, expected: {grant: "repo", reason: null}}
+  - {name: "git-evil", policy: "gitlike", request: {method: "GET", host: "code.test", path: "/repos/acme/widgets-evil"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "git-infos", policy: "gitlike", request: {method: "GET", host: "code.test", path: "/repos/acme/w/info/refs"}, expected: {grant: "repo", reason: null}}
+  - {name: "git-deep", policy: "gitlike", request: {method: "GET", host: "code.test", path: "/repos/acme/a/b"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "git-star-one", policy: "gitlike", request: {method: "POST", host: "code.test", path: "/repos/acme/x"}, expected: {grant: "repog", reason: null}}
+  - {name: "git-star-two", policy: "gitlike", request: {method: "POST", host: "code.test", path: "/repos/acme/a/b"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "git-post-widget", policy: "gitlike", request: {method: "POST", host: "code.test", path: "/repos/acme/widgets"}, expected: {grant: "repog", reason: null}}
+  - {name: "empty-methods", policy: "empty-lists", request: {method: "GET", host: "em.test", path: "/"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "empty-paths", policy: "empty-lists", request: {method: "GET", host: "ep.test", path: "/x"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "empty-ports", policy: "empty-lists", request: {method: "GET", host: "epo.test", path: "/"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "empty-ok", policy: "empty-lists", request: {method: "PUT", host: "e.test", path: "/anything"}, expected: {grant: "e-ok", reason: null}}
+  - {name: "precheck-path-00", policy: "main", request: {method: "GET", host: "api.example.com", path: "/a/../b"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "precheck-path-01", policy: "main", request: {method: "GET", host: "api.example.com", path: "/x/./y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "precheck-path-02", policy: "main", request: {method: "GET", host: "api.example.com", path: "/x/%2e/y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "precheck-path-03", policy: "main", request: {method: "GET", host: "api.example.com", path: "/x%2fy"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "precheck-path-04", policy: "main", request: {method: "GET", host: "api.example.com", path: "/x%2Fy"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "precheck-path-05", policy: "main", request: {method: "GET", host: "api.example.com", path: "/x\\y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "precheck-path-06", policy: "main", request: {method: "GET", host: "api.example.com", path: "/x%5cy"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "precheck-path-07", policy: "main", request: {method: "GET", host: "api.example.com", path: "/x%00y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "precheck-path-08", policy: "main", request: {method: "GET", host: "api.example.com", path: "/x%2E%2E/y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "precheck-path-09", policy: "main", request: {method: "GET", host: "api.example.com", path: "/x\t/y"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "precheck-path-10", policy: "main", request: {method: "GET", host: "api.example.com", path: "/x%2e"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "precheck-path-11", policy: "main", request: {method: "GET", host: "api.example.com", path: "/%2f"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "precheck-sni", policy: "main", request: {method: "GET", host: "api.example.com", path: "/v1/messages", sni: "evil.test"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "precheck-connect", policy: "main", request: {method: "GET", host: "api.example.com", path: "/v1/messages", connect: "evil.test"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "precheck-sni-case-ok", policy: "main", request: {method: "GET", host: "api.example.com", path: "/v1/messages", sni: "API.EXAMPLE.COM"}, expected: {grant: "api-read", reason: null}}
+  - {name: "precheck-connect-ok", policy: "main", request: {method: "GET", host: "api.example.com", path: "/v1/messages", connect: "api.example.com"}, expected: {grant: "api-read", reason: null}}
+  - {name: "empty-path", policy: "main", request: {method: "GET", host: "api.example.com", path: ""}, expected: {grant: "api-any", reason: null}}
+  - {name: "query-ignored", policy: "main", request: {method: "GET", host: "api.example.com", path: "/v1/messages", query: "a=%2f&b=.."}, expected: {grant: "api-read", reason: null}}
+  - {name: "unreserved-decode", policy: "main", request: {method: "GET", host: "api.example.com", path: "/v1/mess%61ges"}, expected: {grant: "api-read", reason: null}}
+  - {name: "unreserved-decode2", policy: "main", request: {method: "GET", host: "api.example.com", path: "/%7e1/messages"}, expected: {grant: "api-any", reason: null}}
+  - {name: "reserved-raw", policy: "main", request: {method: "GET", host: "api.example.com", path: "/v1/mess%20ages"}, expected: {grant: "api-read", reason: null}}
+  - {name: "gitm-r-001", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: "repo-r", reason: null}}
+  - {name: "gitm-r-002", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets/info/refs", query: "service=git-upload-pack"}, expected: {grant: "repo-r", reason: null}}
+  - {name: "gitm-r-003", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-receive-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-r-004", policy: "gitread", request: {method: "POST", host: "code.test", path: "/acme/widgets.git/git-upload-pack"}, expected: {grant: "repo-r", reason: null}}
+  - {name: "gitm-r-005", policy: "gitread", request: {method: "POST", host: "code.test", path: "/acme/widgets/git-upload-pack"}, expected: {grant: "repo-r", reason: null}}
+  - {name: "gitm-r-006", policy: "gitread", request: {method: "POST", host: "code.test", path: "/acme/widgets.git/git-receive-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-r-007", policy: "gitread", request: {method: "POST", host: "code.test", path: "/acme/widgets/git-receive-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-w-001", policy: "gitwrite", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: "repo-w", reason: null}}
+  - {name: "gitm-w-002", policy: "gitwrite", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-receive-pack"}, expected: {grant: "repo-w", reason: null}}
+  - {name: "gitm-w-003", policy: "gitwrite", request: {method: "POST", host: "code.test", path: "/acme/widgets.git/git-upload-pack"}, expected: {grant: "repo-w", reason: null}}
+  - {name: "gitm-w-004", policy: "gitwrite", request: {method: "POST", host: "code.test", path: "/acme/widgets.git/git-receive-pack"}, expected: {grant: "repo-w", reason: null}}
+  - {name: "gitm-s-001", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-s-002", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service="}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-s-003", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-dumb"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-s-004", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "Service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-s-005", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=GIT-UPLOAD-PACK"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-s-006", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git%2dupload%2dpack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-s-007", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack&x=1"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-s-008", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "x=1&service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-s-009", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack&service=git-receive-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-s-010", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack%00"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-s-011", policy: "gitread", request: {method: "POST", host: "code.test", path: "/acme/widgets.git/git-upload-pack", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-s-012", policy: "gitread", request: {method: "POST", host: "code.test", path: "/acme/widgets.git/git-upload-pack", query: "x=1"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-s-013", policy: "gitwrite", request: {method: "POST", host: "code.test", path: "/acme/widgets.git/git-receive-pack", query: "service=git-receive-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-m-001", policy: "gitread", request: {method: "POST", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-m-002", policy: "gitread", request: {method: "PUT", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-m-003", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-m-004", policy: "gitread", request: {method: "PUT", host: "code.test", path: "/acme/widgets.git/git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-m-005", policy: "gitread", request: {method: "HEAD", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-m-006", policy: "gitwrite", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/git-receive-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-m-007", policy: "gitread", request: {method: "DELETE", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-001", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets-evil.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-002", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widget.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-003", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgetsx.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-004", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.gitx/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-005", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-006", policy: "gitread", request: {method: "GET", host: "code.test", path: "/ACME/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-007", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/Widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-008", policy: "gitread", request: {method: "GET", host: "code.test", path: "/ACME/WIDGETS.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-009", policy: "gitread", request: {method: "GET", host: "code.test", path: "/org/acme/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-010", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/extra/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-011", policy: "gitread", request: {method: "POST", host: "code.test", path: "/acme/widgets.git/x/git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-012", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-013", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-014", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets/info/refs/x", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-015", policy: "gitread", request: {method: "GET", host: "code.test", path: "//widgets.git/git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-016", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme//info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-p-017", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-c-001", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/INFO/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-c-002", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/REFS", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-c-003", policy: "gitread", request: {method: "POST", host: "code.test", path: "/acme/widgets.git/Git-Upload-Pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-t-001", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets/../widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "gitm-t-002", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/%2e%2e/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "gitm-t-003", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets%2egit/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "gitm-t-004", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme%2fwidgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "SMUGGLING_SUSPECT"}}
+  - {name: "gitm-e-001", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/%77idgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: "repo-r", reason: null}}
+  - {name: "gitm-e-002", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/%72efs", query: "service=git-upload-pack"}, expected: {grant: "repo-r", reason: null}}
+  - {name: "gitm-h-001", policy: "gitread", request: {method: "GET", host: "other.test", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-h-002", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", port: 8443, query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-h-003", policy: "gitread", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", scheme: "http", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-h-004", policy: "gitread", request: {method: "GET", host: "CODE.TEST", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: "repo-r", reason: null}}
+  - {name: "gitm-o-001", policy: "gitorder", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: "broad", reason: null}}
+  - {name: "gitm-o-002", policy: "gittwo", request: {method: "POST", host: "code.test", path: "/acme/gadgets.git/git-receive-pack"}, expected: {grant: "r-write", reason: null}}
+  - {name: "gitm-o-003", policy: "gittwo", request: {method: "POST", host: "code.test", path: "/acme/widgets.git/git-receive-pack"}, expected: {grant: null, reason: "NO_GRANT"}}
+  - {name: "gitm-o-004", policy: "gittwo", request: {method: "GET", host: "code.test", path: "/acme/gadgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: "r-write", reason: null}}
+  - {name: "gitm-o-005", policy: "gitmulti", request: {method: "GET", host: "code.test", path: "/acme/gadgets.git/info/refs", query: "service=git-receive-pack"}, expected: {grant: "multi", reason: null}}
+  - {name: "gitm-o-006", policy: "gitdeny", request: {method: "GET", host: "code.test", path: "/acme/secret.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: "deny-git", reason: "DENY_GRANT"}}
+  - {name: "gitm-o-007", policy: "gitdeny", request: {method: "POST", host: "code.test", path: "/acme/secret.git/git-receive-pack"}, expected: {grant: "deny-git", reason: "DENY_GRANT"}}
+  - {name: "gitm-o-008", policy: "gitdeny", request: {method: "POST", host: "code.test", path: "/acme/widgets.git/git-upload-pack"}, expected: {grant: "repo", reason: null}}
+  - {name: "gitm-o-009", policy: "gitdeny2", request: {method: "GET", host: "code.test", path: "/acme/secret.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: "deny-r", reason: "DENY_GRANT"}}
+  - {name: "gitm-o-010", policy: "gitdeny2", request: {method: "POST", host: "code.test", path: "/acme/secret.git/git-receive-pack"}, expected: {grant: "repo", reason: null}}
+  - {name: "gitm-d-001", policy: "gitdot", request: {method: "GET", host: "code.test", path: "/acme/widgets/info/refs", query: "service=git-upload-pack"}, expected: {grant: "dot", reason: null}}
+  - {name: "gitm-d-002", policy: "gitdot", request: {method: "GET", host: "code.test", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: "dot", reason: null}}
+  - {name: "gitm-d-003", policy: "gitdot", request: {method: "GET", host: "code.test", path: "/acme/widgets.git.git/info/refs", query: "service=git-upload-pack"}, expected: {grant: null, reason: "NO_GRANT"}}

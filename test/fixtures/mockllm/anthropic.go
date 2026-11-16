@@ -49,12 +49,16 @@ func anthExtract(body []byte) (map[string]string, string, bool, error) {
 			case "tool_result":
 				var txt string
 				if len(b.Content) > 0 && b.Content[0] == '"' {
-					_ = json.Unmarshal(b.Content, &txt)
-				} else {
+					if err := json.Unmarshal(b.Content, &txt); err != nil {
+						return nil, "", false, fmt.Errorf("bad tool_result content: %w", err)
+					}
+				} else if len(b.Content) > 0 {
 					var parts []struct {
 						Text string `json:"text"`
 					}
-					_ = json.Unmarshal(b.Content, &parts)
+					if err := json.Unmarshal(b.Content, &parts); err != nil {
+						return nil, "", false, fmt.Errorf("bad tool_result content: %w", err)
+					}
 					for _, p := range parts {
 						txt += p.Text
 					}

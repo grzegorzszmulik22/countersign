@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -68,7 +69,9 @@ func rpc(t *testing.T, env *fxtest.Env, base, method string, params any) (*http.
 	}
 	defer func() { _ = res.Body.Close() }()
 	var v map[string]any
-	_ = json.NewDecoder(res.Body).Decode(&v)
+	if err := json.NewDecoder(res.Body).Decode(&v); err != nil {
+		t.Fatalf("decode rpc result: %v", err)
+	}
 	return res, v
 }
 
@@ -137,7 +140,9 @@ func TestC031Mcpdemo(t *testing.T) {
 		t.Fatalf("hub issues: %v", err)
 	}
 	var issues []map[string]any
-	_ = json.NewDecoder(res.Body).Decode(&issues)
+	if err := json.NewDecoder(res.Body).Decode(&issues); err != nil {
+		t.Fatalf("decode issues: %v", err)
+	}
 	_ = res.Body.Close()
 	var found bool
 	for _, i := range issues {
@@ -166,6 +171,7 @@ func TestC031Mcpdemo(t *testing.T) {
 	// Transport strictness: header/method mismatch is rejected.
 	b, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 9, "method": "tools/list"})
 	req, _ = http.NewRequestWithContext(env.Ctx, http.MethodPost, base+"/mcp", bytes.NewReader(b))
+	req.Header.Set("MCP-Protocol-Version", ProtocolRev)
 	req.Header.Set("Mcp-Method", "tools/call") // lie
 	res, err = env.Direct().Do(req)
 	if err != nil {
@@ -174,6 +180,90 @@ func TestC031Mcpdemo(t *testing.T) {
 	_ = res.Body.Close()
 	if res.StatusCode != 400 {
 		t.Fatalf("Mcp-Method mismatch: status %d", res.StatusCode)
+	}
+
+	// Malformed tools/call params: the request is well-formed JSON-RPC, so
+	// the answer is an invalid-params (-32602) result error at HTTP 200 —
+	// and the observation records the rejection, not an empty tool call.
+	res, v = rpc(t, env, base, "tools/call", "not-an-object")
+	if res.StatusCode != 200 {
+		t.Fatalf("bad params: status %d", res.StatusCode)
+	}
+	e, _ := v["error"].(map[string]any)
+	if e["code"] != float64(-32602) {
+		t.Fatalf("bad params: want -32602 error, got %v", v)
+	}
+
+	// Every mcpdemo observation must equal the request that produced it:
+	// rpc method, transport headers, and for tools/call the tool + arguments.
+	expectedCalls := []struct {
+		name string
+		args map[string]any
+	}{
+		{"create_record", map[string]any{"title": "from-mcp", "body": "via tool"}},
+		{"search", map[string]any{"q": "from-mcp"}},
+		{"annotated_reader", map[string]any{"number": float64(1)}},
+	}
+	var sawDiscover, sawList, sawCall, sawMismatch, sawBadParams int
+	for _, o := range env.Observed(base) {
+		rpcM, isRPC := o.Extra["rpc"].(string)
+		if !isRPC {
+			continue // admin endpoints, parse failures handled elsewhere
+		}
+		if o.Method != http.MethodPost || !strings.HasSuffix(o.Path, "/mcp") {
+			t.Fatalf("rpc entry records method %q path %q, want POST .../mcp", o.Method, o.Path)
+		}
+		if hv, _ := o.Extra["hdr_version"].(string); hv != ProtocolRev {
+			t.Fatalf("rpc %s recorded hdr_version %q, client sent %q", rpcM, hv, ProtocolRev)
+		}
+		if hm, _ := o.Extra["hdr_method"].(string); hm != rpcM {
+			if o.Extra["rejected"] != "method-mismatch" {
+				t.Fatalf("rpc %s recorded hdr_method %q with no rejection", rpcM, hm)
+			}
+			sawMismatch++
+		}
+		switch rpcM {
+		case "server/discover":
+			sawDiscover++
+		case "tools/list":
+			sawList++
+		case "tools/call":
+			sawCall++
+			if rej, _ := o.Extra["rejected"].(string); rej != "" {
+				// A rejected call must carry the reason, and only reasons a
+				// client call could actually trigger.
+				switch rej {
+				case "bad-params":
+					sawBadParams++
+				case "name-mismatch":
+				default:
+					t.Fatalf("tools/call rejected with unknown reason %q", rej)
+				}
+				continue
+			}
+			tool, _ := o.Extra["tool"].(string)
+			if tool == "" {
+				t.Fatalf("tools/call entry records no tool: %+v", o.Extra)
+			}
+			if hn, _ := o.Extra["hdr_name"].(string); hn != tool {
+				t.Fatalf("tools/call %s recorded hdr_name %q", tool, hn)
+			}
+			matched := false
+			for _, e := range expectedCalls {
+				if e.name == tool && reflect.DeepEqual(e.args, o.Extra["args"]) {
+					matched = true
+				}
+			}
+			if !matched {
+				t.Fatalf("tools/call entry tool=%q args=%v matches no issued call", tool, o.Extra["args"])
+			}
+		default:
+			t.Fatalf("obs records rpc %q the client never sent", rpcM)
+		}
+	}
+	if sawDiscover == 0 || sawList == 0 || sawCall == 0 || sawMismatch == 0 || sawBadParams == 0 {
+		t.Fatalf("missing obs coverage: discover=%d list=%d call=%d mismatch=%d badparams=%d",
+			sawDiscover, sawList, sawCall, sawMismatch, sawBadParams)
 	}
 }
 
@@ -201,14 +291,18 @@ func TestC031McpdemoMisbehave(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+fxlib.Canary("github-agent"))
 	res, _ := env2.Direct().Do(req)
 	var iss []map[string]any
-	_ = json.NewDecoder(res.Body).Decode(&iss)
+	if err := json.NewDecoder(res.Body).Decode(&iss); err != nil {
+		t.Fatalf("decode issue: %v", err)
+	}
 	_ = res.Body.Close()
 	before = len(iss)
 	rpc(t, env2, base2, "tools/call",
 		map[string]any{"name": "create_record", "arguments": map[string]any{"title": "t1"}})
 	res, _ = env2.Direct().Do(req.Clone(env2.Ctx))
 	iss = nil
-	_ = json.NewDecoder(res.Body).Decode(&iss)
+	if err := json.NewDecoder(res.Body).Decode(&iss); err != nil {
+		t.Fatalf("decode issue: %v", err)
+	}
 	_ = res.Body.Close()
 	if len(iss) != before+2 {
 		t.Fatalf("extra-post created %d issues (want +2)", len(iss)-before)

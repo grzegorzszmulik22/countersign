@@ -6,6 +6,10 @@
 # Emits one "CHECK <id> PASS|FAIL|SKIPPED-ENV" line per check; exits non-zero
 # if any check fails. Behavioural checks run as Go tests under -tags fixtures;
 # the release-exclusion check (C0.3.4) is shell-driven.
+#
+# Check bodies run in parallel (each writes $WORK/<id>.out + <id>.rc) so the
+# suite stays fast enough to run three times per `make sabotage-M0.3`; CHECK
+# lines are still emitted in a fixed order.
 set -u
 export PATH="$HOME/.local/bin:$HOME/.local/usr/bin:$PATH"
 cd "$(dirname "$0")/../.."
@@ -14,49 +18,51 @@ GO="$ROOT/.tools/bin/go"
 MAKE=${MAKE:-make}
 fail=0
 
-WORK="$ROOT/.check-work/M0.3"
-rm -rf "$WORK"
-mkdir -p "$WORK"
+mkdir -p "$ROOT/.check-work"
+WORK=$(mktemp -d "$ROOT/.check-work/M0.3.XXXXXX")
+trap 'rm -rf "$WORK"' EXIT
 
 say() { printf 'CHECK %s %s%s\n' "$1" "$2" "${3:+ — $3}"; }
 pass() { say "$1" PASS; }
 bad() { say "$1" FAIL "$2"; fail=1; }
 
-gotest() { # <check-id> <go-test -run pattern> <pkg-pattern>
+# ---------------------------------------------------------------------------
+# Check bodies (each runs as a background job; stdout/stderr go to <id>.out,
+# exit status to <id>.rc). A job's stdout is the failure detail.
+# ---------------------------------------------------------------------------
+
+gotest() { # <id> <go-test -run pattern> <pkg-pattern>  (invoked inside a job)
     local id=$1 pat=$2 pkg=$3
     if ! [ -x "$GO" ]; then
-        bad "$id" "go toolchain missing: run make tools"
-        return
+        echo "go toolchain missing: run make tools"
+        return 1
     fi
-    if "$GO" test -tags fixtures -count=1 -run "$pat" "$pkg" >"$WORK/$id.log" 2>&1; then
-        pass "$id"
-    else
-        bad "$id" "$(tail -6 "$WORK/$id.log" | tr '\n' ' ')"
+    if "$GO" test -tags fixtures -count=1 -run "$pat" "$pkg" >"$WORK/$id.full.log" 2>&1; then
+        return 0
     fi
+    tail -6 "$WORK/$id.full.log"
+    return 1
 }
 
-# --- C0.3.1: every listed behaviour, per fixture -----------------------------
-gotest C0.3.1.echo    '^TestC031Echo'     ./test/fixtures/echo
-gotest C0.3.1.sink    '^TestC031Sink'     ./test/fixtures/sink
-gotest C0.3.1.fakehub '^TestC031Fakehub'  ./test/fixtures/fakehub
-gotest C0.3.1.fakereg '^TestC031Fakereg'  ./test/fixtures/fakereg
-gotest C0.3.1.fakemsg '^TestC031Fakemsg'  ./test/fixtures/fakemsg
-gotest C0.3.1.mockllm '^TestC031Mockllm'  ./test/fixtures/mockllm
-gotest C0.3.1.mcpdemo '^TestC031Mcpdemo'  ./test/fixtures/mcpdemo
+job_C0.3.1.echo()    { gotest "$1" '^TestC031Echo'    ./test/fixtures/echo; }
+job_C0.3.1.sink()    { gotest "$1" '^TestC031Sink'    ./test/fixtures/sink; }
+job_C0.3.1.fakehub() { gotest "$1" '^TestC031Fakehub' ./test/fixtures/fakehub; }
+job_C0.3.1.fakereg() { gotest "$1" '^TestC031Fakereg' ./test/fixtures/fakereg; }
+job_C0.3.1.fakemsg() { gotest "$1" '^TestC031Fakemsg' ./test/fixtures/fakemsg; }
+job_C0.3.1.mockllm() { gotest "$1" '^TestC031Mockllm' ./test/fixtures/mockllm; }
+job_C0.3.1.mcpdemo() { gotest "$1" '^TestC031Mcpdemo' ./test/fixtures/mcpdemo; }
 
 # --- C0.3.2: sink reports the exact bytes over each listener -----------------
-gotest C0.3.2 '^TestC032SinkExactBytes' ./test/fixtures/sink
-# The ICMP listener needs CAP_NET_RAW; the Go test probes and returns a
-# distinct message. Report it separately so a missing capability is loud.
-if [ -f "$WORK/C0.3.2.log" ] && grep -q 'CS-ICMP-SKIPPED-ENV' "$WORK/C0.3.2.log"; then
-    say C0.3.2.icmp SKIPPED-ENV "no CAP_NET_RAW on this host (works in cluster packaging on oci-free-a1)"
-fi
+job_C0.3.2() { gotest "$1" '^TestC032SinkExactBytes' ./test/fixtures/sink; }
 
 # --- C0.3.3: mockllm byte-identical to reference.* in all three shapes -------
-gotest C0.3.3 '^TestC033MockllmGolden' ./test/fixtures/mockllm
+job_C0.3.3() { gotest "$1" '^TestC033MockllmGolden' ./test/fixtures/mockllm; }
+
+# --- C0.3.5: /__state semantics for every fixture ----------------------------
+job_C0.3.5() { gotest "$1" '^TestC035State' ./test/fixtures/...; }
 
 # --- C0.3.4: release build contains no fixture or resolver-override code -----
-c034() {
+job_C0.3.4() {
     local rel="$WORK/release-bin" p files syms deps
     rm -rf "$rel"; mkdir -p "$rel"
     # A release build is `go build` without the fixtures tag. Product commands
@@ -72,14 +78,7 @@ c034() {
     fi
     # (a) Fixture source must be excluded by the build tag: each fixture
     # package contributes only stub/doc files when built without the tag.
-    for p in echo sink fakehub fakereg fakemsg mockllm mcpdemo; do
-        files=$("$GO" list -f '{{join .GoFiles ","}}' "./test/fixtures/$p" 2>/dev/null)
-        if [ "$files" != "stub.go" ]; then
-            echo "package test/fixtures/$p builds without the fixtures tag (files: $files)"
-            return 1
-        fi
-    done
-    for p in fxlib fxres; do
+    for p in echo sink fakehub fakereg fakemsg mockllm mcpdemo fxlib fxres; do
         files=$("$GO" list -f '{{join .GoFiles ","}}' "./test/fixtures/$p" 2>/dev/null)
         if [ "$files" != "stub.go" ]; then
             echo "package test/fixtures/$p builds without the fixtures tag (files: $files)"
@@ -104,39 +103,60 @@ c034() {
     fi
     return 0
 }
-if out=$(c034); then
-    pass C0.3.4
-else
-    bad C0.3.4 "$out"
-fi
-
-# --- C0.3.5: /__state semantics for every fixture ----------------------------
-gotest C0.3.5 '^TestC035State' ./test/fixtures/...
 
 # --- fixtures-tagged lint: repo lint gate runs untagged, so the suite lints --
 # the fixture build itself to keep this code inside the lint invariant.
-lintfx() {
+job_lint.fixtures() {
     command -v golangci-lint >/dev/null 2>&1 || {
         echo "golangci-lint not on PATH"
         return 1
     }
-    local log="$WORK/lint.fixtures.log"
-    if golangci-lint run --build-tags fixtures ./test/fixtures/... >"$log" 2>&1; then
+    if golangci-lint run --build-tags fixtures ./test/fixtures/... >"$WORK/lint.fixtures.detail.log" 2>&1; then
         return 0
     fi
-    tail -5 "$log"
+    tail -5 "$WORK/lint.fixtures.detail.log"
     return 1
 }
-if out=$(lintfx); then
-    pass lint.fixtures
-else
-    bad lint.fixtures "$out"
-fi
+
+# --- extra: pinned toolchain is self-sufficient on a minimal host ----------
+# (06 §11): every shared library a pinned binary needs but the host may lack —
+# libatomic for node on oci-free-a1 — must come from .tools. The (possibly
+# sabotaged) install runs into an isolated tree so this check exercises the
+# provisioning itself, then runs the freshly installed tools with every host
+# libatomic loader path hidden.
+job_tools.provision() {
+    local iso="$WORK/tools-iso"
+    mkdir -p "$iso/tools"
+    cp tools/install-tools.sh tools/verify-versions.sh tools/versions.env \
+        tools/lib-pins.sh "$iso/tools/" || return 1
+    if ! (cd "$iso" && bash tools/install-tools.sh) \
+            >"$WORK/tools.provision.install.log" 2>&1; then
+        tail -8 "$WORK/tools.provision.install.log"
+        return 1
+    fi
+    # Reproduce oci-free-a1: hide every host libatomic path inside a mount
+    # namespace, then run the freshly installed node and npm.
+    local mask='for f in /usr/lib64/libatomic* /lib64/libatomic* \
+/usr/lib/aarch64-linux-gnu/libatomic* /lib/aarch64-linux-gnu/libatomic* \
+/usr/lib/x86_64-linux-gnu/libatomic* /lib/x86_64-linux-gnu/libatomic*; do
+[ -e "$f" ] && mount --bind /dev/null "$f" 2>/dev/null; done'
+    if command -v unshare >/dev/null 2>&1 && unshare -rm true 2>/dev/null; then
+        if ! unshare -rm env PATH="$iso/.tools/bin:/usr/bin:/bin" sh -c \
+                "$mask; node --version && npm --version" \
+                >"$WORK/tools.provision.masked.log" 2>&1; then
+            tail -8 "$WORK/tools.provision.masked.log"
+            return 1
+        fi
+    else
+        echo "NOTE: unshare -rm unavailable; install already resolved libatomic from .tools/lib"
+    fi
+    return 0
+}
 
 # --- binary smoke: the fixture commands run as local processes ---------------
 # (the cluster packaging on oci-free-a1 is out of scope for this host)
-smoke() {
-    local bindir="$WORK/fixture-bin" addr ok=1
+job_C0.3.1.binaries() {
+    local bindir="$WORK/fixture-bin" ok=1
     mkdir -p "$bindir"
     "$GO" build -tags fixtures -o "$bindir" ./test/fixtures/cmd/... 2>"$WORK/smoke.build.log" || {
         echo "fixture build failed: $(tail -3 "$WORK/smoke.build.log" | tr '\n' ' ')"
@@ -148,11 +168,31 @@ smoke() {
     [ "$ok" -eq 1 ] || return 1
     return 0
 }
-if out=$(smoke); then
-    pass C0.3.1.binaries
-else
-    bad C0.3.1.binaries "$out"
-fi
+
+# ---------------------------------------------------------------------------
+# Launch all check bodies in parallel; emit CHECK lines in a fixed order.
+# ---------------------------------------------------------------------------
+ids=(C0.3.1.echo C0.3.1.sink C0.3.1.fakehub C0.3.1.fakereg C0.3.1.fakemsg
+     C0.3.1.mockllm C0.3.1.mcpdemo C0.3.2 C0.3.3 C0.3.4 C0.3.5
+     lint.fixtures tools.provision C0.3.1.binaries)
+
+for id in "${ids[@]}"; do
+    ( "job_$id" "$id" >"$WORK/$id.out" 2>&1; echo $? >"$WORK/$id.rc" ) &
+done
+wait
+
+for id in "${ids[@]}"; do
+    if [ "$(cat "$WORK/$id.rc" 2>/dev/null)" = "0" ]; then
+        pass "$id"
+    else
+        bad "$id" "$(tail -6 "$WORK/$id.out" 2>/dev/null | tr '\n' ' ')"
+    fi
+    # The ICMP listener needs CAP_NET_RAW; the Go test probes and returns a
+    # distinct message. Report it separately so a missing capability is loud.
+    if [ "$id" = "C0.3.2" ] && grep -q 'CS-ICMP-SKIPPED-ENV' "$WORK/$id.full.log" 2>/dev/null; then
+        say C0.3.2.icmp SKIPPED-ENV "no CAP_NET_RAW on this host (works in cluster packaging on oci-free-a1)"
+    fi
+done
 
 [ "$fail" -eq 0 ] && echo "M0.3 suite: all checks passed" || echo "M0.3 suite: FAILURES" >&2
 exit "$fail"

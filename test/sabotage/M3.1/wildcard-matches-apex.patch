@@ -1,0 +1,13 @@
+diff --git a/internal/policy/match.go b/internal/policy/match.go
+index aaef6c5..42cc6a3 100644
+--- a/internal/policy/match.go
++++ b/internal/policy/match.go
+@@ -156,7 +156,7 @@ func hostMatch(pat, host string) bool {
+ 		return true
+ 	}
+ 	if strings.HasPrefix(pat, "*.") {
+-		return strings.HasSuffix(host, pat[1:])
++		return host == pat[2:] || strings.HasSuffix(host, pat[1:])
+ 	}
+ 	return pat == host
+ }

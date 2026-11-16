@@ -13,12 +13,15 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/countersign/countersign/test/fixtures/fxlib"
@@ -107,13 +110,33 @@ func (e *Env) Direct() *http.Client { return e.direct }
 // Named is an HTTP client that reaches real host names through the proxy.
 func (e *Env) Named() *http.Client { return e.named }
 
+// toolsBin returns <repo>/.tools/bin, located relative to this source file
+// so it resolves identically no matter where the test binary runs.
+func toolsBin() string {
+	return filepath.Join(ToolsDir(), "bin")
+}
+
+// ToolsDir returns the pinned toolchain root (<repo>/.tools) with symlinks
+// resolved, so it matches the realpath a subprocess reports for itself even
+// when the tree's .tools is a symlink (sabotage scratch dirs do that).
+func ToolsDir() string {
+	_, src, _, _ := runtime.Caller(0)
+	tools := filepath.Join(filepath.Dir(src), "..", "..", "..", ".tools")
+	if resolved, err := filepath.EvalSymlinks(tools); err == nil {
+		return resolved
+	}
+	return tools
+}
+
 // SubEnv returns subprocess environment that routes HTTPS through the proxy
 // and trusts the test CA (git/pip/npm/curl all honour these variables).
+// .tools/bin leads PATH so python3/npm/node resolve to the pinned toolchain
+// (06 §11) no matter what the ambient PATH holds.
 func (e *Env) SubEnv() []string {
 	proxy := "http://" + e.ProxyAddr()
 	return []string{
 		"HOME=" + e.Dir,
-		"PATH=" + os.Getenv("PATH"),
+		"PATH=" + toolsBin() + string(os.PathListSeparator) + os.Getenv("PATH"),
 		"HTTPS_PROXY=" + proxy, "https_proxy=" + proxy,
 		"HTTP_PROXY=" + proxy, "http_proxy=" + proxy,
 		"GIT_SSL_CAINFO=" + e.CAFile(),
@@ -123,6 +146,25 @@ func (e *Env) SubEnv() []string {
 		"NODE_EXTRA_CA_CERTS=" + e.CAFile(),
 		"NO_PROXY=", "no_proxy=",
 	}
+}
+
+// LookPath resolves name against the PATH that SubEnv exports — the binary
+// the test process execs is then the same one a subprocess would resolve.
+// exec.Command alone is NOT enough: it resolves argv[0] against the ambient
+// PATH at construction time, so a host's own python3/npm would win.
+func (e *Env) LookPath(name string) (string, error) {
+	for _, kv := range e.SubEnv() {
+		if p, ok := strings.CutPrefix(kv, "PATH="); ok {
+			for _, dir := range filepath.SplitList(p) {
+				full := filepath.Join(dir, name)
+				if st, err := os.Stat(full); err == nil && !st.IsDir() && st.Mode()&0o111 != 0 {
+					return full, nil
+				}
+			}
+			return "", fmt.Errorf("%s not found on SubEnv PATH", name)
+		}
+	}
+	return "", fmt.Errorf("SubEnv carries no PATH")
 }
 
 // Admin performs an admin request against a fixture's loopback base URL.

@@ -1,0 +1,11 @@
+# field: spec.grants[1].id
+# rule: grant ids must be unique
+apiVersion: "countersign.dev/v1alpha1"
+kind: "SessionPolicy"
+metadata: {name: bad}
+spec:
+  mode: "enforce"
+  scenario: "agent"
+  grants:
+    - {id: g1, match: {hosts: ["a.example.com"]}}
+    - {id: g1, match: {hosts: ["b.example.com"]}}
