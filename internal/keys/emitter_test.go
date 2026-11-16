@@ -6,6 +6,7 @@ package keys_test
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/countersign/countersign/internal/evidence"
@@ -78,6 +79,98 @@ func TestC122_InterleavedChains(t *testing.T) {
 			t.Fatalf("%s: final eseq %d", h.Emitter, h.FinalEseq)
 		}
 	}
+}
+
+// C1.2.2 eseq must be exactly previous + 1 (03 §2, V5): the chain checker
+// rejects a wrong starting value, a gap, a repeat and a decrease, each with
+// the chain reason — never silently skipping or renumbering a record.
+func TestC122_EseqExactness(t *testing.T) {
+	body, err := evtest.Sample("observer.gap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	emitter := "broker/" + testULID
+	// mkRecord builds a record carrying a chosen (eseq, eprev) plus an
+	// envelope whose record hash the chain checker will store as the head.
+	mkRecord := func(eseq uint64, eprev string, salt int) (*evidence.Envelope, *evidence.Record) {
+		rec := &evidence.Record{
+			V: 1, Type: "observer.gap", ID: testULID,
+			Session: testULID, Emitter: emitter,
+			Eseq: eseq, Eprev: eprev, TS: testTS, Body: body,
+		}
+		env := &evidence.Envelope{
+			PayloadType: evidence.PayloadType,
+			Payload:     []byte(fmt.Sprintf("payload-%d-%d", eseq, salt)),
+		}
+		return env, rec
+	}
+	// feed folds one eseq sequence through a fresh checker, keeping eprev
+	// consistent with the chain, and reports where it failed.
+	feed := func(seqs []uint64, firstEprev string) error {
+		cc := evidence.NewChainChecker()
+		prev := firstEprev
+		for i, s := range seqs {
+			env, rec := mkRecord(s, prev, i)
+			if err := cc.Add(env, rec); err != nil {
+				return err
+			}
+			prev = evidence.RecordHash(env)
+		}
+		return nil
+	}
+
+	t.Run("start at zero accepted", func(t *testing.T) {
+		if err := feed([]uint64{0, 1, 2, 3, 4}, evidence.ZeroHash); err != nil {
+			t.Fatalf("contiguous chain rejected: %v", err)
+		}
+	})
+	for _, first := range []uint64{1, 2, 1000} {
+		t.Run(fmt.Sprintf("wrong start %d", first), func(t *testing.T) {
+			err := feed([]uint64{first}, evidence.ZeroHash)
+			if err == nil || !strings.Contains(err.Error(), "eseq") {
+				t.Fatalf("first eseq %d: got %v, want chain rejection", first, err)
+			}
+		})
+	}
+	t.Run("first eprev nonzero", func(t *testing.T) {
+		err := feed([]uint64{0}, strings.Repeat("ab", 32))
+		if err == nil || !strings.Contains(err.Error(), "eprev") {
+			t.Fatalf("nonzero first eprev: got %v, want chain rejection", err)
+		}
+	})
+	for _, tc := range []struct {
+		name string
+		seqs []uint64
+	}{
+		{"gap 0,2", []uint64{0, 2}},
+		{"gap mid-chain", []uint64{0, 1, 2, 4, 5}},
+		{"gap two skipped", []uint64{0, 1, 4}},
+		{"repeat last", []uint64{0, 1, 2, 2}},
+		{"repeat first", []uint64{0, 0}},
+		{"decrease by one", []uint64{0, 1, 2, 1}},
+		{"decrease to zero", []uint64{0, 1, 0}},
+		{"decrease after long run", []uint64{0, 1, 2, 3, 4, 5, 2}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := feed(tc.seqs, evidence.ZeroHash)
+			if err == nil || !strings.Contains(err.Error(), "eseq") {
+				t.Fatalf("%v: got %v, want chain rejection", tc.seqs, err)
+			}
+		})
+	}
+	// A wrong eprev at a correct eseq is also a chain failure: eseq alone
+	// does not carry the link.
+	t.Run("eprev mismatch at right eseq", func(t *testing.T) {
+		cc := evidence.NewChainChecker()
+		env0, r0 := mkRecord(0, evidence.ZeroHash, 0)
+		if err := cc.Add(env0, r0); err != nil {
+			t.Fatal(err)
+		}
+		env1, r1 := mkRecord(1, strings.Repeat("cd", 32), 1)
+		if err := cc.Add(env1, r1); err == nil || !strings.Contains(err.Error(), "eprev") {
+			t.Fatalf("eprev mismatch: got %v, want chain rejection", err)
+		}
+	})
 }
 
 // C1.2.5 An emitter restarted mid-session gets a new instance ID and starts a

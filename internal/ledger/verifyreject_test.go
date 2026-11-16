@@ -96,6 +96,41 @@ func TestC143_VSteps(t *testing.T) {
 		hasCode(res.Errors, "E_SCHEMA", t)
 	})
 
+	// V2 at full width (03 §2, C1.1.3): a duplicate JSON key is rejected at
+	// every nesting depth, key identity being the decoded string.
+	t.Run("V2_duplicate_key_envelope", func(t *testing.T) {
+		m := clone(members)
+		ls := lines(m)
+		// Second payloadType in the envelope's outer object.
+		ls[1] = bytes.Replace(ls[1], []byte(`{"payloadType"`),
+			[]byte(`{"payloadType":"x","payloadType"`), 1)
+		m["records.jsonl"] = bytes.Join(ls, []byte("\n"))
+		res := ledger.VerifyBundle2(m, trusted)
+		hasCode(res.Errors, "E_SCHEMA", t)
+	})
+
+	t.Run("V2_duplicate_key_in_payload", func(t *testing.T) {
+		m := clone(members)
+		ls := lines(m)
+		var env map[string]any
+		if err := json.Unmarshal(ls[1], &env); err != nil {
+			t.Fatal(err)
+		}
+		pl, err := base64.StdEncoding.DecodeString(env["payload"].(string))
+		if err != nil {
+			t.Fatal(err)
+		}
+		// The statement JSON gains a key that decodes to an existing one.
+		pl = bytes.Replace(pl, []byte(`"_type"`),
+			[]byte(`"_\u0074ype":"x","_type"`), 1)
+		env["payload"] = base64.StdEncoding.EncodeToString(pl)
+		raw, _ := json.Marshal(env)
+		ls[1] = raw
+		m["records.jsonl"] = bytes.Join(ls, []byte("\n"))
+		res := ledger.VerifyBundle2(m, trusted)
+		hasCode(res.Errors, "E_SCHEMA", t)
+	})
+
 	t.Run("V3_signature", func(t *testing.T) {
 		m := clone(members)
 		// Flip a base64 character inside the first signature.
@@ -155,6 +190,77 @@ func TestC143_VSteps(t *testing.T) {
 		hasCode(res.Errors, "E_CHAIN", t)
 	})
 
+	// V5 at full width (03 §2, C1.2.2): eseq is exactly previous + 1.
+	// rechain re-signs every record of one emitter with the given eseq
+	// sequence, keeping eprev consistent, so the ONLY V5 defect is the
+	// eseq violation itself — a sabotage that relaxes the eseq rule
+	// cannot hide behind an eprev failure.
+	rechain := func(t *testing.T, m map[string][]byte, role string, seqs []uint64) {
+		ls := lines(m)
+		signer := s.Signers[role]
+		prev := evidence.ZeroHash
+		i := 0
+		for k, raw := range ls {
+			_, _, r, err := evidence.DecodeRecordLine(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rl, _, err := evidence.EmitterRole(r.Emitter)
+			if err != nil || rl != role {
+				continue
+			}
+			if i >= len(seqs) {
+				t.Fatalf("%s chain longer than %d records", role, len(seqs))
+			}
+			nr := &evidence.Record{
+				V: 1, Type: r.Type, ID: r.ID, Session: r.Session,
+				Emitter: r.Emitter, Eseq: seqs[i], Eprev: prev, TS: r.TS,
+				Body: r.Body,
+			}
+			pred, err := evidence.MarshalPredicate(nr)
+			if err != nil {
+				t.Fatal(err)
+			}
+			stb, err := evidence.MarshalStatement(evidence.NewStatement(nr.Session, pred))
+			if err != nil {
+				t.Fatal(err)
+			}
+			env := &evidence.Envelope{PayloadType: evidence.PayloadType, Payload: stb}
+			env.Signatures = []evidence.Signature{{
+				KeyID: signer.KeyID(), Sig: signer.Sign(env.PAE()),
+			}}
+			line, err := evidence.MarshalEnvelope(env)
+			if err != nil {
+				t.Fatal(err)
+			}
+			prev = evidence.RecordHash(env)
+			ls[k] = line
+			i++
+		}
+		if i != len(seqs) {
+			t.Fatalf("%s has %d records, %d seqs given", role, i, len(seqs))
+		}
+		m["records.jsonl"] = bytes.Join(ls, []byte("\n"))
+	}
+	// The sealed session has 3 broker records (effect.http,
+	// effect.http.result, emitter.seal).
+	for _, tc := range []struct {
+		name string
+		seqs []uint64
+	}{
+		{"V5_eseq_gap", []uint64{0, 1, 3}},
+		{"V5_eseq_repeat", []uint64{0, 1, 1}},
+		{"V5_eseq_decrease", []uint64{0, 1, 0}},
+		{"V5_eseq_wrong_start", []uint64{1, 2, 3}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := clone(members)
+			rechain(t, m, "broker", tc.seqs)
+			res := ledger.VerifyBundle2(m, trusted)
+			hasCode(res.Errors, "E_CHAIN", t)
+		})
+	}
+
 	t.Run("V6_checkpoint_origin", func(t *testing.T) {
 		m := clone(members)
 		cp := &mlog.Checkpoint{Origin: names.APIGroup + "/log/other", Size: 1}
@@ -202,6 +308,49 @@ func TestC143_VSteps(t *testing.T) {
 			t.Fatal(err)
 		}
 		ix[1], ix[2] = ix[2], ix[1]
+		raw, _ := json.Marshal(ix)
+		m["index.json"] = raw
+		res := ledger.VerifyBundle2(m, trusted)
+		hasCode(res.Errors, "E_INCLUSION", t)
+	})
+
+	// V7: a proof must be exactly the path length — a truncated proof and
+	// a valid path with extra hashes appended both fail, not trimmed or
+	// ignored (03 §10 V7, RFC 6962 §2.1.1).
+	t.Run("V7_proof_too_short", func(t *testing.T) {
+		m := clone(members)
+		var ix []map[string]any
+		if err := json.Unmarshal(m["index.json"], &ix); err != nil {
+			t.Fatal(err)
+		}
+		// Find an entry whose proof is non-empty and drop its last node.
+		for i := range ix {
+			p := ix[i]["inclusion_proof"].([]any)
+			if len(p) > 0 {
+				ix[i]["inclusion_proof"] = p[:len(p)-1]
+				break
+			}
+		}
+		raw, _ := json.Marshal(ix)
+		m["index.json"] = raw
+		res := ledger.VerifyBundle2(m, trusted)
+		hasCode(res.Errors, "E_INCLUSION", t)
+	})
+
+	t.Run("V7_proof_too_long", func(t *testing.T) {
+		m := clone(members)
+		var ix []map[string]any
+		if err := json.Unmarshal(m["index.json"], &ix); err != nil {
+			t.Fatal(err)
+		}
+		// Append a genuine 32-byte hash to every proof — a verifier that
+		// folds everything in or only reads a prefix must still reject.
+		h := mlog.HashLeaf([]byte("extra"))
+		extra := base64.StdEncoding.EncodeToString(h[:])
+		for i := range ix {
+			p := ix[i]["inclusion_proof"].([]any)
+			ix[i]["inclusion_proof"] = append(p, extra)
+		}
 		raw, _ := json.Marshal(ix)
 		m["index.json"] = raw
 		res := ledger.VerifyBundle2(m, trusted)

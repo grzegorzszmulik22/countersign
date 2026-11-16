@@ -159,7 +159,7 @@ func (l *Ledger) ExportBundle(session string, m keys.Manifest, extras map[string
 		}
 		members[name] = data
 	}
-	return writeTar(members), nil
+	return writeTar(members)
 }
 
 // treeRootAt returns MTH over the first n stored leaf hashes.
@@ -202,8 +202,9 @@ func fileExists(p string) bool {
 }
 
 // writeTar serializes members sorted by name with zeroed mtime/uid/gid —
-// deterministic by construction (03 §7).
-func writeTar(members map[string][]byte) []byte {
+// deterministic by construction (03 §7). A failed header or member write
+// would corrupt the archive, so every tar.Writer error propagates.
+func writeTar(members map[string][]byte) ([]byte, error) {
 	names := make([]string, 0, len(members))
 	for n := range members {
 		names = append(names, n)
@@ -213,14 +214,20 @@ func writeTar(members map[string][]byte) []byte {
 	tw := tar.NewWriter(&buf)
 	for _, n := range names {
 		data := members[n]
-		_ = tw.WriteHeader(&tar.Header{
+		if err := tw.WriteHeader(&tar.Header{
 			Name: n, Mode: 0o644, Size: int64(len(data)),
 			Typeflag: tar.TypeReg,
-		})
-		_, _ = tw.Write(data)
+		}); err != nil {
+			return nil, fmt.Errorf("tar header for %q: %w", n, err)
+		}
+		if _, err := tw.Write(data); err != nil {
+			return nil, fmt.Errorf("tar member %q: %w", n, err)
+		}
 	}
-	_ = tw.Close()
-	return buf.Bytes()
+	if err := tw.Close(); err != nil {
+		return nil, fmt.Errorf("tar close: %w", err)
+	}
+	return buf.Bytes(), nil
 }
 
 // Bundle reader limits (03 §10 V1): a verifier must never allocate more
@@ -324,11 +331,9 @@ func ReadBundle(data []byte) (map[string][]byte, error) {
 			return nil, &BundleError{fmt.Sprintf("unexpected member %q", name)}
 		}
 	}
-	man, err := parseManifest(members["manifest.json"])
-	if err != nil {
+	if _, err := parseManifest(members["manifest.json"]); err != nil {
 		return nil, &BundleError{err.Error()}
 	}
-	_ = man
 	return members, nil
 }
 

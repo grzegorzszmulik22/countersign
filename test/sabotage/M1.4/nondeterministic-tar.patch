@@ -1,21 +1,20 @@
 diff --git a/internal/ledger/bundle.go b/internal/ledger/bundle.go
-index 1786e62..3f648a4 100644
 --- a/internal/ledger/bundle.go
 +++ b/internal/ledger/bundle.go
-@@ -4,6 +4,7 @@
- package ledger
- 
- import (
+@@ -14,6 +14,7 @@
+ 	"os"
+ 	"path/filepath"
+ 	"sort"
 +	"time"
- 	"archive/tar"
- 	"bytes"
- 	"encoding/base64"
-@@ -214,7 +215,7 @@ func writeTar(members map[string][]byte) []byte {
+ 
+ 	"github.com/countersign/countersign/internal/evidence"
+ 	"github.com/countersign/countersign/internal/keys"
+@@ -216,7 +217,7 @@
  		data := members[n]
- 		_ = tw.WriteHeader(&tar.Header{
+ 		if err := tw.WriteHeader(&tar.Header{
  			Name: n, Mode: 0o644, Size: int64(len(data)),
 -			Typeflag: tar.TypeReg,
 +			Typeflag: tar.TypeReg, ModTime: time.Now(),
- 		})
- 		_, _ = tw.Write(data)
- 	}
+ 		}); err != nil {
+ 			return nil, fmt.Errorf("tar header for %q: %w", n, err)
+ 		}

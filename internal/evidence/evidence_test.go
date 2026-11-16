@@ -236,3 +236,97 @@ func TestC113_Rejections(t *testing.T) {
 		}
 	})
 }
+
+// C1.1.3 duplicate keys at the full width of 03 §2: a duplicate is rejected
+// at every nesting depth — the outer object, an object nested in an object,
+// an object inside an array — and key identity is the DECODED string, so
+// keys that differ only in escaping ("a" vs "a", "/" vs "\/", raw non-ASCII
+// vs \uXXXX including a surrogate pair) are duplicates.
+func TestC113_DuplicateKeys(t *testing.T) {
+	// Reject vectors: raw JSON carrying a duplicate key. In a Go raw string
+	// literal backslashes are literal, so `\u0061` here is the six-byte JSON
+	// escape for "a" on the wire. The expected error names the decoded key.
+	preds := []struct {
+		name string
+		in   string
+		key  string // decoded key the error must name
+	}{
+		{"outer literal", `{"a":1,"a":2}`, "a"},
+		{"outer literal three fields", `{"a":1,"b":0,"a":2}`, "a"},
+		{"ascii raw vs escape", `{"a":1,"\u0061":2}`, "a"},
+		{"ascii escape vs raw", `{"\u0061":1,"a":2}`, "a"},
+		{"slash vs escaped slash", `{"\/":1,"/":2}`, "/"},
+		{"escaped slash vs slash", `{"/":1,"\/":2}`, "/"},
+		{"slash literal", `{"/":1,"/":2}`, "/"},
+		{"escaped quote vs raw", `{"\"x":1,"\"x":2}`, "x"},
+		{"hex escape vs escape", "{\"\\u002f\":1,\"\\/\":2}", "/"},
+		{"hex quote vs raw escape", "{\"\\\"x\":1,\"\\u0022x\":2}", "x"},
+		{"non-ascii raw vs escape", "{\"é\":1,\"\\u00e9\":2}", "é"},
+		{"non-ascii escape vs raw", "{\"\\u00e9\":1,\"é\":2}", "é"},
+		{"uppercase hex escape", "{\"é\":1,\"\\u00E9\":2}", "é"},
+		{"surrogate pair raw vs escaped", "{\"𝕊\":1,\"\\ud835\\udd4a\":2}", "𝕊"},
+		{"surrogate pair escaped vs raw", "{\"\\ud835\\udd4a\":1,\"𝕊\":2}", "𝕊"},
+		{"nested object depth 2", `{"x":{"a":1,"a":2}}`, "a"},
+		{"nested object depth 3", `{"x":{"y":{"a":1,"a":2}}}`, "a"},
+		{"object in array depth 2", `{"x":[{"a":1,"a":2}]}`, "a"},
+		{"object in nested arrays", `{"x":[[[{"a":1,"a":2}]]]}`, "a"},
+		{"object in array in object", `{"x":{"y":[{"a":1,"a":2}]}}`, "a"},
+		{"dup in inner, outer unique", `{"a":1,"b":{"a":1,"a":2}}`, "a"},
+		{"escape-equal at depth 2", "{\"x\":{\"é\":1,\"\\u00e9\":2}}", "é"},
+		{"escape-equal inside array", "{\"x\":[{\"\\u0061\":1,\"a\":2}]}", "a"},
+		{"tab vs \\u0009", "{\"\\u0009\":1,\"\\t\":2}", "\\t"},
+		{"newline vs \\u000a", "{\"\\u000a\":1,\"\\n\":2}", "\\n"},
+		{"backspace vs \\u0008", "{\"\\u0008\":1,\"\\b\":2}", "\\b"},
+		{"backslash vs \\u005c", "{\"\\u005c\":1,\"\\\\\":2}", "\\\\"},
+	}
+	for _, v := range preds {
+		t.Run(v.name, func(t *testing.T) {
+			_, err := evidence.UnmarshalPredicate([]byte(v.in))
+			if err == nil {
+				t.Fatalf("accepted %s", v.in)
+			}
+			if !strings.Contains(err.Error(), "duplicate key") {
+				t.Fatalf("error %v is not the duplicate-key rejection", err)
+			}
+			if !strings.Contains(err.Error(), `"`+v.key+`"`) {
+				t.Fatalf("error %v does not name decoded key %q", err, v.key)
+			}
+		})
+	}
+	// Envelope-level depth: the outer object of a stored line and an object
+	// inside the signatures array.
+	t.Run("envelope outer object", func(t *testing.T) {
+		in := `{"payloadType":"x","payloadType":"x","payload":"AA==","signatures":[]}`
+		if _, err := evidence.UnmarshalEnvelope([]byte(in)); err == nil ||
+			!strings.Contains(err.Error(), `duplicate key "payloadType"`) {
+			t.Fatalf("got %v, want duplicate key rejection", err)
+		}
+	})
+	t.Run("envelope signatures array", func(t *testing.T) {
+		in := `{"payloadType":"x","payload":"AA==","signatures":[{"keyid":"a","keyid":"a"}]}`
+		if _, err := evidence.UnmarshalEnvelope([]byte(in)); err == nil ||
+			!strings.Contains(err.Error(), `duplicate key "keyid"`) {
+			t.Fatalf("got %v, want duplicate key rejection", err)
+		}
+	})
+	t.Run("statement subject array", func(t *testing.T) {
+		in := `{"_type":"x","subject":[{"name":"n","name":"n"}]}`
+		if _, err := evidence.UnmarshalStatement([]byte(in)); err == nil ||
+			!strings.Contains(err.Error(), `duplicate key "name"`) {
+			t.Fatalf("got %v, want duplicate key rejection", err)
+		}
+	})
+	// Controls: the same name in DIFFERENT objects is not a duplicate —
+	// any failure must not be the duplicate-key error.
+	for _, ok := range []string{
+		`{"a":{"a":1}}`,
+		`{"x":[{"a":1},{"a":2}]}`,
+		`{"A":1,"a":2}`,
+		`{"a":1,"x":{"a":1,"b":{"a":1}}}`,
+	} {
+		if _, err := evidence.UnmarshalPredicate([]byte(ok)); err != nil &&
+			strings.Contains(err.Error(), "duplicate key") {
+			t.Fatalf("%s wrongly rejected as duplicate: %v", ok, err)
+		}
+	}
+}

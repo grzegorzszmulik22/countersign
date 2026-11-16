@@ -13,11 +13,10 @@ import (
 // that does not itself imply a warning or denial.
 func CleanAllTypes(l *ledger.Ledger, s *Session) {
 	s.Open(l, "enforce")
-	b := s.Emit(l, "broker", "effect.http", Body("effect.http", map[string]any{
+	s.Emit(l, "broker", "effect.http", Body("effect.http", map[string]any{
 		"effect_id": "e1", "class": "safe",
 		"decision": map[string]any{"action": "allow", "reason": "OK", "requires": "allow"},
 	}))
-	_ = b
 	s.Emit(l, "broker", "intent.declared", Body("intent.declared", map[string]any{
 		"intent_id": "i1", "via_effect": "e1",
 	}))

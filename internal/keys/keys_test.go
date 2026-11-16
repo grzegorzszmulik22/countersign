@@ -158,13 +158,11 @@ func TestC124_ValidityWindow(t *testing.T) {
 // Unknown keyid is rejected as a key error.
 func TestC124_UnknownKey(t *testing.T) {
 	s := keys.NewSigner(seedBytes(t))
-	other := keys.NewSigner(bytes.Repeat([]byte{9}, 32))
 	em := keys.NewEmitter("broker", testULID, s)
 	env, rec := mkRecord(t, em)
 	if err := keys.VerifyRecord(env, rec, manifestWith(t, "emitter:broker")); err != nil {
 		t.Fatal(err)
 	}
-	_ = other
 	err := keys.VerifyRecord(env, rec, keys.Manifest(nil))
 	if !errors.Is(err, keys.ErrKey) {
 		t.Fatalf("unknown keyid: got %v, want ErrKey", err)

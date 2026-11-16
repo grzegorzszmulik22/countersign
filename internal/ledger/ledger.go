@@ -153,7 +153,7 @@ func (l *Ledger) waitDurable(seq uint64) error {
 // Append writes one canonical record line and blocks until it is durable.
 // Returns the record's log index.
 func (l *Ledger) Append(line []byte) (uint64, error) {
-	env, _, r, err := evidence.DecodeRecordLine(line)
+	_, _, r, err := evidence.DecodeRecordLine(line)
 	if err != nil {
 		return 0, fmt.Errorf("append of undecodable record: %w", err)
 	}
@@ -209,7 +209,6 @@ func (l *Ledger) Append(line []byte) (uint64, error) {
 			return idx, fmt.Errorf("checkpoint at %d: %w", idx, err)
 		}
 	}
-	_ = env
 	return idx, nil
 }
 
