@@ -117,9 +117,11 @@ If upstream differs from the spec in a way that matters, that is a contradiction
 | Gate | After | What the human decides |
 |---|---|---|
 | G1 | M1 | Freeze the evidence format and vectors |
+| G2L | M2.7, M3.2 (CR-001) | Review the local runner's boundary (namespaces, relay, hidden data directory, placeholders, the agent's own model credential) before the transaction work builds on it |
 | G2 | M4 | Review the trusted computing base and the lockdown before the transaction work builds on it |
 | G3 | M7 | Review transaction semantics: staging isolation, commit integrity, undo safety. Freeze the class, commit and abuse vectors |
 | G4 | M9 | Review reconciliation semantics against the reference model; freeze the trace corpus |
+| G34 | Slice step 7 (CR-001) | The G3 and G4 questions, limited to the slice's chunks; freeze the slice's class, commit, abuse and trace vectors; approve M14.0's real-agent runs |
 | G5 | M14.3 | Review the results table before anything is written for the public |
 
 At a gate: write the exit review, set the milestone to `AWAITING-GATE` in `PROGRESS.md`, and stop.

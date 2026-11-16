@@ -3,6 +3,8 @@
 Updated by the implementation agent on every loop iteration (`06-agent-loop.md` §1, §13).
 Statuses: `TODO`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-CR-NNN`, `SKIPPED-ENV`, `AWAITING-GATE`.
 
+Build order: Slice 1 first (`README.md`, Build order; CR-001).
+
 | chunk | title | status | attempts | last evidence folder | note |
 |---|---|---|---|---|---|
 | M0.1 | Repository and toolchain | DONE | 1 | evidence/M0.1/20261114T161541Z | lane foundation; re-verified by supervisor on oci-free-a1 and agent-vpc |
@@ -23,8 +25,10 @@ Statuses: `TODO`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-CR-NNN`, `SKIPPED-E
 | M2.4 | Write-ahead evidence and fail-closed | TODO | 0 | | |
 | M2.5 | Protocol edges and hardening | TODO | 0 | | |
 | M2.6 | Performance harness | TODO | 0 | | |
+| M2.7 | Local runner (CR-001, slice step 2) | TODO | 0 | | |
 | M3.1 | Policy schema and matcher | DONE | 1 | evidence/M3.1/20261114T194524Z | merged 2026-11-15 after second review on agent-vpc (3/3 unseen sabotages caught again; one scan finding was a test file, false positive). run ahead of M2 by supervisor waiver (no code dependency). Supervisor review: regress green, 3/3 unseen sabotages caught (http default port, trailing-dot host, ** zero segments), race-clean. Lane edited shared tooling (sabotage.sh evidence, lint cache dirs): reviewed, sound, kept |
 | M3.2 | Credential store, placeholders, injection | TODO | 0 | | |
+| **G2L** | **Human gate: the local runner's boundary (CR-001)** | TODO | | | |
 | M3.3 | Pinning, placeholder misuse, credential shapes | TODO | 0 | | |
 | M3.4 | Response scrubbing | TODO | 0 | | |
 | M3.5 | Limits | TODO | 0 | | |
@@ -72,6 +76,7 @@ Statuses: `TODO`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-CR-NNN`, `SKIPPED-E
 | M9.5 | MCP: undeclared calls and server contracts | TODO | 0 | | |
 | M9.6 | Policy and contract learning | TODO | 0 | | |
 | M9.7 | Intent annotations on changesets | TODO | 0 | | |
+| **G34** | **Human gate: slice transaction and reconciliation semantics (CR-001)** | TODO | | | |
 | M9.8 | Transaction propagation into MCP servers | TODO | 0 | | |
 | **G4** | **Human gate: reconciliation semantics** | TODO | | | |
 | M10.1 | Labels and taint state | TODO | 0 | | |
@@ -94,6 +99,7 @@ Statuses: `TODO`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-CR-NNN`, `SKIPPED-E
 | M13.2 | Write budget | TODO | 0 | | |
 | M13.3 | Attested outputs | TODO | 0 | | |
 | M13.4 | The gate | TODO | 0 | | |
+| M14.0 | The slice: demonstration, benchmark subset, real agents (CR-001) | TODO | 0 | | |
 | M14.1 | Benchmark runner, scenarios, shared policies | TODO | 0 | | |
 | M14.2 | Defence levels | TODO | 0 | | |
 | M14.3 | Results | TODO | 0 | | |
