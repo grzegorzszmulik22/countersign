@@ -1,0 +1,14 @@
+diff --git a/internal/keys/verify.go b/internal/keys/verify.go
+index 6e1646d..d025019 100644
+--- a/internal/keys/verify.go
++++ b/internal/keys/verify.go
+@@ -32,9 +32,6 @@ func VerifyRecord(env *evidence.Envelope, r *evidence.Record, m Manifest) error
+ 	if err != nil {
+ 		return fmt.Errorf("%w: %v", ErrKey, err)
+ 	}
+-	if entry.Role != EmitterRole(role) {
+-		return fmt.Errorf("%w: key %s role %q cannot sign %s", ErrKey, sig.KeyID, entry.Role, r.Emitter)
+-	}
+ 	if !entry.CoversTS(r.TS) {
+ 		return fmt.Errorf("%w: key %s not valid at %s", ErrKey, sig.KeyID, r.TS)
+ 	}

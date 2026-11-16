@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://countersign.dev/schema/records/intent.declared.json",
+  "title": "countersign record intent.declared (03 §4)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "id",
+    "session",
+    "emitter",
+    "eseq",
+    "eprev",
+    "ts",
+    "body"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "type": {
+      "const": "intent.declared"
+    },
+    "id": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "session": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "emitter": {
+      "$ref": "_common.json#/$defs/emitter"
+    },
+    "eseq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "eprev": {
+      "$ref": "_common.json#/$defs/hex64"
+    },
+    "ts": {
+      "$ref": "_common.json#/$defs/ts"
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "intent_id",
+        "source",
+        "provider",
+        "model",
+        "via_effect",
+        "tool",
+        "class",
+        "executor",
+        "input_sha256",
+        "input_len",
+        "input_preview",
+        "anchor_sha256"
+      ],
+      "properties": {
+        "intent_id": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "inference",
+            "mcp"
+          ]
+        },
+        "provider": {
+          "type": "string"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "via_effect": {
+          "type": "string"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "class": {
+          "type": "string",
+          "enum": [
+            "exec",
+            "http",
+            "mcp",
+            "other"
+          ]
+        },
+        "executor": {
+          "type": "string",
+          "enum": [
+            "sandbox",
+            "provider"
+          ]
+        },
+        "input_sha256": {
+          "$ref": "_common.json#/$defs/hex64"
+        },
+        "input_len": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "input_preview": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "anchor_sha256": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "_common.json#/$defs/hex64"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

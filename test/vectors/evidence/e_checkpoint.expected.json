@@ -1,0 +1,17 @@
+{
+  "verdict": "INVALID",
+  "world": "committed",
+  "errors": [
+    {
+      "code": "E_CHECKPOINT",
+      "detail": "checkpoint signed by an unknown key"
+    }
+  ],
+  "warnings": null,
+  "findings": [],
+  "stats": {
+    "emitters": 4,
+    "records": 36,
+    "session": "AMW7RA749Q1D1T1CNZKS6QXG60"
+  }
+}

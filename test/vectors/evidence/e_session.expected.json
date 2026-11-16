@@ -1,0 +1,374 @@
+{
+  "verdict": "INVALID",
+  "world": "committed",
+  "errors": [
+    {
+      "code": "E_SESSION",
+      "index": 0,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 0,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 1,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 1,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 2,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 2,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 3,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 3,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 4,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 4,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 5,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 5,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 6,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 6,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 7,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 7,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 8,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 8,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 9,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 9,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 10,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 10,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 11,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 11,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 12,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 12,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 13,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 13,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 14,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 14,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 15,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 15,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 16,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 16,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 17,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 17,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 18,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 18,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 19,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 19,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 20,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 20,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 21,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 21,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 22,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 22,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 23,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 23,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 24,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 24,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 25,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 25,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 26,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 26,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 27,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 27,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 28,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 28,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 29,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 29,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 30,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 30,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 31,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 31,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 32,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 32,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 33,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 33,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 34,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 34,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    },
+    {
+      "code": "E_SESSION",
+      "index": 35,
+      "detail": "subject digest \"0c8b063be99c7ac4b9707b3c83491177a973a8feddd78ccdf37e7e699a7598d7\" ≠ bundle session"
+    },
+    {
+      "code": "E_SESSION",
+      "index": 35,
+      "detail": "record session \"WQVQKM5007YHRV9H3QBS6QXG60\" ≠ \"01K7D7JQ9Y8T4X2Z6B4H4F4F4E\""
+    }
+  ],
+  "warnings": null,
+  "findings": [],
+  "stats": {
+    "emitters": 4,
+    "records": 36,
+    "session": "01K7D7JQ9Y8T4X2Z6B4H4F4F4E",
+    "tree_size": 36
+  }
+}

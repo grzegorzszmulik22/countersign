@@ -1,0 +1,47 @@
+[
+  {
+    "key_id": "79fb38ef414ebed57f2f3a5ba81799ed",
+    "role": "emitter:controller",
+    "public_key": "XJxt8mHJy4QEdXdqrvzZRLQFMo+rKPmzqV70BJDT3oQ=",
+    "not_before": "2020-01-01T00:00:00Z",
+    "not_after": null,
+    "rp_id": null,
+    "origins": null
+  },
+  {
+    "key_id": "10ba682c8ad13513971e8b56881aab8b",
+    "role": "emitter:world",
+    "public_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc=",
+    "not_before": "2020-01-01T00:00:00Z",
+    "not_after": null,
+    "rp_id": null,
+    "origins": null
+  },
+  {
+    "key_id": "b0066359d64f97eb279947feeb083a96",
+    "role": "emitter:world",
+    "public_key": "IEBA42TBDyvsnB/lAKHNTCR8idZQoB7X6CyrqGeHfCE=",
+    "not_before": "2020-01-01T00:00:00Z",
+    "not_after": null,
+    "rp_id": null,
+    "origins": null
+  },
+  {
+    "key_id": "56fae12f7716462746a3a802817ca762",
+    "role": "emitter:observer",
+    "public_key": "Zs1gi5KLiOUODv6qM/rxxDzv4HKUsLh+n+CrpqPPdjM=",
+    "not_before": "2020-01-01T00:00:00Z",
+    "not_after": null,
+    "rp_id": null,
+    "origins": null
+  },
+  {
+    "key_id": "d2f381d7b0b5f1d39239f186fdee4dd3",
+    "role": "log",
+    "public_key": "yFOtDwzSthmuqSzuxP1Wok1kmdWEznklfkXP2BObYKc=",
+    "not_before": "2020-01-01T00:00:00Z",
+    "not_after": null,
+    "rp_id": null,
+    "origins": null
+  }
+]

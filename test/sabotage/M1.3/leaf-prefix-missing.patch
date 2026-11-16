@@ -1,0 +1,14 @@
+diff --git a/internal/mlog/tree.go b/internal/mlog/tree.go
+index 0c5101e..338058c 100644
+--- a/internal/mlog/tree.go
++++ b/internal/mlog/tree.go
+@@ -18,8 +18,7 @@ import (
+ // the stored record line exactly as appended (no added newline).
+ func HashLeaf(line []byte) [32]byte {
+ 	buf := make([]byte, 0, 1+len(line))
+-	buf = append(buf, 0x00)
+-	buf = append(buf, line...)
++		buf = append(buf, line...)
+ 	return sha256.Sum256(buf)
+ }
+ 

@@ -1,0 +1,18 @@
+{
+  "verdict": "INVALID",
+  "world": "committed",
+  "errors": [
+    {
+      "code": "E_POLICY",
+      "detail": "policy.yaml digest ≠ policy_digest b745fc622ae706e163cd1fa75bddc0bdebfb784fdb1f9fef1815a4ea51290b75"
+    }
+  ],
+  "warnings": null,
+  "findings": [],
+  "stats": {
+    "emitters": 4,
+    "records": 36,
+    "session": "EYCFCC363DTXVAMZV48T6QXG60",
+    "tree_size": 36
+  }
+}
