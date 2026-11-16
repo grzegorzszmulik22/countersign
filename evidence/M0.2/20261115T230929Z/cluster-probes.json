@@ -1,0 +1,7 @@
+{
+  "check": "C0.2.4",
+  "nodes": [{"name": "countersign-worker2", "btf_vmlinux": true}, {"name": "countersign-control-plane", "btf_vmlinux": true}, {"name": "countersign-worker", "btf_vmlinux": true}],
+  "runtimeclasses": "none",
+  "containerd_runtimes": "countersign-worker2: runtimes.runc runtimes.test-handler ; countersign-control-plane: runtimes.runc runtimes.test-handler ; countersign-worker: runtimes.runc runtimes.test-handler ",
+  "note": "recorded for M11 (BTF) and M4.7 (runtime classes); absence is data, not failure"
+}

@@ -1,0 +1,6 @@
+CHECK C0.1.1 PASS
+CHECK C0.1.2 FAIL — version ok: cryptography version ok: cryptography wheel sha256 version ok: kind node image pin format 
+CHECK C0.1.3 PASS
+CHECK C0.1.4 PASS
+CHECK C0.1.5 PASS
+M0.1 suite: FAILURES
