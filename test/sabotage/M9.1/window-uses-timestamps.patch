@@ -1,0 +1,44 @@
+--- a/ref/python/refreconcile/reconcile.py	2026-11-16 10:39:18.211098734 +0000
++++ b/ref/python/refreconcile/reconcile.py	2026-11-16 10:39:18.255098837 +0000
+@@ -45,7 +45,8 @@
+ 
+ class _Intent:
+     __slots__ = ("id", "tool", "cls", "executor", "input", "input_sha256",
+-                 "open", "consumed", "expectations", "order")
++                 "open", "consumed", "expectations", "order",
++                 "decl_ts", "result_ts")
+ 
+     def __init__(self, rec, order, packs, command_field):
+         self.id = rec.get("intent_id")
+@@ -56,6 +57,8 @@
+         self.input_sha256 = rec.get("input_sha256") or canon.canon_sha256(self.input)
+         self.open = self.executor == "sandbox"   # 04 §5.3: provider intents never open
+         self.consumed = False                    # 04 §6.3: one tools/call per intent
++        self.decl_ts = _ts(rec.get("ts"))
++        self.result_ts = None
+         self.order = order
+         self.expectations = expect.intent_expectations(
+             {"class": self.cls, "tool": self.tool, "input": self.input,
+@@ -241,6 +244,14 @@
+     """Recompute one sandbox effect.http (agent session)."""
+     req = rec.get("request") or {}
+     rid = rec.get("effect_id")
++    # An intent covers the effects whose ts falls inside its
++    # declared -> result window.
++    ets = _ts(rec.get("ts"))
++    for i in st.intent_order:
++        if i.executor == "sandbox":
++            i.open = (i.decl_ts is not None and ets is not None
++                      and i.decl_ts <= ets
++                      and (i.result_ts is None or i.result_ts > ets))
+     grant, greason = grants.select_grant(st.policy, req)
+     res = {"grant": grant.get("id") if grant else None,
+            "grant_has_credential": bool(grant and grant.get("credential")),
+@@ -509,6 +520,7 @@
+             i = st.intents.get(rec.get("intent_id"))
+             if i is not None:
+                 i.open = False
++                i.result_ts = _ts(rec.get("ts"))
+         elif t == "intent.unparsed":
+             pass                                           # 04 §5.4: nothing opens
+         elif t == "mcp.call.begin":

@@ -1,0 +1,16 @@
+{
+  "kind": "expectation-pack/v1",
+  "pack": "http",
+  "comment": "spec/04 §6.2 http row: tools of class http expect the URL argument; GET unless the tool input names another method.",
+  "rules": [
+    {
+      "id": "http-tool",
+      "when": {"tool_class": "http", "input_has": ["url"]},
+      "bind": {
+        "url": {"kind": "input-field", "field": "url", "required": true},
+        "method": {"kind": "input-field", "field": "method", "default": "GET", "required": true}
+      },
+      "expect": [{"shape": "http", "url": "{url}", "method": "{method}"}]
+    }
+  ]
+}

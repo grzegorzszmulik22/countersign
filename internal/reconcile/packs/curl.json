@@ -1,0 +1,18 @@
+{
+  "kind": "expectation-pack/v1",
+  "pack": "curl",
+  "comment": "spec/04 §6.2 curl row: `curl`/`wget` with exactly one URL argument expects that URL; method from -X/--request/--method, else POST when a data flag is present, else GET. Options that can introduce further requests forbid firing.",
+  "rules": [
+    {
+      "id": "curl-one-url",
+      "when": {"tool": "Bash", "tool_class": "exec", "argv0": ["curl", "wget"], "url_arg_count": 1},
+      "forbid_tokens": ["-K", "--config", "--next"],
+      "forbid_prefixes": ["-K", "--config=", "--resolve=", "--connect-to="],
+      "bind": {
+        "url": {"kind": "single-url-arg", "required": true},
+        "method": {"kind": "curl-method"}
+      },
+      "expect": [{"shape": "http", "url": "{url}", "method": "{method}"}]
+    }
+  ]
+}
