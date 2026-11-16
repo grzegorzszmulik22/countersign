@@ -1,0 +1,199 @@
+== make check-M0.1 ==
+make[2]: Entering directory '/home/opc/src/cs-cluster'
+CHECK C0.1.1 PASS
+CHECK C0.1.2 PASS
+CHECK C0.1.3 PASS
+CHECK C0.1.4 PASS
+CHECK C0.1.5 PASS
+M0.1 suite: all checks passed
+check-M0.1: PASS (evidence: evidence/M0.1/20261116T003841Z)
+make[2]: Leaving directory '/home/opc/src/cs-cluster'
+CHECK M0.1 PASS
+== make check-M0.2 ==
+make[2]: Entering directory '/home/opc/src/cs-cluster'
+== preamble: make images && make cluster-up ==
+make[3]: Entering directory '/home/opc/src/cs-cluster'
+images: digest refs -> tags
+  quay.io/calico/calico:v3.33.0
+  quay.io/calico/node:v3.33.0
+  quay.io/calico/third-party-cni-plugins:v3.33.0
+  registry.k8s.io/e2e-test-images/agnhost:2.56
+  docker.io/library/busybox:1.37.0
+images: quay.io/calico/calico:v3.33.0 already on countersign-worker
+images: quay.io/calico/calico:v3.33.0 already on countersign-control-plane
+images: quay.io/calico/calico:v3.33.0 already on countersign-worker2
+images: quay.io/calico/node:v3.33.0 already on countersign-worker
+images: quay.io/calico/node:v3.33.0 already on countersign-control-plane
+images: quay.io/calico/node:v3.33.0 already on countersign-worker2
+images: quay.io/calico/third-party-cni-plugins:v3.33.0 already on countersign-worker
+images: load quay.io/calico/third-party-cni-plugins:v3.33.0 -> countersign-control-plane
+images: quay.io/calico/third-party-cni-plugins:v3.33.0 already on countersign-worker2
+images: registry.k8s.io/e2e-test-images/agnhost:2.56 already on countersign-worker
+images: load registry.k8s.io/e2e-test-images/agnhost:2.56 -> countersign-control-plane
+images: load registry.k8s.io/e2e-test-images/agnhost:2.56 -> countersign-worker2
+images: docker.io/library/busybox:1.37.0 already on countersign-worker
+images: load docker.io/library/busybox:1.37.0 -> countersign-control-plane
+images: docker.io/library/busybox:1.37.0 already on countersign-worker2
+images: done
+make[3]: Leaving directory '/home/opc/src/cs-cluster'
+make[3]: Entering directory '/home/opc/src/cs-cluster'
+cluster-up: cluster 'countersign' already exists (idempotent path)
+images: skip-pull; tagging local digests
+  quay.io/calico/calico:v3.33.0
+  quay.io/calico/node:v3.33.0
+  quay.io/calico/third-party-cni-plugins:v3.33.0
+  registry.k8s.io/e2e-test-images/agnhost:2.56
+  docker.io/library/busybox:1.37.0
+images: quay.io/calico/calico:v3.33.0 already on countersign-worker
+images: quay.io/calico/calico:v3.33.0 already on countersign-control-plane
+images: quay.io/calico/calico:v3.33.0 already on countersign-worker2
+images: quay.io/calico/node:v3.33.0 already on countersign-worker
+images: quay.io/calico/node:v3.33.0 already on countersign-control-plane
+images: quay.io/calico/node:v3.33.0 already on countersign-worker2
+images: quay.io/calico/third-party-cni-plugins:v3.33.0 already on countersign-worker
+images: quay.io/calico/third-party-cni-plugins:v3.33.0 already on countersign-control-plane
+images: quay.io/calico/third-party-cni-plugins:v3.33.0 already on countersign-worker2
+images: registry.k8s.io/e2e-test-images/agnhost:2.56 already on countersign-worker
+images: registry.k8s.io/e2e-test-images/agnhost:2.56 already on countersign-control-plane
+images: registry.k8s.io/e2e-test-images/agnhost:2.56 already on countersign-worker2
+images: docker.io/library/busybox:1.37.0 already on countersign-worker
+images: docker.io/library/busybox:1.37.0 already on countersign-control-plane
+images: load docker.io/library/busybox:1.37.0 -> countersign-worker2
+images: done
+cluster-up: offline flag set; re-applying node egress rules
+offline-on: rules on countersign-worker
+offline-on: rules on countersign-control-plane
+offline-on: rules on countersign-worker2
+cluster-up: ready
+NAME                        STATUS   ROLES           AGE     VERSION   INTERNAL-IP   EXTERNAL-IP   OS-IMAGE                       KERNEL-VERSION              CONTAINER-RUNTIME
+countersign-control-plane   Ready    control-plane   9m48s   v1.37.0   172.18.0.2    <none>        Debian GNU/Linux 13 (trixie)   7.0.0-1013-oracle (arm64)   containerd://2.3.4
+countersign-worker          Ready    <none>          9m32s   v1.37.0   172.18.0.3    <none>        Debian GNU/Linux 13 (trixie)   7.0.0-1013-oracle (arm64)   containerd://2.3.4
+countersign-worker2         Ready    <none>          9m32s   v1.37.0   172.18.0.4    <none>        Debian GNU/Linux 13 (trixie)   7.0.0-1013-oracle (arm64)   containerd://2.3.4
+make[3]: Leaving directory '/home/opc/src/cs-cluster'
+== C0.2.1: NetworkPolicy enforcement proof ==
+  .. server pods: w1=192.168.4.200 w2=192.168.22.68
+  .. applying deploy/kind/policies/deny-all-egress.yaml
+  .. netpol-cli-w1 -> 192.168.4.200  tcp=blocked udp=blocked (want blocked)
+  .. netpol-cli-w1 -> 192.168.22.68  tcp=blocked udp=blocked (want blocked)
+  .. netpol-cli-w1 dns=blocked (want blocked)
+  .. netpol-cli-w2 -> 192.168.4.200  tcp=blocked udp=blocked (want blocked)
+  .. netpol-cli-w2 -> 192.168.22.68  tcp=blocked udp=blocked (want blocked)
+  .. netpol-cli-w2 dns=blocked (want blocked)
+  .. netpol-cli-w1 -> 192.168.4.200  tcp=open udp=open (want open)
+  .. netpol-cli-w1 -> 192.168.22.68  tcp=open udp=open (want open)
+  .. netpol-cli-w1 dns=open (want open)
+  .. netpol-cli-w2 -> 192.168.4.200  tcp=open udp=open (want open)
+  .. netpol-cli-w2 -> 192.168.22.68  tcp=open udp=open (want open)
+  .. netpol-cli-w2 dns=open (want open)
+CHECK C0.2.1 PASS
+== C0.2.4: kernel/runtime probes ==
+node countersign-worker: /sys/kernel/btf/vmlinux present=true
+node countersign-control-plane: /sys/kernel/btf/vmlinux present=true
+node countersign-worker2: /sys/kernel/btf/vmlinux present=true
+runtimeclasses: none
+node countersign-worker containerd runtimes: runtimes.runc runtimes.test-handler 
+node countersign-control-plane containerd runtimes: runtimes.runc runtimes.test-handler 
+node countersign-worker2 containerd runtimes: runtimes.runc runtimes.test-handler 
+CHECK C0.2.4 PASS
+== C0.2.3: idempotent cluster-up timing ==
+  .. run 1: 23s
+  .. run 2: 19s
+  .. run 3: 35s
+  .. run 4: 21s
+  .. run 5: 14s
+CHECK C0.2.3 PASS
+== C0.2.2: hermetic offline proof, IPv4+IPv6 (inner=1) ==
+CHECK C0.2.2 PASS
+== C0.2.5: docker isolation of cluster-down ==
+  .. cluster-down took 1s
+CHECK C0.2.5 PASS
+== restore: make images && make cluster-up ==
+make[3]: Entering directory '/home/opc/src/cs-cluster'
+cluster-up: kind create cluster 'countersign'
+Creating cluster "countersign" ...
+ • Ensuring node image (kindest/node:v1.37.0) 🖼️  ...
+ ✓ Ensuring node image (kindest/node:v1.37.0) 🖼️
+ • Preparing nodes 📦 📦 📦   ...
+ ✓ Preparing nodes 📦 📦 📦 
+ • Writing configuration 📜  ...
+ ✓ Writing configuration 📜
+ • Starting control-plane 🕹️  ...
+ ✓ Starting control-plane 🕹️
+ • Installing StorageClass 💾  ...
+ ✓ Installing StorageClass 💾
+ • Joining worker nodes 🚜  ...
+ ✓ Joining worker nodes 🚜
+Set kubectl context to "kind-countersign"
+You can now use your cluster with:
+
+kubectl cluster-info --context kind-countersign --kubeconfig /home/opc/.cache/countersign/kubeconfig
+
+Have a question, bug, or feature request? Let us know! https://kind.sigs.k8s.io/#community 🙂
+images: skip-pull; tagging local digests
+  quay.io/calico/calico:v3.33.0
+  quay.io/calico/node:v3.33.0
+  quay.io/calico/third-party-cni-plugins:v3.33.0
+  registry.k8s.io/e2e-test-images/agnhost:2.56
+  docker.io/library/busybox:1.37.0
+images: load quay.io/calico/calico:v3.33.0 -> countersign-worker2
+images: quay.io/calico/calico:v3.33.0 already on countersign-worker
+images: load quay.io/calico/calico:v3.33.0 -> countersign-control-plane
+images: load quay.io/calico/node:v3.33.0 -> countersign-worker2
+images: quay.io/calico/node:v3.33.0 already on countersign-worker
+images: quay.io/calico/node:v3.33.0 already on countersign-control-plane
+images: quay.io/calico/third-party-cni-plugins:v3.33.0 already on countersign-worker2
+images: quay.io/calico/third-party-cni-plugins:v3.33.0 already on countersign-worker
+images: quay.io/calico/third-party-cni-plugins:v3.33.0 already on countersign-control-plane
+images: load registry.k8s.io/e2e-test-images/agnhost:2.56 -> countersign-worker2
+images: load registry.k8s.io/e2e-test-images/agnhost:2.56 -> countersign-worker
+images: load registry.k8s.io/e2e-test-images/agnhost:2.56 -> countersign-control-plane
+images: load docker.io/library/busybox:1.37.0 -> countersign-worker2
+images: load docker.io/library/busybox:1.37.0 -> countersign-worker
+images: load docker.io/library/busybox:1.37.0 -> countersign-control-plane
+images: done
+cluster-up: offline flag set; re-applying node egress rules
+offline-on: rules on countersign-worker2
+offline-on: rules on countersign-worker
+offline-on: rules on countersign-control-plane
+cluster-up: ready
+NAME                        STATUS   ROLES           AGE    VERSION   INTERNAL-IP   EXTERNAL-IP   OS-IMAGE                       KERNEL-VERSION              CONTAINER-RUNTIME
+countersign-control-plane   Ready    control-plane   114s   v1.37.0   172.18.0.3    <none>        Debian GNU/Linux 13 (trixie)   7.0.0-1013-oracle (arm64)   containerd://2.3.4
+countersign-worker          Ready    <none>          98s    v1.37.0   172.18.0.2    <none>        Debian GNU/Linux 13 (trixie)   7.0.0-1013-oracle (arm64)   containerd://2.3.4
+countersign-worker2         Ready    <none>          98s    v1.37.0   172.18.0.4    <none>        Debian GNU/Linux 13 (trixie)   7.0.0-1013-oracle (arm64)   containerd://2.3.4
+make[3]: Leaving directory '/home/opc/src/cs-cluster'
+  .. measurements written to evidence/M0.2/20261116T003914Z//measurements.json
+M0.2 suite: all checks passed
+check-M0.2: PASS (evidence: evidence/M0.2/20261116T003914Z)
+make[2]: Leaving directory '/home/opc/src/cs-cluster'
+CHECK M0.2 PASS
+== make check-M0.3 ==
+make[2]: Entering directory '/home/opc/src/cs-cluster'
+CHECK C0.3.1.echo PASS
+CHECK C0.3.1.sink PASS
+CHECK C0.3.1.fakehub PASS
+CHECK C0.3.1.fakereg PASS
+CHECK C0.3.1.fakemsg PASS
+CHECK C0.3.1.mockllm PASS
+CHECK C0.3.1.mcpdemo PASS
+CHECK C0.3.2 PASS
+CHECK C0.3.3 PASS
+CHECK C0.3.4 PASS
+CHECK C0.3.5 PASS
+CHECK lint.fixtures PASS
+CHECK tools.provision PASS
+CHECK C0.3.1.binaries PASS
+M0.3 suite: all checks passed
+check-M0.3: PASS (evidence: evidence/M0.3/20261116T004838Z)
+make[2]: Leaving directory '/home/opc/src/cs-cluster'
+CHECK M0.3 PASS
+== make check-M0.5 ==
+make[2]: Entering directory '/home/opc/src/cs-cluster'
+CHECK C0.5.1 PASS
+CHECK C0.5.2 PASS
+CHECK C0.5.3 PASS
+CHECK C0.5.4 PASS
+M0.5 suite: all checks passed
+check-M0.5: PASS (evidence: evidence/M0.5/20261116T004907Z)
+make[2]: Leaving directory '/home/opc/src/cs-cluster'
+CHECK M0.5 PASS
+check-M0: all M0.* suites passed
