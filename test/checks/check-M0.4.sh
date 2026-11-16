@@ -31,12 +31,25 @@ skipenv() { say "$1" SKIPPED-ENV "$2"; }
 # PID-scoped and removed on cleanup.
 WORK="$ROOT/.check-work/M0.4-$$"
 rm -rf "$WORK"
-mkdir -p "$WORK/bin" "$WORK/ca" "$WORK/obs" "$WORK/logs"
+mkdir -p "$WORK/ca" "$WORK/obs" "$WORK/logs"
 
 IMG=cs-sandbox-m04:run-$$
 NET=cs-m04-net-$$
 VOL=cs-m04-work-$$
-BIN=$WORK/bin
+# SNAP is an immutable snapshot of the commit under test: it is the docker
+# build context and the source tree the fixture binaries are built from. The
+# build context must never be the live working tree — under parallel regress
+# another suite writing a file mid-tar breaks `docker build`.
+SNAP="$WORK/snap"
+mkdir -p "$SNAP"
+git archive HEAD | tar -x -C "$SNAP" || {
+    for id in C0.4.1 C0.4.2 C0.4.3 C0.4.4 C0.4.image; do
+        bad "$id" "git archive HEAD failed"
+    done
+    exit "$fail"
+}
+BIN=$SNAP/bin
+mkdir -p "$BIN"
 CADIR=$WORK/ca
 SCEN=$ROOT/test/vectors/transcripts
 AGENT=cs-m04-agent-$$
@@ -61,14 +74,14 @@ if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
     exit 0  # nothing runnable; other checks below still apply
 fi
 
-if ! "$GO" build -tags fixtures -o "$BIN" ./test/fixtures/cmd/... >"$WORK/logs/build.log" 2>&1; then
+if ! ( cd "$SNAP" && "$GO" build -tags fixtures -o bin/ ./test/fixtures/cmd/... ) >"$WORK/logs/build.log" 2>&1; then
     for id in C0.4.1 C0.4.2 C0.4.3 C0.4.4 C0.4.image; do
         bad "$id" "fixture/agent build failed: $(tail -3 "$WORK/logs/build.log" | tr '\n' ' ')"
     done
     exit "$fail"
 fi
 
-if ! docker build -f "$ROOT/test/fixtures/scriptagent/Dockerfile" -t "$IMG" "$WORK" >"$WORK/logs/docker-build.log" 2>&1; then
+if ! docker build -f "$SNAP/test/fixtures/scriptagent/Dockerfile" -t "$IMG" "$SNAP" >"$WORK/logs/docker-build.log" 2>&1; then
     for id in C0.4.1 C0.4.2 C0.4.3 C0.4.4 C0.4.image; do
         bad "$id" "sandbox image build failed: $(tail -5 "$WORK/logs/docker-build.log" | tr '\n' ' ')"
     done
