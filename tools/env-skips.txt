@@ -1,0 +1,12 @@
+# Checks of DONE chunks that may report SKIP in `make regress`, and only on the
+# hosts listed (hostname -s). A SKIP of any other check, or on any other host,
+# fails regress. A skip is never a pass: regress prints every accepted one.
+#
+# Columns: check-id  hosts(comma-separated)  reason
+# Only the supervisor edits this file; each line names the evidence that the
+# check passed where it can run.
+C0.2.1  agent-vpc  no Docker on agent-vpc (host rule: no containers); passed on oci-free-a1: evidence/M0.2/20261116T003151Z
+C0.2.2  agent-vpc  no Docker on agent-vpc (host rule: no containers); passed on oci-free-a1: evidence/M0.2/20261116T003151Z
+C0.2.3  agent-vpc  no Docker on agent-vpc (host rule: no containers); passed on oci-free-a1: evidence/M0.2/20261116T003151Z
+C0.2.4  agent-vpc  no Docker on agent-vpc (host rule: no containers); passed on oci-free-a1: evidence/M0.2/20261116T003151Z
+C0.2.5  agent-vpc  no Docker on agent-vpc (host rule: no containers); passed on oci-free-a1: evidence/M0.2/20261116T003151Z
