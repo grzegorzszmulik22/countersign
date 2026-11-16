@@ -24,11 +24,16 @@ pass() { say "$1" PASS; }
 bad() { say "$1" FAIL "$2"; fail=1; }
 skipenv() { say "$1" SKIPPED-ENV "$2"; }
 
-WORK="$ROOT/.check-work/M0.4"
+# Per-run work dir and image tag: parallel invocations (e.g. make regress
+# re-running M0.4 alongside another lane's check, or the sabotage scratch
+# building the patched agent) must not share daemon-global or worktree
+# state. Image tags, networks, volumes and container names are all
+# PID-scoped and removed on cleanup.
+WORK="$ROOT/.check-work/M0.4-$$"
 rm -rf "$WORK"
 mkdir -p "$WORK/bin" "$WORK/ca" "$WORK/obs" "$WORK/logs"
 
-IMG=cs-sandbox-m04:local
+IMG=cs-sandbox-m04:run-$$
 NET=cs-m04-net-$$
 VOL=cs-m04-work-$$
 BIN=$WORK/bin
@@ -42,6 +47,7 @@ cleanup() {
     done
     docker network rm "$NET" >/dev/null 2>&1
     docker volume rm "$VOL" >/dev/null 2>&1
+    docker image rm -f "$IMG" >/dev/null 2>&1
 }
 trap cleanup EXIT
 
@@ -62,7 +68,7 @@ if ! "$GO" build -tags fixtures -o "$BIN" ./test/fixtures/cmd/... >"$WORK/logs/b
     exit "$fail"
 fi
 
-if ! docker build -f test/fixtures/scriptagent/Dockerfile -t "$IMG" . >"$WORK/logs/docker-build.log" 2>&1; then
+if ! docker build -f "$ROOT/test/fixtures/scriptagent/Dockerfile" -t "$IMG" "$WORK" >"$WORK/logs/docker-build.log" 2>&1; then
     for id in C0.4.1 C0.4.2 C0.4.3 C0.4.4 C0.4.image; do
         bad "$id" "sandbox image build failed: $(tail -5 "$WORK/logs/docker-build.log" | tr '\n' ' ')"
     done
