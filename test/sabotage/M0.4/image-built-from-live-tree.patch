@@ -1,5 +1,5 @@
 diff --git a/test/checks/check-M0.4.sh b/test/checks/check-M0.4.sh
-index 63664c2..bc735a7 100755
+index 63664c2..c6c01b1 100755
 --- a/test/checks/check-M0.4.sh
 +++ b/test/checks/check-M0.4.sh
 @@ -36,19 +36,7 @@ mkdir -p "$WORK/ca" "$WORK/obs" "$WORK/logs"
@@ -23,7 +23,7 @@ index 63664c2..bc735a7 100755
  mkdir -p "$BIN"
  CADIR=$WORK/ca
  SCEN=$ROOT/test/vectors/transcripts
-@@ -74,14 +62,23 @@ if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
+@@ -74,14 +62,22 @@ if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
      exit 0  # nothing runnable; other checks below still apply
  fi
  
@@ -38,10 +38,9 @@ index 63664c2..bc735a7 100755
 -if ! docker build -f "$SNAP/test/fixtures/scriptagent/Dockerfile" -t "$IMG" "$SNAP" >"$WORK/logs/docker-build.log" 2>&1; then
 +mkdir -p "$ROOT/bin"
 +cp "$BIN/scriptagent" "$ROOT/bin/"
-+churn="$WORK/churn"
-+( while :; do printf 'sabotage churn %s\n' "$(date +%s%N)" >>"$churn"; done ) &
++( while :; do : >"$ROOT/bin/scriptagent"; head -c 1048576 /dev/urandom >"$ROOT/bin/scriptagent"; done ) &
 +churnpid=$!
-+docker build -f "$ROOT/test/fixtures/scriptagent/Dockerfile" -t "$IMG" "$ROOT" >"$WORK/logs/docker-build.log" 2>&1
++DOCKER_BUILDKIT=0 docker build -f "$ROOT/test/fixtures/scriptagent/Dockerfile" -t "$IMG" "$ROOT" >"$WORK/logs/docker-build.log" 2>&1
 +buildrc=$?
 +kill "$churnpid" 2>/dev/null || true
 +wait "$churnpid" 2>/dev/null || true
