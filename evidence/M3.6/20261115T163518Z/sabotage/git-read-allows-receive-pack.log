@@ -1,0 +1,4 @@
+make[1]: Entering directory '/home/csbuild/src/cs-matchers/.check-work/sabotage-M3.6-git-read-allows-receive-pack'
+no check suite at test/checks/check-M3.6.sh
+make[1]: *** [Makefile:36: check-M3.6] Error 2
+make[1]: Leaving directory '/home/csbuild/src/cs-matchers/.check-work/sabotage-M3.6-git-read-allows-receive-pack'

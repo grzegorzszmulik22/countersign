@@ -1,0 +1,35 @@
+{
+  "chunk": "M3.1",
+  "measurements": [
+    {
+      "id": "MM3.1",
+      "name": "Decision-table rows passing (test/vectors/policy/matching.yaml)",
+      "target": "100% of >= 200 rows",
+      "command": "go test ./internal/policy/ -run TestDecisionTable -count=1 -v",
+      "machine": {
+        "kernel": "6.12.0-204.92.4.4.3.el9uek.aarch64",
+        "arch": "aarch64",
+        "cpu_model": "Neoverse-N1",
+        "cores": 4,
+        "memory": "22945 MB",
+        "docker": "unavailable"
+      },
+      "runs": 5,
+      "unit": "rows passing",
+      "raw_samples": [348, 348, 348, 348, 348],
+      "median": 348,
+      "coefficient_of_variation": 0.0,
+      "total_rows": 348,
+      "achieved": "100% of 348 rows",
+      "meets_target": true,
+      "evidence": "output.log and result.json in this folder"
+    }
+  ],
+  "supporting_results": {
+    "C3.1.2": "20 invalid policies, each rejected naming the field (see test/vectors/policy/invalid/)",
+    "C3.1.3": "SHA-256 over exact file bytes; whitespace-only change alters digest",
+    "C3.1.4": "8000 random policy/request cases agree with ref/python/refreconcile/match.py",
+    "C3.1.5": "10-minute YAML-loader fuzz: 1,468,832 execs, 1,486 interesting inputs, no panic",
+    "sabotage": "4/4 caught: prefix-match-instead-of-segment, last-match-wins, wildcard-matches-apex, case-sensitive-host"
+  }
+}

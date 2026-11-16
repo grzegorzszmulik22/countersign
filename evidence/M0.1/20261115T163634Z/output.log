@@ -1,0 +1,7 @@
+CHECK C0.1.1 PASS
+CHECK C0.1.2 PASS
+CHECK C0.1.3 PASS
+CHECK C0.1.4 FAIL — stray name strings: internal/policy/git_test.go
+internal/policy/gite2e_test.go 
+CHECK C0.1.5 PASS
+M0.1 suite: FAILURES

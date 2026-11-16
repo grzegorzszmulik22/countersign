@@ -1,0 +1,14 @@
+diff --git a/internal/policy/git.go b/internal/policy/git.go
+index 0000000..1111111 100644
+--- a/internal/policy/git.go
++++ b/internal/policy/git.go
+@@ -62,7 +62,8 @@ func gitSmartHTTPMatch(git *GitSmartHTTP, method, path, query string) bool {
+ 		if !ok || strings.Contains(name2, "/") {
+ 			continue
+ 		}
+-		if owner2 == owner && gitRepoSeg(name2) == name {
++		// Prefix scoping: acme/widgets also covers acme/widgets-evil.
++		if owner2 == owner && strings.HasPrefix(name, gitRepoSeg(name2)) {
+ 			return true
+ 		}
+ 	}

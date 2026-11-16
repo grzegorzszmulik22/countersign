@@ -1,0 +1,10 @@
+make[1]: Entering directory '/home/csbuild/src/cs-matchers/.check-work/sabotage-M3.6-git-read-allows-receive-pack'
+CHECK C3.6.1 FAIL —          * [new branch]      HEAD -> denied-read FAIL FAIL	github.com/countersign/countersign/internal/policy	0.418s FAIL 
+CHECK C3.6.2 PASS
+CHECK C3.6.3 FAIL —         git_test.go:122: match POST /acme/widgets.git/git-receive-pack? = {"repo" ""}, want grant "" FAIL FAIL	github.com/countersign/countersign/internal/policy	0.031s FAIL 
+CHECK C3.6.4 FAIL —     match_test.go:113: row gitm-o-010: got {grant:"deny-r" reason:"DENY_GRANT"}, want {grant:"repo" reason:""} FAIL FAIL	github.com/countersign/countersign/internal/policy	0.086s FAIL 
+CHECK lint.fixtures PASS
+M3.6 suite: FAILURES
+check-M3.6: FAIL (exit 1, evidence: evidence/M3.6/20261115T163613Z)
+make[1]: *** [Makefile:36: check-M3.6] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-matchers/.check-work/sabotage-M3.6-git-read-allows-receive-pack'

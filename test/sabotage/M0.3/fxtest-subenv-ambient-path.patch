@@ -1,0 +1,13 @@
+diff --git a/test/fixtures/fxtest/env.go b/test/fixtures/fxtest/env.go
+index 84ecfd7..baabf60 100644
+--- a/test/fixtures/fxtest/env.go
++++ b/test/fixtures/fxtest/env.go
+@@ -131,7 +131,7 @@ func (e *Env) SubEnv() []string {
+ 	proxy := "http://" + e.ProxyAddr()
+ 	return []string{
+ 		"HOME=" + e.Dir,
+-		"PATH=" + toolsBin() + string(os.PathListSeparator) + os.Getenv("PATH"),
++		"PATH=" + os.Getenv("PATH"),
+ 		"HTTPS_PROXY=" + proxy, "https_proxy=" + proxy,
+ 		"HTTP_PROXY=" + proxy, "http_proxy=" + proxy,
+ 		"GIT_SSL_CAINFO=" + e.CAFile(),
