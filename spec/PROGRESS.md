@@ -19,9 +19,9 @@ Build order: Slice 1 first (`README.md`, Build order; CR-001).
 | M1.5 | Python reference verifier | BLOCKED | 1 | lane/evidence-py bf9be33 | C1.5.2 needs csverify and golden bundles (M1.4). Supervisor review: lane marked DONE with C1.5.2 BLOCKED (not allowed by 06 §2); its suite misses an index/record count mismatch (supervisor sabotage). Resume after M1.4 lands |
 | M1.6 | Mutation suite and measurements | TODO | 0 | | |
 | **G1** | **Human gate: freeze the evidence format** | TODO | | | |
-| M2.1 | Proxy listener and sessions | TODO | 0 | | |
-| M2.2 | TLS interception | TODO | 0 | | |
-| M2.3 | Streaming and digests | TODO | 0 | | |
+| M2.1 | Proxy listener and sessions | DONE | 1 | evidence/M2.1/20261117T003115Z | lane broker. Supervisor review on agent-vpc (fresh clone, after one send-back): 3/3 unseen sabotages caught (Connection-listed header forwarded, TE forwarded, client IP not checked) |
+| M2.2 | TLS interception | DONE | 2 | evidence/M2.2/20261117T031137Z | lane broker. Supervisor review: SNI suffix accepted caught by C2.2.4 (sabotage rewritten after the code changed); race detector clean |
+| M2.3 | Streaming and digests | DONE | 2 | evidence/M2.3/20261117T031244Z | lane broker. Supervisor review: 2/2 unseen sabotages caught (digest ignores query, default port kept in authority). C2.3.2 failed once at nice 19 under load (p99 added 2.65 ms > 2 ms), passed 3/3 at nice 10: timing-sensitive on a shared host |
 | M2.4 | Write-ahead evidence and fail-closed | TODO | 0 | | |
 | M2.5 | Protocol edges and hardening | TODO | 0 | | |
 | M2.6 | Performance harness | TODO | 0 | | |
