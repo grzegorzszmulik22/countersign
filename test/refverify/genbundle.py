@@ -208,7 +208,7 @@ class Session:
                 "class": cls,
                 "decision": {"action": action, "reason": "OK",
                              "requires": "allow",
-                             "credentials": [], "would_deny": False},
+                             "credentials": []},
                 "attribution": {"level": "STANDING", "intents": [],
                                 "lineage": "off"},
                 "taint": [], "budget": {"leak_bytes": 0, "writes": 0},
@@ -229,7 +229,7 @@ class Session:
                          "body_sha256": sha_hex(b"resp"), "body_len": 4},
             "request_body": {"sha256": sha_hex(b""), "len": 0},
             "timing": {"total_ms": 12, "ttfb_ms": 8},
-            "scrubbed": False})
+            "scrubbed": 0})
 
     def denied(self):
         self.emit("broker", "effect.denied", {
@@ -261,7 +261,7 @@ class Session:
             eff = self.eid("eff")
             self.emit("broker", "effect.http", {
                 "effect_id": eff, "actor": "world", "purpose": "apply",
-                "for": entry, "conn_id": "cw",
+                "for": cid, "conn_id": "cw",
                 "client": {"ip": "10.0.0.10", "port": 3128},
                 "request": {"method": "POST", "scheme": "https",
                             "authority": "example.com", "path": "/apply",
@@ -270,8 +270,7 @@ class Session:
                 "request_digest": sha_hex(b"apply"),
                 "class": "compensable",
                 "decision": {"action": "allow", "reason": "OK",
-                             "requires": "allow", "credentials": [],
-                             "would_deny": False},
+                             "requires": "allow", "credentials": []},
                 "attribution": {"level": "STANDING", "intents": [],
                                 "lineage": "off"},
                 "taint": [], "budget": {"leak_bytes": 0, "writes": 1},
@@ -328,7 +327,7 @@ class Session:
 
     def index(self):
         return [{"log_index": self.log_base + i,
-                 "inclusion_proof": [p.hex() for p in ipath(self.log_base + i, self.lines)]}
+                 "inclusion_proof": [b64e(p) for p in ipath(self.log_base + i, self.lines)]}
                 for i in range(len(self.lines))]
 
     def tree(self):

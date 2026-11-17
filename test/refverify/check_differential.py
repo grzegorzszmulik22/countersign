@@ -3,10 +3,10 @@
 """C1.5.2 — differential: every golden bundle must yield the same verdict,
 error-code set and warning-code set from refverify as from csverify.
 
-BLOCKED on this lane: csverify and the golden bundles of C1.4.3 are produced
-by another lane. Exit 3 when they are absent so the check suite reports
-BLOCKED rather than PASS. Once both exist on main this runs for real and the
-same comparison the spec requires happens here.
+Runs the real csverify binary (built from cmd/csverify with the pinned Go
+toolchain when no prebuilt binary exists) and compares the full normalized
+result: verdict, world, and the errors/warnings lists as sorted
+(code, index, detail) tuples — stronger than the spec's code-set minimum.
 """
 import json
 import os
@@ -15,23 +15,44 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PY = os.path.join(ROOT, ".tools", "python", "bin", "python3")
+GO = os.path.join(ROOT, ".tools", "bin", "go")
 GOLDENS = os.path.join(ROOT, "test", "vectors", "evidence")
+SCRATCH = os.path.join(ROOT, ".check-work")
 
 
-def codes(items):
-    """Extract a set of codes from errors/warnings (strings or objects)."""
-    out = set()
-    for it in items or []:
-        out.add(it["code"] if isinstance(it, dict) else it)
-    return out
+def norm(res):
+    """Normalize a VerifyResult for comparison: findings as sorted tuples
+    so map-iteration order inside either implementation cannot matter."""
+    def fs(items):
+        return sorted((i.get("code"), i.get("index"), i.get("detail"))
+                      for i in (items or []))
+    return {
+        "verdict": res.get("verdict"),
+        "world": res.get("world"),
+        "errors": fs(res.get("errors")),
+        "warnings": fs(res.get("warnings")),
+        "stats": res.get("stats"),
+    }
 
 
 def find_csverify():
     for cand in (os.path.join(ROOT, "bin", "csverify"),
+                 os.path.join(SCRATCH, "csverify"),
                  os.path.join(ROOT, ".tools", "bin", "csverify")):
         if os.path.isfile(cand) and os.access(cand, os.X_OK):
             return cand
-    return None
+    if not os.path.isfile(GO) or not os.access(GO, os.X_OK):
+        return None
+    os.makedirs(SCRATCH, exist_ok=True)
+    out = os.path.join(SCRATCH, "csverify")
+    env = {**os.environ, "PATH": os.path.dirname(GO) + ":" + os.environ["PATH"],
+           "GOFLAGS": "-mod=mod", "GOCACHE": os.path.join(SCRATCH, "gocache")}
+    r = subprocess.run([GO, "build", "-o", out, "./cmd/csverify"],
+                       cwd=ROOT, capture_output=True, text=True, env=env)
+    if r.returncode != 0 or not os.path.isfile(out):
+        print("C1.5.2: csverify build failed:", r.stderr[-300:])
+        return None
+    return out
 
 
 def main() -> int:
@@ -46,34 +67,36 @@ def main() -> int:
         print("C1.5.2 BLOCKED: csverify binary or golden bundles absent")
         return 3
 
-    keys = os.path.join(GOLDENS, "keys.json")
-    keys_arg = keys if os.path.isfile(keys) else None
     fails = 0
     for bundle in goldens:
         base = os.path.splitext(os.path.basename(bundle))[0]
-        exp = subprocess.run([csverify, bundle] + (["--keys", keys_arg] if keys_arg else []),
+        # Each golden ships its trusted manifest as <name>.keys.json.
+        keys = os.path.join(os.path.dirname(bundle), base + ".keys.json")
+        if not os.path.isfile(keys):
+            keys = os.path.join(GOLDENS, "keys.json")
+        karg = ["--keys", keys] if os.path.isfile(keys) else []
+        exp = subprocess.run([csverify, bundle] + karg,
                              capture_output=True, text=True)
-        got = subprocess.run([PY, "-m", "refverify", bundle] +
-                             (["--keys", keys_arg] if keys_arg else []),
-                             capture_output=True, text=True,
-                             env={**os.environ, "PYTHONPATH": os.path.join(ROOT, "ref", "python")})
+        gres = subprocess.run([PY, "-m", "refverify", bundle] + karg,
+                              capture_output=True, text=True,
+                              env={**os.environ,
+                                   "PYTHONPATH": os.path.join(ROOT, "ref", "python")})
         try:
             ev = json.loads(exp.stdout)
-            gv = json.loads(got.stdout)
+            gv = json.loads(gres.stdout)
         except json.JSONDecodeError:
-            print(f"  {base}: non-JSON output (csverify={exp.stdout[:80]!r} refverify={got.stdout[:80]!r})")
+            print(f"  {base}: non-JSON output "
+                  f"(csverify={exp.stdout[:80]!r} refverify={gres.stdout[:80]!r})")
             fails += 1
             continue
-        diffs = []
-        if ev.get("verdict") != gv.get("verdict"):
-            diffs.append(f"verdict {gv.get('verdict')} != {ev.get('verdict')}")
-        if codes(ev.get("errors")) != codes(gv.get("errors")):
-            diffs.append(f"errors {codes(gv.get('errors'))} != {codes(ev.get('errors'))}")
-        if codes(ev.get("warnings")) != codes(gv.get("warnings")):
-            diffs.append(f"warnings {codes(gv.get('warnings'))} != {codes(ev.get('warnings'))}")
-        if diffs:
+        ne, ng = norm(ev), norm(gv)
+        if ne != ng:
             fails += 1
-            print(f"  {base}: {'; '.join(diffs)}")
+            diffs = [k for k in ne if ne[k] != ng[k]]
+            print(f"  {base}: differs in {diffs}")
+            for k in diffs:
+                print(f"    csverify  {k}: {ne[k]}")
+                print(f"    refverify {k}: {ng[k]}")
     if fails:
         print(f"C1.5.2: {fails}/{len(goldens)} bundles differ from csverify")
         return 1

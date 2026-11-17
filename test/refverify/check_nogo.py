@@ -1,12 +1,17 @@
 # Copyright 2026 The Countersign Authors
 # SPDX-License-Identifier: Apache-2.0
-"""C1.5.3 — nothing under ref/python/ is generated from, or reads, Go sources."""
+"""C1.5.3 — nothing under ref/python/refverify is generated from, or reads,
+Go sources. The scan root is the refverify package only: ref/python also
+contains refreconcile, an M9.x deliverable owned by another lane whose own
+check suite governs it (its pack data deliberately names the shared
+internal/reconcile JSON path).
+"""
 import os
 import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-REF = os.path.join(ROOT, "ref", "python")
+REF = os.path.join(ROOT, "ref", "python", "refverify")
 
 # Path/expression patterns that would indicate Go-source reading or codegen.
 PATTERNS = [

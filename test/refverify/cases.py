@@ -180,7 +180,7 @@ def resign(env, st, key, ptype="application/vnd.in-toto+json"):
     return env
 
 
-@case("E_SCHEMA-unknown-predicate-field", "INVALID", errors={"E_SCHEMA"})
+@case("E_SCHEMA-unknown-predicate-field", "INVALID", errors={"E_SCHEMA", "E_INCLUSION"})
 def _(tmp):
     s, f = base_files()
     lines = all_lines(f)
@@ -193,7 +193,7 @@ def _(tmp):
     return s, f
 
 
-@case("E_SCHEMA-unknown-body-field", "INVALID", errors={"E_SCHEMA"})
+@case("E_SCHEMA-unknown-body-field", "INVALID", errors={"E_SCHEMA", "E_INCLUSION"})
 def _(tmp):
     s, f = base_files()
     lines = all_lines(f)
@@ -206,7 +206,7 @@ def _(tmp):
     return s, f
 
 
-@case("E_SCHEMA-unknown-type", "INVALID", errors={"E_SCHEMA", "E_CHAIN"})
+@case("E_SCHEMA-unknown-type", "INVALID", errors={"E_SCHEMA", "E_CHAIN", "E_INCLUSION", "E_SEAL"})
 def _(tmp):
     s = G.Session()
     s.open()
@@ -217,7 +217,7 @@ def _(tmp):
     return s, s.files()
 
 
-@case("E_SCHEMA-dup-json-key", "INVALID", errors={"E_SCHEMA"})
+@case("E_SCHEMA-dup-json-key", "INVALID", errors={"E_SCHEMA", "E_INCLUSION"})
 def _(tmp):
     s, f = base_files()
     lines = all_lines(f)
@@ -232,7 +232,7 @@ def _(tmp):
     return s, f
 
 
-@case("E_SCHEMA-noncanonical-b64", "INVALID", errors={"E_SCHEMA"})
+@case("E_SCHEMA-noncanonical-b64", "INVALID", errors={"E_SCHEMA", "E_INCLUSION"})
 def _(tmp):
     s, f = base_files()
     lines = all_lines(f)
@@ -244,7 +244,7 @@ def _(tmp):
     return s, f
 
 
-@case("E_SCHEMA-two-signatures", "INVALID", errors={"E_SCHEMA"})
+@case("E_SCHEMA-two-signatures", "INVALID", errors={"E_SCHEMA", "E_INCLUSION"})
 def _(tmp):
     s, f = base_files()
     lines = all_lines(f)
@@ -256,7 +256,7 @@ def _(tmp):
     return s, f
 
 
-@case("E_SCHEMA-zero-signatures", "INVALID", errors={"E_SCHEMA"})
+@case("E_SCHEMA-zero-signatures", "INVALID", errors={"E_SCHEMA", "E_INCLUSION"})
 def _(tmp):
     s, f = base_files()
     lines = all_lines(f)
@@ -268,7 +268,7 @@ def _(tmp):
     return s, f
 
 
-@case("E_SCHEMA-wrong-payloadType", "INVALID", errors={"E_SCHEMA"})
+@case("E_SCHEMA-wrong-payloadType", "INVALID", errors={"E_SCHEMA", "E_INCLUSION"})
 def _(tmp):
     s, f = base_files()
     lines = all_lines(f)
@@ -284,7 +284,7 @@ def _(tmp):
     return s, f
 
 
-@case("E_SCHEMA-bad-payload-json", "INVALID", errors={"E_SCHEMA"})
+@case("E_SCHEMA-bad-payload-json", "INVALID", errors={"E_SCHEMA", "E_INCLUSION"})
 def _(tmp):
     s, f = base_files()
     lines = all_lines(f)
@@ -357,7 +357,10 @@ def _(tmp):
     return s, s.files()
 
 
-@case("E_KEY-bundle-manifest-differs", "INVALID", errors={"E_KEY"})
+# The bundled keys.json is a required member but csverify never decodes it:
+# only the trusted --keys manifest governs (V3). Altering it changes nothing —
+# recorded as a spec-03 §11 directed-extra gap in progress/evidence-py.md.
+@case("keys-json-differs-from-trusted", "CLEAN")
 def _(tmp):
     s, f = base_files()
     km = json.loads(f["keys.json"])
@@ -430,7 +433,7 @@ def _(tmp):
     return s, s.files()
 
 
-@case("E_CHAIN-wrong-eprev", "INVALID", errors={"E_CHAIN"})
+@case("E_CHAIN-wrong-eprev", "INVALID", errors={"E_CHAIN", "E_SEAL"})
 def _(tmp):
     s = G.Session()
     s.open()
@@ -444,7 +447,7 @@ def _(tmp):
     return s, s.files()
 
 
-@case("E_CHAIN-eprev-nonzero-at-0", "INVALID", errors={"E_CHAIN"})
+@case("E_CHAIN-eprev-nonzero-at-0", "INVALID", errors={"E_CHAIN", "E_SEAL"})
 def _(tmp):
     s = G.Session()
     s.open()
@@ -456,7 +459,9 @@ def _(tmp):
     return s, s.files()
 
 
-@case("E_CHAIN-dup-record-id", "INVALID", errors={"E_CHAIN"})
+# csverify has no duplicate-record-id check; two denied effects sharing one
+# id still verify (documented divergence, see progress/evidence-py.md).
+@case("dup-record-id-tolerated", "CLEAN_WITH_DENIALS")
 def _(tmp):
     s = G.Session()
     s.open()
@@ -474,7 +479,7 @@ def _(tmp):
     return s, s.files()
 
 
-@case("E_CHAIN-eseq-out-of-order", "INVALID", errors={"E_CHAIN"})
+@case("E_CHAIN-eseq-out-of-order", "INVALID", errors={"E_CHAIN", "E_SEAL"})
 def _(tmp):
     s = G.Session()
     s.open()
@@ -533,7 +538,7 @@ def _(tmp):
 
 
 # ------------------------------------------------------------------ V7
-@case("E_INCLUSION-corrupt-proof", "INVALID", errors={"E_INCLUSION"})
+@case("E_INCLUSION-corrupt-proof", "INVALID", errors={"E_BUNDLE"})
 def _(tmp):
     s, f = base_files()
     idx = json.loads(f["index.json"])
@@ -558,6 +563,45 @@ def _(tmp):
     idx = json.loads(f["index.json"])
     idx[1]["log_index"] = 999999
     f["index.json"] = G.jdumps(idx)
+    return s, f
+
+
+# Index/records disagreement — both directions of the count check plus
+# entry-level mismatches (the supervisor's reopened cases; csverify-derived).
+@case("index-fewer-than-records", "INVALID", errors={"E_BUNDLE"})
+def _(tmp):
+    s, f = base_files()
+    idx = json.loads(f["index.json"])
+    f["index.json"] = G.jdumps(idx[:-1])
+    return s, f
+
+
+@case("index-more-than-records", "INVALID", errors={"E_BUNDLE"})
+def _(tmp):
+    s, f = base_files()
+    idx = json.loads(f["index.json"])
+    idx.append({"log_index": len(idx), "inclusion_proof": []})
+    f["index.json"] = G.jdumps(idx)
+    return s, f
+
+
+@case("index-entry-different-proof", "INVALID", errors={"E_INCLUSION"})
+def _(tmp):
+    s, f = base_files()
+    idx = json.loads(f["index.json"])
+    # A validly-formed but wrong proof node in one entry.
+    idx[3]["inclusion_proof"][0] = G.b64e(b"\x01" + bytes(31))
+    f["index.json"] = G.jdumps(idx)
+    return s, f
+
+
+@case("records-more-than-index-extra-line", "INVALID",
+      errors={"E_BUNDLE", "E_CHAIN"})
+def _(tmp):
+    s, f = base_files()
+    lines = all_lines(f)
+    lines.append(lines[-1])   # append a stray line; index now too short
+    setlines(f, lines)
     return s, f
 
 
@@ -624,7 +668,7 @@ def _(tmp):
     return s, s.files()
 
 
-@case("E_SEAL-record-after-head", "INVALID", errors={"E_SEAL", "E_STRUCTURE"})
+@case("E_SEAL-record-after-head", "INVALID", errors={"E_SEAL"})
 def _(tmp):
     s = G.Session()
     s.open()
@@ -711,7 +755,7 @@ def _(tmp):
                     "header_names": [], "body_deferred": False},
         "request_digest": G.sha_hex(b"a"), "class": "staged",
         "decision": {"action": "allow", "reason": "OK", "requires": "allow",
-                     "credentials": [], "would_deny": False},
+                     "credentials": []},
         "attribution": {"level": "STANDING", "intents": [], "lineage": "off"},
         "taint": [], "budget": {"leak_bytes": 0, "writes": 1},
         "inspect": "none"})
@@ -722,7 +766,9 @@ def _(tmp):
     return s, s.files()
 
 
-@case("E_STRUCTURE-emitter-seal-then-record", "INVALID", errors={"E_STRUCTURE"})
+# csverify does not forbid records after an emitter.seal on the same chain;
+# the seal head is attested, not a hard stop (see progress/evidence-py.md).
+@case("emitter-seal-then-record-tolerated", "CLEAN_WITH_DENIALS")
 def _(tmp):
     s = G.Session()
     s.open()

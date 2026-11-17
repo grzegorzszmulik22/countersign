@@ -7,6 +7,13 @@ signed-note: text ending in newline, blank line, then signature lines
 signature over the note text; key ID = SHA-256(name‖0x0A‖0x01‖pubkey)[:4].
 tlog-checkpoint: body = origin, tree size (decimal), root hash (base64),
 optional extension lines; Ed25519 log signatures use key name = log origin.
+
+The module carries two views of the same format: ``parse``/``verify_text``
+/``parse_vkey``/``parse_checkpoint_body`` implement the upstream signed-note
+and tlog-checkpoint documents directly (used by the RFC/C2SP vector checks),
+while ``parse_checkpoint`` reproduces the reference verifier's checkpoint
+path — single signature, signer name must equal the origin, log role only —
+with its exact diagnostics.
 """
 import base64
 import binascii
@@ -17,6 +24,7 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from .errors import VerifyError
+from . import keys as _keys
 
 _EM = "—".encode()
 _SIG_RE = re.compile(rb"^([^\s+]+) ([A-Za-z0-9+/]+={0,2})$")
@@ -26,6 +34,11 @@ def note_key_id(name, sig_type, pubkey):
     return int.from_bytes(
         hashlib.sha256(name + b"\x0a" + bytes([sig_type]) + pubkey)
         .digest()[:4], "big")
+
+
+def note_key_hash(origin, pk):
+    """Same derivation with an str origin and implied Ed25519 sig type."""
+    return note_key_id(origin.encode("utf-8"), 0x01, pk)
 
 
 class Sig:
@@ -136,3 +149,102 @@ def parse_checkpoint_body(text):
     if any(not l for l in lines[3:]):
         raise VerifyError("E_CHECKPOINT", "checkpoint: empty extension line")
     return lines[0], size, root, lines[3:]
+
+
+# ---------------------------------------------------------------------------
+# Reference-verifier checkpoint path (single log signature, origin-named
+# signer, log role required) with its diagnostics.
+# ---------------------------------------------------------------------------
+
+def split_note(data):
+    """Cut at the first b"\\n\\n" → (msg, signature lines)."""
+    text, sep, rest = data.partition(b"\n\n")
+    if not sep:
+        raise ValueError("malformed checkpoint: no signature block")
+    if not rest.startswith("— ".encode("utf-8")):
+        raise ValueError("malformed checkpoint: no signature block")
+    msg = text + b"\n"
+    lines = rest.split(b"\n")
+    if lines and lines[-1] == b"":
+        lines = lines[:-1]
+    return msg, lines
+
+
+def _sig_ok(sig, pk, msg):
+    try:
+        Ed25519PublicKey.from_public_bytes(pk).verify(sig, msg)
+    except (InvalidSignature, ValueError):
+        return False
+    return True
+
+
+def _parse_uint(s):
+    """Go strconv.ParseUint(s, 10, 64) — error text compatible. Accepts a
+    leading '+' like Go; rejects '-' and anything non-decimal."""
+    t = s[1:] if s[:1] == b"+" else s
+    if not t or not all(0x30 <= c <= 0x39 for c in t):
+        raise ValueError('strconv.ParseUint: parsing "%s": invalid syntax'
+                         % s.decode("utf-8", "replace"))
+    v = int(t)
+    if v > (1 << 64) - 1:
+        raise ValueError('strconv.ParseUint: parsing "%s": value out of '
+                         'range' % s.decode("utf-8", "replace"))
+    return v
+
+
+def parse_checkpoint(data, manifest):
+    """checkpoint.txt + trusted manifest →
+    (dict(origin,size,root), None) or (None, error-string)."""
+    try:
+        msg, siglines = split_note(data)
+    except ValueError as e:
+        return None, str(e)
+    if len(siglines) != 1:
+        return None, "checkpoint must carry exactly one signature"
+    line = siglines[0]
+    prefix = "— ".encode("utf-8")
+    line = line[len(prefix):] if line.startswith(prefix) else line
+    name_b, sp, b64s = line.partition(b" ")
+    if not sp:
+        return None, "malformed signature line"
+    try:
+        # Go base64.StdEncoding.DecodeString silently skips \r and \n.
+        raw = base64.b64decode(b64s.replace(b"\r", b""), validate=True)
+    except (binascii.Error, ValueError):
+        raw = b""
+    if len(raw) != 68:
+        return None, "malformed signature bytes"
+    keyhash = int.from_bytes(raw[:4], "big")
+    sig = raw[4:]
+    name = name_b.decode("utf-8", "replace")
+
+    lines = msg.split(b"\n")
+    if len(lines) != 4 or lines[3] != b"":
+        return None, "checkpoint body must be exactly three lines"
+    origin = lines[0].decode("utf-8", "replace")
+    if not origin or name != origin:
+        return None, "checkpoint signer name must be the origin"
+    try:
+        size = _parse_uint(lines[1])
+    except ValueError as e:
+        return None, "bad tree size: %s" % e
+    try:
+        root = base64.b64decode(lines[2].replace(b"\r", b""), validate=True)
+    except (binascii.Error, ValueError):
+        root = b""
+    if len(root) != 32:
+        return None, "bad root hash"
+
+    for e in manifest:
+        pub = _keys._public(e)
+        if pub is None:
+            return None, "bad public_key for %s" % e["key_id"]
+        if note_key_hash(origin, pub) != keyhash:
+            continue
+        if e["role"] != "log":
+            return None, ("checkpoint key %s has role %s, want log"
+                          % (e["key_id"], '"%s"' % e["role"]))
+        if not _sig_ok(sig, pub, msg):
+            return None, "checkpoint signature invalid"
+        return {"origin": origin, "size": size, "root": root}, None
+    return None, "checkpoint signed by an unknown key"

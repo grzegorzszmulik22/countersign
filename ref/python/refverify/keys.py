@@ -1,93 +1,114 @@
 # Copyright 2026 The Countersign Authors
 # SPDX-License-Identifier: Apache-2.0
-"""Trusted key manifest (spec 03 §7 keys.json): entries carry
-key_id, role, public_key, not_before, not_after? plus reviewer metadata.
-key_id = first 16 bytes of SHA-256 of the raw public key, lowercase hex.
-"""
-import hashlib
+"""Trusted key manifest (--keys) and per-record signature verification."""
+import base64
+import binascii
+import re
 
-from .errors import VerifyError
-from . import strict
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
-ROLES = {"emitter:broker", "emitter:controller", "emitter:world",
-         "emitter:observer", "log", "attestor", "reviewer",
-         "reviewer:delegate", "witness"}
+from . import dsse, schema
+from .strict import SchemaError, _quote, go_parse_first, go_typed
 
 
-def key_id_of(pub):
-    return hashlib.sha256(pub).digest()[:16].hex()
+class KeysError(Exception):
+    """Trusted-manifest load failure (exit-2 class)."""
 
 
-def _decode_pub(v, i):
-    """public_key: standard base64 (preferred) or 64-hex of the raw 32 bytes."""
-    if isinstance(v, str):
-        try:
-            raw = strict.b64d(v, "manifest public_key")
-            if len(raw) == 32:
-                return raw
-        except VerifyError:
-            pass
-        if strict.is_hex(v, 64):
-            return bytes.fromhex(v)
-    raise VerifyError("E_KEY", f"keys.json[{i}]: public_key not a 32-byte key")
+def unmarshal_manifest(data):
+    """keys.json bytes → list of manifest entries (dicts)."""
+    try:
+        node, _end = go_parse_first(data)
+    except SchemaError as e:
+        raise KeysError(str(e)) from e
+    try:
+        m = go_typed(node, schema.KEYS_MANIFEST)
+    except SchemaError as e:
+        raise KeysError(str(e)) from e
+    return m or []
 
 
-class KeyEntry:
-    __slots__ = ("key_id", "role", "pub", "not_before", "not_after", "extra")
+def find(manifest, keyid):
+    for e in manifest:
+        if e["key_id"] == keyid:
+            return e
+    return None
 
-    def __init__(self, key_id, role, pub, not_before, not_after, extra):
-        self.key_id = key_id
-        self.role = role
-        self.pub = pub
-        self.not_before = not_before      # (sec, nanos)
-        self.not_after = not_after        # (sec, nanos) or None
-        self.extra = extra                # reviewer metadata (rp_id, origins)
 
-    def covers(self, ts):
-        if self.not_before and ts < self.not_before:
+def _public(entry):
+    try:
+        b = base64.b64decode(entry["public_key"].encode("ascii"),
+                             validate=True)
+    except (binascii.Error, ValueError, UnicodeEncodeError):
+        return None
+    if len(b) != 32:
+        return None
+    return b
+
+
+_TS_RE = re.compile(
+    r"^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})"
+    r"(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})$")
+
+
+def _parse_ts(s):
+    """RFC 3339 (nano) → epoch nanoseconds, or None if unparseable."""
+    m = _TS_RE.match(s)
+    if not m:
+        return None
+    y, mo, d, hh, mm, ss, frac, off = m.groups()
+    import datetime
+    try:
+        dt = datetime.datetime(int(y), int(mo), int(d), int(hh), int(mm),
+                               int(ss), tzinfo=datetime.timezone.utc)
+    except ValueError:
+        return None
+    nanos = int(frac.ljust(9, "0")) if frac else 0
+    if off != "Z":
+        sign = 1 if off[0] == "+" else -1
+        ohh, omm = int(off[1:3]), int(off[4:6])
+        if ohh > 23 or omm > 59:
+            return None
+        dt -= datetime.timedelta(minutes=sign * (ohh * 60 + omm))
+    return int(dt.timestamp()) * 10**9 + nanos
+
+
+def covers_ts(entry, ts):
+    t = _parse_ts(ts)
+    if t is None:
+        return False
+    nb = _parse_ts(entry["not_before"])
+    if nb is None or t < nb:
+        return False
+    if entry["not_after"] is not None:
+        na = _parse_ts(entry["not_after"])
+        if na is None or t > na:
             return False
-        return not (self.not_after and ts > self.not_after)
-
-    def same_as(self, other):
-        """Semantic equality for the bundle-vs-trusted comparison."""
-        return (self.key_id == other.key_id and self.role == other.role and
-                self.pub == other.pub and self.not_before == other.not_before
-                and self.not_after == other.not_after)
+    return True
 
 
-def parse_manifest(obj, what="keys.json"):
-    """Validate a manifest array → {key_id: KeyEntry}. Malformed entries are
-    E_KEY; a duplicated key_id or a key_id that is not the hash of its public
-    key is E_KEY."""
-    if not isinstance(obj, list):
-        raise VerifyError("E_KEY", f"{what}: not an array")
-    keys = {}
-    for i, e in enumerate(obj):
-        if not isinstance(e, dict):
-            raise VerifyError("E_KEY", f"{what}[{i}]: not an object")
-        allowed = {"key_id", "role", "public_key", "not_before", "not_after",
-                   "rp_id", "origins"}
-        unknown = set(e) - allowed
-        if unknown:
-            raise VerifyError("E_KEY", f"{what}[{i}]: unknown fields {sorted(unknown)}")
-        for req in ("key_id", "role", "public_key", "not_before"):
-            if req not in e:
-                raise VerifyError("E_KEY", f"{what}[{i}]: missing {req}")
-        kid = e["key_id"]
-        strict.check_hex(kid, 32, f"{what}[{i}].key_id")
-        if kid in keys:
-            raise VerifyError("E_KEY", f"{what}[{i}]: duplicate key_id {kid}")
-        role = e["role"]
-        if role not in ROLES:
-            raise VerifyError("E_KEY", f"{what}[{i}]: unknown role {role!r}")
-        pub = _decode_pub(e["public_key"], i)
-        if key_id_of(pub) != kid:
-            raise VerifyError("E_KEY",
-                              f"{what}[{i}]: key_id is not SHA-256(pub)[:16]")
-        nb = strict.parse_ts(e["not_before"], f"{what}[{i}].not_before")
-        na = None
-        if e.get("not_after") is not None:
-            na = strict.parse_ts(e["not_after"], f"{what}[{i}].not_after")
-        extra = {k: e[k] for k in ("rp_id", "origins") if k in e}
-        keys[kid] = KeyEntry(kid, role, pub, nb, na, extra)
-    return keys
+def verify_record(env, rec, manifest):
+    """V3 of §10 → None, or the error string starting E_KEY/E_SIG."""
+    keyid = env["keyid"]
+    entry = find(manifest, keyid)
+    if entry is None:
+        return "E_KEY: unknown key %s" % keyid
+    try:
+        role, _inst = dsse.emitter_role(rec["emitter"])
+    except ValueError as e:
+        return "E_KEY: %s" % e
+    if entry["role"] != "emitter:" + role:
+        return ("E_KEY: key %s role %s cannot sign %s"
+                % (keyid, _quote(entry["role"]), rec["emitter"]))
+    if not covers_ts(entry, rec["ts"]):
+        return "E_KEY: key %s not valid at %s" % (keyid, rec["ts"])
+    pub = _public(entry)
+    if pub is None:
+        return "E_KEY: bad public_key for %s" % keyid
+    try:
+        Ed25519PublicKey.from_public_bytes(pub).verify(
+            env["sig"], dsse.pae(env["payload_type"], env["payload"]))
+    except (InvalidSignature, ValueError):
+        return "E_SIG: signature on %s invalid" % rec["id"]
+    return None

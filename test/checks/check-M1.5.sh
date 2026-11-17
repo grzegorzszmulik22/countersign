@@ -3,10 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # check-M1.5.sh — check suite for the Python reference verifier.
-# C1.5.1 import scan; C1.5.2 differential vs csverify (BLOCKED until the Go
-# lane lands; reported, never silently passed); C1.5.3 no-Go-source scan;
-# C1.5.4 RFC 6962 / C2SP vectors; C1.5.5 derived bundle vectors standing in
-# for C1.5.2 until the golden bundles of C1.4.3 exist on main.
+# C1.5.1 import scan; C1.5.2 differential vs csverify on every golden bundle;
+# C1.5.3 no-Go-source scan; C1.5.4 RFC 6962 / C2SP vectors; C1.5.5 derived
+# bundle vectors beyond the goldens (index/records disagreement, tolerated
+# divergences, all warning codes).
 set -uo pipefail
 
 root=$(git rev-parse --show-toplevel)
@@ -33,9 +33,10 @@ run() {
 run C1.5.1 "stdlib+cryptography imports only" \
     "$PY" test/refverify/check_imports.py
 
-# C1.5.2: differential against csverify on golden bundles. The Go lane has not
-# landed; when cmd/csverify and test/vectors/evidence/** are absent this check
-# reports BLOCKED — which is not a pass and stays listed in the exit review.
+# C1.5.2: differential against csverify on every golden bundle. The check
+# builds csverify from cmd/csverify with the pinned Go toolchain when no
+# binary exists; it exits 3 (BLOCKED) only if neither a binary nor the Go
+# toolchain plus golden bundles are present.
 if "$PY" test/refverify/check_differential.py; then
     echo "CHECK C1.5.2 PASS  golden-bundle differential vs csverify"
 else
@@ -54,7 +55,7 @@ run C1.5.3 "no Go sources under ref/python" \
 run C1.5.4 "RFC 6962 + C2SP vectors" \
     "$PY" test/refverify/check_upstream.py
 
-run C1.5.5 "derived bundle vectors (stand-in for C1.5.2)" \
+run C1.5.5 "derived bundle vectors beyond the goldens" \
     "$PY" test/refverify/check_vectors.py
 
 if [ "$fail" -eq 0 ]; then

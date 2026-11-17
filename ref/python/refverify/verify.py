@@ -1,613 +1,557 @@
 # Copyright 2026 The Countersign Authors
 # SPDX-License-Identifier: Apache-2.0
-"""The verifier algorithm: V1–V11 and V15 of spec 03 §10.
+"""Bundle verification pipeline (spec 03 §10): V1–V11 + V15.
 
-Output object (same schema as csverify):
-    {"verdict", "world", "errors", "warnings", "findings", "stats"}
-Verdicts, most severe first: INVALID (any E_*) → UNSEALED → LEARN →
-VIOLATIONS → CLEAN_WITH_DENIALS → CLEAN. A bundle with no seal is never CLEAN.
+The observable behaviour — verdicts, world state, findings order, error
+diagnostics and JSON shape — mirrors the reference verifier exactly.
 """
 import hashlib
+import json
 
-from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-
-from . import bundle as bund
-from . import dsse
-from . import keys as keysmod
-from . import mlog
-from . import note as notemod
-from . import schema
-from . import strict
-from .errors import VerifyError, err_obj
-
-EFFECT_TYPES = {"effect.http", "effect.tunnel"}
-RESULT_OF = {"effect.http": "effect.http.result",
-             "effect.tunnel": "effect.tunnel.result"}
+from . import bundle as _bundle
+from . import dsse, keys as _keys, mlog, note
+from .dsse import SchemaError
+from .strict import _quote
 
 
-def _sha(b):
-    return hashlib.sha256(b).digest()
+def _f(code, detail):
+    return {"code": code, "detail": detail}
 
 
-class Rec:
-    """A parsed record: envelope, statement and predicate fields."""
-
-    __slots__ = ("pos", "line", "payload", "keyid", "sig", "rtype", "role",
-                 "emitter", "eseq", "eprev", "id", "session", "ts", "ts_str",
-                 "body", "rh", "subj")
-
-    def __init__(self, pos, line, payload, keyid, sig, st, pred, val):
-        self.pos = pos
-        self.line = line
-        self.payload = payload
-        self.keyid = keyid
-        self.sig = sig
-        self.rtype, self.role, self.eseq, self.eprev, self.ts, self.body = val
-        self.emitter = pred["emitter"]
-        self.id = pred["id"]
-        self.session = pred["session"]
-        self.ts_str = pred["ts"]
-        self.rh = dsse.record_hash(dsse.PAYLOAD_TYPE, payload)
-        self.subj = st["subject"][0]
+def _fat(code, i, detail):
+    return {"code": code, "index": i, "detail": detail}
 
 
-def verify(members, trusted_keys):
-    """Run V1–V11 + V15 over parsed bundle members and the trusted manifest.
-    Returns the output dict."""
-    errors = []
-    warnings = []
+class _Res:
+    """The verifier result row; JSON shape mirrors the reference schema."""
 
-    def err(code, detail, record=None, entry=None):
-        errors.append(err_obj(code, detail, record, entry))
+    def __init__(self):
+        self.verdict = ""
+        self.world = "open"
+        self.errors = []
+        self.warnings = None   # Go nil slice → null; [] only pre-V1
+        self.findings = []
+        self.stats = {}
+        self.sealed = False
+        self.learn = False
+        self.denied = False
 
-    def warn(code, detail, record=None):
-        warnings.append(err_obj(code, detail, record))
 
-    # ---------------------------------------------------------- V1
-    # member names/required members already enforced by bundle.read()
-    manifest = strict.loads(members["manifest.json"], "manifest.json",
-                            code="E_BUNDLE")
-    if not isinstance(manifest, dict):
-        raise VerifyError("E_BUNDLE", "manifest.json: not an object")
-    if set(manifest) != {"bundle_version", "session", "log_origin", "created"}:
-        err("E_BUNDLE", f"manifest.json: keys {sorted(manifest)}")
+def _emit(res):
+    if res.errors:
+        res.verdict = "INVALID"
+    elif not res.sealed:
+        res.verdict = "UNSEALED"
+    elif res.learn:
+        res.verdict = "LEARN"
+    elif res.denied:
+        res.verdict = "CLEAN_WITH_DENIALS"
     else:
-        if manifest["bundle_version"] != 1:
-            err("E_BUNDLE", "manifest: bundle_version != 1")
-        if not isinstance(manifest.get("session"), str) or \
-                not manifest["session"]:
-            err("E_BUNDLE", "manifest: session missing")
-        if not isinstance(manifest.get("log_origin"), str) or \
-                not manifest["log_origin"]:
-            err("E_BUNDLE", "manifest: log_origin missing")
-    sid = manifest.get("session", "") if isinstance(manifest, dict) else ""
-    origin = manifest.get("log_origin", "") if isinstance(manifest, dict) \
-        else ""
+        res.verdict = "CLEAN"
+    return {
+        "verdict": res.verdict,
+        "world": res.world,
+        "errors": res.errors,
+        "warnings": res.warnings,
+        "findings": res.findings,
+        # Go marshals map[string]any with sorted keys.
+        "stats": dict(sorted(res.stats.items())),
+    }
 
-    bundle_keys = {}
-    try:
-        bundle_keys = keysmod.parse_manifest(
-            strict.loads(members["keys.json"], "keys.json", code="E_BUNDLE"),
-            "bundle keys.json")
-    except VerifyError as e:
-        err(e.code, e.detail)
 
-    lines = bund.records_lines(members["records.jsonl"])
+def _split_lines(data):
+    """bytes.TrimSuffix(\n) + Split(\n); empty input → no lines."""
+    if data.endswith(b"\n"):
+        data = data[:-1]
+    if len(data) == 0:
+        return []
+    return data.split(b"\n")
 
-    # ---------------------------------------------------------- V2
-    recs = []          # Rec objects that parsed cleanly
-    for pos, line in enumerate(lines):
-        try:
-            payload, keyid, sig = dsse.parse_envelope(line, pos)
-            st = dsse.parse_statement(payload, pos)
-            pred = st["predicate"]
-            val = schema.validate(pred, pos)
-            recs.append(Rec(pos, line, payload, keyid, sig, st, pred, val))
-        except VerifyError as e:
-            err(e.code, e.detail, pos)
 
-    # ---------------------------------------------------------- V3
-    def trusted(kid):
-        return trusted_keys.get(kid)
+def _via_of(t, b):
+    """viaOf: the via_effect of bodies that carry one (03 §4.4)."""
+    if t in ("context.observed", "intent.unparsed"):
+        return b["via_effect"]
+    return ""
 
-    for r in recs:
-        ent = trusted(r.keyid)
-        if ent is None:
-            err("E_KEY", f"keyid {r.keyid} not in trusted manifest", r.pos)
+
+def _verify_structure(recs):
+    """V11: referential integrity and §4.5 ordering, single pass, log order."""
+    errs = []
+    http_eff = {}    # effect_id → index
+    tunnel_eff = {}  # effect_id → index
+    intents = {}     # intent_id → index
+    calls = {}       # call_id → index
+    entries = {}     # entry_id → index
+    commit_req = {}  # commit_id → index
+    commit_dec = {}  # commit_id → index
+    undo_req = {}    # undo_id → index
+    results = {}     # "http:<id>" / "tunnel:<id>" → result count
+
+    def at(i, msg):
+        errs.append(_fat("E_STRUCTURE", i, msg))
+
+    for i, d in enumerate(recs):
+        if not d["ok"]:
             continue
-        bk = bundle_keys.get(r.keyid)
-        if bk is not None and not bk.same_as(ent):
-            err("E_KEY",
-                f"bundle keys.json entry for {r.keyid} differs from trusted "
-                "manifest", r.pos)
-        if ent.role != f"emitter:{r.role}":
-            err("E_KEY",
-                f"key {r.keyid} role {ent.role} does not match emitter role "
-                f"{r.role}", r.pos)
-            continue
-        if not ent.covers(r.ts):
-            err("E_KEY",
-                f"key {r.keyid} validity does not cover ts {r.ts_str}", r.pos)
-            continue
-        try:
-            Ed25519PublicKey.from_public_bytes(ent.pub).verify(
-                r.sig, dsse.pae(dsse.PAYLOAD_TYPE, r.payload))
-        except InvalidSignature:
-            err("E_SIG", "signature verification failed", r.pos)
-        except ValueError as e:
-            err("E_KEY", f"bad public key for {r.keyid}: {e}", r.pos)
-
-    # ---------------------------------------------------------- V4
-    for r in recs:
-        if r.session != sid:
-            err("E_SESSION",
-                f"record session {r.session!r} != manifest {sid!r}", r.pos)
-        want = f"countersign:session:{sid}"
-        if r.subj["name"] != want:
-            err("E_SESSION", f"subject name {r.subj['name']!r} != {want!r}",
-                r.pos)
-        if r.subj["digest"]["sha256"] != \
-                hashlib.sha256(sid.encode()).hexdigest():
-            err("E_SESSION", "subject digest != sha256(session)", r.pos)
-
-    # ---------------------------------------------------------- V5
-    chains = {}                    # emitter -> [Rec]
-    seen_ids = {}
-    for r in recs:
-        if r.id in seen_ids:
-            err("E_CHAIN", f"duplicate record id {r.id} "
-                f"(records {seen_ids[r.id]} and {r.pos})", r.pos)
-        else:
-            seen_ids[r.id] = r.pos
-        ch = chains.setdefault(r.emitter, [])
-        if r.eseq != len(ch):
-            err("E_CHAIN",
-                f"{r.emitter}: eseq {r.eseq} at position {len(ch)} (gap or "
-                "reorder)", r.pos)
-        if r.eseq == 0:
-            if r.eprev != "0" * 64:
-                err("E_CHAIN", f"{r.emitter}: eprev at eseq 0 not 64 zeros",
-                    r.pos)
-        elif ch and r.eprev != ch[-1].rh:
-            err("E_CHAIN", f"{r.emitter}: eprev does not match previous "
-                "record hash", r.pos)
-        ch.append(r)
-
-    # ---------------------------------------------------------- V6
-    cp_size = cp_root = None
-    try:
-        text, sigs = notemod.parse(members["checkpoint.txt"])
-        o, cp_size, cp_root, _ext = notemod.parse_checkpoint_body(text)
-        if o != origin.encode():
-            err("E_CHECKPOINT",
-                f"checkpoint origin {o!r} != manifest log_origin {origin!r}")
-        keytab = {origin.encode(): [
-            (notemod.note_key_id(origin.encode(), 0x01, k.pub), k.pub, k.role)
-            for k in trusted_keys.values()]}
-        roles = notemod.verify_text(text, sigs, keytab)
-        if roles is None:
-            err("E_CHECKPOINT", "no trusted checkpoint signature verifies")
-        else:
-            if "log" not in roles:
-                err("E_CHECKPOINT", "checkpoint not signed by a log key")
-            for rl in roles:
-                if rl.startswith("emitter:") or rl == "attestor":
-                    err("E_CHECKPOINT",
-                        f"checkpoint signed by a {rl} key")
-                    break
-    except VerifyError as e:
-        err("E_CHECKPOINT", e.detail)
-
-    # ---------------------------------------------------------- V7
-    idx = None
-    try:
-        idx = strict.loads(members["index.json"], "index.json", code="E_BUNDLE")
-        if not isinstance(idx, list):
-            raise VerifyError("E_BUNDLE", "index.json: not an array")
-        for i, e in enumerate(idx):
-            if not isinstance(e, dict) or set(e) != {"log_index",
-                                                   "inclusion_proof"}:
-                raise VerifyError("E_BUNDLE",
-                                  f"index.json[{i}]: keys must be "
-                                  "log_index+inclusion_proof")
-            if not isinstance(e["log_index"], int) or \
-                    isinstance(e["log_index"], bool) or e["log_index"] < 0:
-                raise VerifyError("E_BUNDLE",
-                                  f"index.json[{i}]: bad log_index")
-            if not isinstance(e["inclusion_proof"], list) or \
-                    not all(strict.is_hex(p, 64) for p in e["inclusion_proof"]):
-                raise VerifyError("E_BUNDLE",
-                                  f"index.json[{i}]: bad inclusion_proof")
-    except VerifyError as e:
-        err(e.code, e.detail)
-        idx = None
-    if idx is not None and cp_root is not None and cp_size is not None:
-        if len(idx) != len(lines):
-            err("E_INCLUSION",
-                f"index.json has {len(idx)} proofs for {len(lines)} records")
-        prev = -1
-        for i, e in enumerate(idx[:len(lines)]):
-            leaf = mlog.leaf_hash(lines[i])
-            proof = [bytes.fromhex(p) for p in e["inclusion_proof"]]
-            if e["log_index"] <= prev:
-                err("E_INCLUSION",
-                    f"log_index not strictly increasing at entry {i}")
-            prev = e["log_index"]
-            if not mlog.verify_inclusion(leaf, e["log_index"], cp_size,
-                                         proof, cp_root):
-                err("E_INCLUSION",
-                    f"inclusion proof for record {i} (log_index "
-                    f"{e['log_index']}) fails")
-
-    # ---------------------------------------------------------- V8
-    open_rec = recs[0] if recs and recs[0].pos == 0 and \
-        recs[0].rtype == "session.open" else None
-    if open_rec is None:
-        err("E_OPEN", "first record is not session.open")
-    if open_rec is not None:
-        pol = members.get("policy.yaml")
-        if pol is None:
-            err("E_POLICY", "policy.yaml absent")
-        elif open_rec.body["policy_digest"] != hashlib.sha256(pol).hexdigest():
-            err("E_POLICY", "policy.yaml digest != session.open.policy_digest")
-        want = sorted(open_rec.body["contract_digests"])
-        got = sorted(hashlib.sha256(v).hexdigest()
-                     for k, v in members.items() if k.startswith("contracts/"))
-        if want != got:
-            err("E_POLICY", "contracts/*.yaml digests != contract_digests")
-
-    # ---------------------------------------------------------- V9 / V10
-    world_closed = [r for r in recs if r.rtype == "world.closed"]
-    world_outcome = world_closed[-1].body["outcome"] if world_closed else None
-    ctrl = [r for r in recs if r.role == "controller"]
-    seal = ctrl[-1] if ctrl and ctrl[-1].rtype == "session.seal" else None
-    sealed = bool(seal and any(w.pos < seal.pos for w in world_closed))
-    if seal:
-        # The sealing emitter cannot list its own chain head: the seal's
-        # record hash covers emitters[], so its head is the last record it
-        # wrote *before* the seal. Other emitters' heads are their last
-        # records outright (and nothing may follow a sealed head).
-        declared = {e["emitter"]: e for e in seal.body["emitters"]}
-        for name, e in declared.items():
-            ch = chains.get(name)
-            if not ch:
-                err("E_SEAL", f"seal lists {name} but it has no records")
-                continue
-            if name == seal.emitter:
-                before = [r for r in ch if r.pos < seal.pos]
-                if not before:
-                    err("E_SEAL", f"sealer {name} has no record before "
-                        "the seal")
-                    continue
-                head = before[-1]
-            else:
-                head = ch[-1]
-                beyond = [r for r in ch if r.eseq > e["final_eseq"]]
-                if beyond:
-                    err("E_SEAL", f"{name}: record after sealed head",
-                        beyond[0].pos)
-            if head.eseq != e["final_eseq"] or head.rh != e["head_hash"]:
-                err("E_SEAL",
-                    f"seal head for {name} does not match the chain head",
-                    head.pos)
-        for name in chains:
-            if name != seal.emitter and name not in declared:
-                err("E_SEAL", f"emitter {name} missing from the seal")
-
-    # ---------------------------------------------------------- V11
-    _structure(recs, err)
-
-    # ---------------------------------------------------------- V15
-    _warnings(recs, seal, warn)
-
-    # ---------------------------------------------------------- verdict
-    denials = sum(1 for r in recs
-                  if r.rtype == "effect.denied" or
-                  (r.rtype in EFFECT_TYPES and
-                   r.body.get("decision", {}).get("action") == "deny"))
-    if errors:
-        verdict = "INVALID"
-    elif not sealed:
-        verdict = "UNSEALED"
-    elif open_rec is not None and open_rec.body.get("mode") == "learn":
-        verdict = "LEARN"
-    elif denials:
-        verdict = "CLEAN_WITH_DENIALS"
-    else:
-        verdict = "CLEAN"
-    return {"verdict": verdict,
-            "world": world_outcome,
-            "errors": errors,
-            "warnings": warnings,
-            "findings": [],
-            "stats": {"records": len(lines), "emitters": len(chains),
-                      "denials": denials,
-                      "tree_size": cp_size}}
-
-
-def _structure(recs, err):
-    """V11: references resolve to earlier records of the right type; ordering
-    rules of §4.5 hold in log order."""
-    ids = {}        # id -> (pos, kind)
-    result_pos = {} # effect_id -> pos of its result
-    by_pos = {r.pos: r for r in recs}
-
-    def reg(id_, pos, kind):
-        if id_:
-            ids.setdefault(id_, (pos, kind))
-
-    for r in recs:
-        b = r.body
-        if r.rtype in EFFECT_TYPES:
-            reg(b["effect_id"], r.pos, r.rtype)
-        elif r.rtype == "effect.exec":
-            reg(b["exec_id"], r.pos, "effect.exec")
-        elif r.rtype == "intent.declared":
-            reg(b["intent_id"], r.pos, "intent.declared")
-        elif r.rtype == "stage.entry":
-            reg(b["entry_id"], r.pos, "stage.entry")
-        elif r.rtype == "commit.requested":
-            reg(b["commit_id"], r.pos, "commit.requested")
-        elif r.rtype == "undo.requested":
-            reg(b["undo_id"], r.pos, "undo.requested")
-        elif r.rtype == "mcp.call.begin":
-            reg(b["call_id"], r.pos, "mcp.call.begin")
-
-    def ref(r, id_, kinds, what):
-        got = ids.get(id_)
-        if got is None:
-            err("E_STRUCTURE", f"{r.rtype}: {what} {id_!r} not found", r.pos)
-            return None
-        pos, kind = got
-        if pos >= r.pos:
-            err("E_STRUCTURE",
-                f"{r.rtype}: {what} {id_!r} does not precede it", r.pos)
-            return None
-        if kind not in kinds:
-            err("E_STRUCTURE",
-                f"{r.rtype}: {what} {id_!r} is {kind}, want {sorted(kinds)}",
-                r.pos)
-            return None
-        return by_pos[pos]
-
-    effects = {}
-    for r in recs:
-        if r.rtype in EFFECT_TYPES:
-            effects[r.body["effect_id"]] = r
-
-    seen_res = set()
-    for r in recs:
-        b, t = r.body, r.rtype
-        if t in ("effect.http.result", "effect.tunnel.result"):
-            eff_type = "effect.http" if t.startswith("effect.http") \
-                else "effect.tunnel"
-            e = ref(r, b["effect_id"], {eff_type}, "effect_id")
-            if b["effect_id"] in seen_res:
-                err("E_STRUCTURE",
-                    f"second result for effect {b['effect_id']}", r.pos)
-            seen_res.add(b["effect_id"])
-            if e is not None:
-                result_pos[b["effect_id"]] = r.pos
-        elif t == "intent.result":
-            ref(r, b["intent_id"], {"intent.declared"}, "intent_id")
-            ref(r, b["via_effect"], EFFECT_TYPES, "via_effect")
+        b = d["rec"]["body"]
+        t = d["rec"]["type"]
+        if t == "effect.http":
+            eid = b["effect_id"]
+            if eid in http_eff:
+                at(i, "duplicate effect_id %s" % eid)
+            http_eff[eid] = i
+            if b.get("purpose") == "apply":
+                fr = b.get("for")
+                if fr is None:
+                    at(i, "apply effect %s has no for" % eid)
+                elif fr not in commit_dec:
+                    at(i, "apply effect %s for %s precedes its "
+                          "commit.decision" % (eid, fr))
+        elif t == "effect.tunnel":
+            eid = b["effect_id"]
+            if eid in tunnel_eff:
+                at(i, "duplicate effect_id %s" % eid)
+            tunnel_eff[eid] = i
+        elif t == "effect.http.result":
+            eid = b["effect_id"]
+            ei = http_eff.get(eid)
+            if ei is None:
+                at(i, "result for unknown effect %s" % eid)
+            elif ei >= i:
+                at(i, "result precedes effect %s" % eid)
+            if results.get("http:" + eid, 0) > 0:
+                at(i, "second result for effect %s" % eid)
+            results["http:" + eid] = results.get("http:" + eid, 0) + 1
+        elif t == "effect.tunnel.result":
+            eid = b["effect_id"]
+            ei = tunnel_eff.get(eid)
+            if ei is None:
+                at(i, "result for unknown tunnel %s" % eid)
+            elif ei >= i:
+                at(i, "result precedes tunnel %s" % eid)
+            if results.get("tunnel:" + eid, 0) > 0:
+                at(i, "second result for tunnel %s" % eid)
+            results["tunnel:" + eid] = results.get("tunnel:" + eid, 0) + 1
         elif t == "intent.declared":
-            ref(r, b["via_effect"], EFFECT_TYPES, "via_effect")
-        elif t == "intent.unparsed":
-            ref(r, b["via_effect"], EFFECT_TYPES, "via_effect")
-        elif t == "context.observed":
-            ref(r, b["via_effect"], EFFECT_TYPES, "via_effect")
-            for nb in b["new_blocks"]:
-                if nb.get("intent_id") is not None:
-                    ref(r, nb["intent_id"], {"intent.declared"},
-                        "new_blocks.intent_id")
-        elif t == "taint.added":
-            if b.get("source_effect") is not None:
-                ref(r, b["source_effect"], EFFECT_TYPES, "source_effect")
-        elif t == "mcp.call.end":
-            ref(r, b["call_id"], {"mcp.call.begin"}, "call_id")
-        elif t == "effect.connect":
-            ref(r, b["exec_id"], {"effect.exec"}, "exec_id")
-        elif t == "effect.exec":
-            if b.get("parent_exec_id") is not None:
-                ref(r, b["parent_exec_id"], {"effect.exec"}, "parent_exec_id")
+            iid = b["intent_id"]
+            intents[iid] = i
+            if b["via_effect"] not in http_eff and \
+                    b["via_effect"] not in tunnel_eff:
+                at(i, "intent %s via unknown effect %s"
+                   % (iid, b["via_effect"]))
+        elif t == "intent.result":
+            iid = b["intent_id"]
+            ii = intents.get(iid)
+            if ii is None:
+                at(i, "result for unknown intent %s" % iid)
+            elif ii >= i:
+                at(i, "result precedes intent %s" % iid)
         elif t == "stage.entry":
-            foreign = b.get("via_session") is not None and \
-                b["via_session"] != r.session
-            if not foreign:
-                ref(r, b["via_effect"], EFFECT_TYPES, "via_effect")
-            if b.get("supersedes") is not None:
-                ref(r, b["supersedes"], {"stage.entry"}, "supersedes")
+            eid = b["entry_id"]
+            entries[eid] = i
+            if b["via_effect"] not in http_eff and \
+                    b["via_effect"] not in tunnel_eff:
+                at(i, "entry %s via unknown effect %s"
+                   % (eid, b["via_effect"]))
+            sup = b.get("supersedes")
+            if sup is not None and sup not in entries:
+                at(i, "entry %s supersedes unknown %s" % (eid, sup))
         elif t == "prestate.captured":
-            foreign = b.get("for_session") is not None and \
-                b["for_session"] != r.session
-            if not foreign:
-                ref(r, b["for_effect"], EFFECT_TYPES, "for_effect")
-                ref(r, b["via_effect"], EFFECT_TYPES, "via_effect")
+            fe = b["for_effect"]
+            ei = http_eff.get(fe)
+            if ei is None:
+                at(i, "prestate for unknown effect %s" % fe)
+            elif b["when"] == "before" and \
+                    results.get("http:" + fe, 0) > 0:
+                at(i, "before-prestate for %s after its result (idx %d)"
+                   % (fe, ei))
+            if b["via_effect"] not in http_eff:
+                at(i, "prestate via unknown effect %s" % b["via_effect"])
         elif t == "commit.requested":
-            for en in b["entries"]:
-                ref(r, en, {"stage.entry"}, "entries[]")
+            cid = b["commit_id"]
+            commit_req[cid] = i
+            for e in b["entries"] or []:
+                if e not in entries:
+                    at(i, "commit %s requests unknown entry %s" % (cid, e))
         elif t == "commit.decision":
-            ref(r, b["commit_id"], {"commit.requested"}, "commit_id")
+            cid = b["commit_id"]
+            commit_dec[cid] = i
+            if cid not in commit_req:
+                at(i, "decision for unrequested commit %s" % cid)
         elif t == "commit.applied":
-            ref(r, b["commit_id"], {"commit.requested"}, "commit_id")
-            ref(r, b["entry_id"], {"stage.entry"}, "entry_id")
-            if b.get("via_effect") is not None:
-                ref(r, b["via_effect"], EFFECT_TYPES, "via_effect")
+            cid = b["commit_id"]
+            if cid not in commit_dec:
+                at(i, "applied for undecided commit %s" % cid)
+            if b["entry_id"] not in entries:
+                at(i, "applied unknown entry %s" % b["entry_id"])
+            via = b.get("via_effect")
+            if via is not None and via not in http_eff:
+                at(i, "applied via unknown effect %s" % via)
         elif t == "commit.closed":
-            ref(r, b["commit_id"], {"commit.requested"}, "commit_id")
+            if b["commit_id"] not in commit_dec:
+                at(i, "closed for undecided commit %s" % b["commit_id"])
         elif t == "probation.ratified":
-            ref(r, b["commit_id"], {"commit.requested"}, "commit_id")
-        elif t == "attestation.issued":
-            ref(r, b["commit_id"], {"commit.requested"}, "commit_id")
-            ref(r, b["entry_id"], {"stage.entry"}, "entry_id")
+            if b["commit_id"] not in commit_dec:
+                at(i, "ratified for undecided commit %s" % b["commit_id"])
         elif t == "undo.requested":
-            for tg in b["targets"]:
-                if b["scope"] == "commit":
-                    ref(r, tg, {"commit.requested"}, "targets[]")
-                elif b["scope"] == "effect":
-                    ref(r, tg, EFFECT_TYPES, "targets[]")
+            undo_req[b["undo_id"]] = i
         elif t == "undo.applied":
-            ref(r, b["undo_id"], {"undo.requested"}, "undo_id")
-            if ids.get(b["target"]) is None:
-                err("E_STRUCTURE",
-                    f"undo.applied: target {b['target']!r} not found", r.pos)
-            if b.get("via_effect") is not None:
-                ref(r, b["via_effect"], EFFECT_TYPES, "via_effect")
+            if b["undo_id"] not in undo_req:
+                at(i, "applied for unrequested undo %s" % b["undo_id"])
+            via = b.get("via_effect")
+            if via is not None and via not in http_eff:
+                at(i, "undo applied via unknown effect %s" % via)
         elif t == "undo.closed":
-            ref(r, b["undo_id"], {"undo.requested"}, "undo_id")
-        elif t == "world.closed":
-            for c in b["commits"]:
-                ref(r, c, {"commit.requested"}, "commits[]")
-        elif t == "world.rewound":
-            for en in b["dropped_entries"]:
-                ref(r, en, {"stage.entry"}, "dropped_entries[]")
-            if b.get("undo_id") is not None:
-                ref(r, b["undo_id"], {"undo.requested"}, "undo_id")
-        elif t == "effect.http" and b.get("for") is not None:
-            tgt = ids.get(b["for"])
-            if tgt is None:
-                err("E_STRUCTURE",
-                    f"effect.http: 'for' {b['for']!r} not found", r.pos)
-            elif tgt[0] >= r.pos:
-                err("E_STRUCTURE",
-                    f"effect.http: 'for' {b['for']!r} does not precede it",
-                    r.pos)
-            elif tgt[1] not in ("stage.entry", "effect.http", "effect.tunnel"):
-                err("E_STRUCTURE",
-                    f"effect.http: 'for' {b['for']!r} is {tgt[1]}, want "
-                    "entry or effect", r.pos)
+            if b["undo_id"] not in undo_req:
+                at(i, "closed for unrequested undo %s" % b["undo_id"])
+        elif t == "attestation.issued":
+            if b["entry_id"] not in entries:
+                at(i, "attestation for unknown entry %s" % b["entry_id"])
+        elif t in ("context.observed", "intent.unparsed", "mcp.tools",
+                   "replay.divergence"):
+            x = _via_of(t, b)
+            if x != "" and x not in http_eff and x not in tunnel_eff:
+                at(i, "%s via unknown effect %s" % (t, x))
+        elif t == "mcp.call.begin":
+            calls[b["call_id"]] = i
+        elif t == "mcp.call.end":
+            cid = b["call_id"]
+            ci = calls.get(cid)
+            if ci is None:
+                at(i, "end for unknown call %s" % cid)
+            elif ci >= i:
+                at(i, "end precedes call %s" % cid)
+    return errs
 
-    # ---- ordering rules of §4.5 in log order ----
-    emitter_sealed = set()
-    for r in recs:
-        if r.emitter in emitter_sealed:
-            err("E_STRUCTURE",
-                f"record by {r.emitter} after its emitter.seal", r.pos)
-        if r.rtype == "emitter.seal":
-            emitter_sealed.add(r.emitter)
 
-    for r in recs:
-        b = r.body
-        if r.rtype == "intent.declared":
-            rp = result_pos.get(b["via_effect"])
-            if rp is not None and r.pos > rp:
-                err("E_STRUCTURE",
-                    "intent.declared after the result of its via_effect",
-                    r.pos)
-        elif r.rtype == "taint.added":
-            se = b.get("source_effect")
-            rp = result_pos.get(se)
-            if se is not None and rp is not None and r.pos > rp:
-                err("E_STRUCTURE",
-                    "taint.added after the result of its source_effect",
-                    r.pos)
-        elif r.rtype == "stage.entry" and \
-                not (b.get("via_session") is not None and
-                     b["via_session"] != r.session):
-            rp = result_pos.get(b["via_effect"])
-            if rp is not None and r.pos > rp:
-                err("E_STRUCTURE",
-                    "stage.entry after the result of its via_effect", r.pos)
-        elif r.rtype == "prestate.captured" and b["when"] == "before" and \
-                not (b.get("for_session") is not None and
-                     b["for_session"] != r.session):
-            fe = ids.get(b["for_effect"])
-            if fe is not None and r.pos <= fe[0]:
-                err("E_STRUCTURE",
-                    "prestate.captured{before} not after its for_effect",
-                    r.pos)
-            rp = result_pos.get(b["for_effect"])
-            if rp is not None and r.pos > rp:
-                err("E_STRUCTURE",
-                    "prestate.captured{before} after the result of its "
-                    "for_effect", r.pos)
-        elif r.rtype == "commit.applied" and b.get("via_effect") is not None:
-            rp = result_pos.get(b["via_effect"])
-            if rp is None:
-                err("E_STRUCTURE",
-                    "commit.applied: apply effect has no result", r.pos)
-            elif r.pos < rp:
-                err("E_STRUCTURE",
-                    "commit.applied before the result of its apply effect",
-                    r.pos)
-
-    # decision before apply: each effect.http{purpose: apply} must follow a
-    # commit.decision for the commit whose request contains its `for` entry.
-    reqs = [r for r in recs if r.rtype == "commit.requested"]
-    decisions = [r for r in recs if r.rtype == "commit.decision"]
-    for r in recs:
-        if not (r.rtype == "effect.http" and r.body.get("purpose") == "apply"
-                and r.body.get("for") is not None):
+def _verify_warnings(recs, seal_body):
+    """V15 warnings, in the reference order."""
+    w = []
+    resulted = set()
+    http_order = []
+    for i, d in enumerate(recs):
+        if not d["ok"]:
             continue
-        entry = r.body["for"]
-        cands = [q for q in reqs if entry in q.body["entries"]
-                 and q.pos < r.pos]
-        if not cands:
-            err("E_STRUCTURE",
-                f"apply effect {r.body['effect_id']}: no commit.requested "
-                f"for entry {entry!r} precedes it", r.pos)
+        t = d["rec"]["type"]
+        b = d["rec"]["body"]
+        if t == "effect.http":
+            http_order.append((b["effect_id"], i))
+        elif t == "effect.http.result":
+            resulted.add(b["effect_id"])
+        elif t == "observer.gap":
+            w.append(_fat("W_OBSERVER_GAP", i, "observer gap recorded"))
+        elif t == "intent.unparsed":
+            w.append(_fat("W_UNPARSED", i, "unparsed intent recorded"))
+        elif t == "commit.closed":
+            if b["outcome"] == "partial":
+                w.append(_fat("W_PARTIAL_COMMIT", i,
+                              "commit closed partial"))
+        elif t == "commit.applied":
+            if b["outcome"] == "unknown":
+                w.append(_fat("W_APPLY_UNKNOWN", i,
+                              "apply outcome unknown"))
+        elif t == "undo.closed":
+            if b["conflicts"] > 0:
+                w.append(_fat("W_UNDO_CONFLICT", i, "undo had conflicts"))
+    for eid, i in http_order:
+        if eid not in resulted:
+            w.append(_fat("W_DANGLING", i, "effect %s has no result" % eid))
+    if seal_body is not None:
+        for i, se in enumerate(seal_body["emitters"] or []):
+            if not se["clean"]:
+                w.append(_fat("W_UNCLEAN_EMITTER", i,
+                              "emitter %s sealed unclean" % se["emitter"]))
+    # Go: verifyWarnings returns a nil slice when empty → null in JSON.
+    return w or None
+
+
+def _has_denial(recs):
+    return any(d["ok"] and d["rec"]["type"] == "effect.denied"
+               for d in recs)
+
+
+def verify_bundle(data, trusted):
+    """Bundle bytes + trusted manifest → result dict (the verifier schema)."""
+    res = _Res()
+    # V1 — archive well-formed; required entries present; none extra.
+    try:
+        members = _bundle.read_bundle(data)
+    except _bundle.BundleError as e:
+        res.errors.append(_f("E_BUNDLE", str(e)))
+        res.warnings = []
+        res.verdict = "INVALID"
+        return _emit(res)
+    try:
+        man = _bundle.parse_manifest(members["manifest.json"])
+    except _bundle.BundleError as e:
+        res.errors.append(_f("E_BUNDLE", str(e)))
+        res.warnings = []
+        res.verdict = "INVALID"
+        return _emit(res)
+    res.stats["session"] = man["session"]
+
+    # V2 — every line is a strict DSSE envelope + statement + predicate.
+    raw_lines = _split_lines(members["records.jsonl"])
+    recs = []
+    for i, line in enumerate(raw_lines):
+        d = {"line": line, "env": None, "st": None, "rec": None, "ok": False}
+        try:
+            env, st, rec = dsse.decode_record_line(line)
+            d.update(env=env, st=st, rec=rec, ok=True)
+        except SchemaError as e:
+            res.errors.append(_fat("E_SCHEMA", i, str(e)))
+            d["line"] = None  # failed lines keep the zero value
+        recs.append(d)
+    res.stats["records"] = len(raw_lines)
+
+    # V3 — signature under a trusted key, role match, validity window.
+    for i, d in enumerate(recs):
+        if not d["ok"]:
             continue
-        req = cands[-1]
-        ok = any(d.pos > req.pos and d.pos < r.pos and
-                 d.body["decision"] == "commit"
-                 for d in decisions if d.body["commit_id"] ==
-                 req.body["commit_id"])
-        if not ok:
-            err("E_STRUCTURE",
-                f"apply effect {r.body['effect_id']}: no commit.decision "
-                "before it", r.pos)
+        err = _keys.verify_record(d["env"], d["rec"], trusted)
+        if err is not None:
+            code = "E_KEY" if err.startswith("E_KEY") else "E_SIG"
+            res.errors.append(_fat(code, i, err))
 
+    # V4 — subject digest and per-record session equal the manifest's.
+    want_subj = hashlib.sha256(man["session"].encode("utf-8")).hexdigest()
+    for i, d in enumerate(recs):
+        if not d["ok"]:
+            continue
+        st = d["st"]
+        if len(st["subject"]) != 1 or \
+                (st["subject"][0]["digest"] or {}).get("sha256") != want_subj:
+            dig = ""
+            if st["subject"]:
+                dig = (st["subject"][0]["digest"] or {}).get("sha256", "")
+            res.errors.append(_fat("E_SESSION", i,
+                                   "subject digest %s ≠ bundle session"
+                                   % _quote(dig)))
+        if d["rec"]["session"] != man["session"]:
+            res.errors.append(_fat("E_SESSION", i,
+                                   "record session %s ≠ %s"
+                                   % (_quote(d["rec"]["session"]),
+                                      _quote(man["session"]))))
 
-def _warnings(recs, seal, warn):
-    """V15 warning conditions."""
-    results = {r.body["effect_id"] for r in recs
-               if r.rtype in ("effect.http.result", "effect.tunnel.result")}
-    for r in recs:
-        if r.rtype in EFFECT_TYPES and r.body["effect_id"] not in results:
-            warn("W_DANGLING", f"effect {r.body['effect_id']} has no result",
-                 r.pos)
-        elif r.rtype == "observer.gap":
-            warn("W_OBSERVER_GAP", "observer.gap present", r.pos)
-        elif r.rtype == "intent.unparsed":
-            warn("W_UNPARSED", "intent.unparsed present", r.pos)
-        elif r.rtype == "commit.closed" and r.body["outcome"] == "partial":
-            warn("W_PARTIAL_COMMIT", "commit closed partial", r.pos)
-        elif r.rtype == "commit.applied" and r.body["outcome"] == "unknown":
-            warn("W_APPLY_UNKNOWN", "apply outcome unknown", r.pos)
-        elif r.rtype == "undo.applied" and r.body["outcome"] == "conflict":
-            warn("W_UNDO_CONFLICT", "undo applied with conflict", r.pos)
-    if seal:
-        for e in seal.body["emitters"]:
-            if not e["clean"]:
-                warn("W_UNCLEAN_EMITTER",
-                     f"emitter {e['emitter']} sealed unclean")
+    # V5 — per-emitter chains.
+    heads = {}
+    order = []
+    for i, d in enumerate(recs):
+        if not d["ok"]:
+            continue
+        r = d["rec"]
+        em = r["emitter"]
+        h = heads.get(em)
+        if h is None:
+            h = {"eseq": 0, "hash": "", "records": 0}
+            heads[em] = h
+            order.append(em)
+            if r["eseq"] != 0:
+                res.errors.append(_fat("E_CHAIN", i,
+                                       "%s: first eseq is %d, want 0"
+                                       % (em, r["eseq"])))
+                continue
+            if r["eprev"] != dsse.ZERO_HASH:
+                res.errors.append(_fat("E_CHAIN", i,
+                                       "%s: first eprev is not 64 zeros"
+                                       % em))
+                continue
+        else:
+            if r["eseq"] != h["eseq"] + 1:
+                res.errors.append(_fat("E_CHAIN", i,
+                                       "%s: eseq gap or reuse at %d after %d"
+                                       % (em, r["eseq"], h["eseq"])))
+                continue
+            if r["eprev"] != h["hash"]:
+                res.errors.append(_fat("E_CHAIN", i,
+                                       "%s: eprev mismatch at eseq %d"
+                                       % (em, r["eseq"])))
+                continue
+        h["eseq"] = r["eseq"]
+        h["hash"] = dsse.record_hash(d["env"])
+        h["records"] += 1
+    res.stats["emitters"] = len(heads)
 
+    # V6 — checkpoint signed by a log key; origin matches log_origin.
+    cp, cp_err = note.parse_checkpoint(members["checkpoint.txt"], trusted)
+    if cp_err is not None:
+        res.errors.append(_f("E_CHECKPOINT", cp_err))
+    elif cp["origin"] != man["log_origin"]:
+        res.errors.append(_f("E_CHECKPOINT", "origin %s ≠ %s"
+                             % (_quote(cp["origin"]),
+                                _quote(man["log_origin"]))))
+    if cp is not None:
+        res.stats["tree_size"] = cp["size"]
 
-def run(bundle_path, keys_path):
-    """Verify a bundle file against a trusted manifest file → output dict.
-    Raises UsageError for unreadable inputs."""
+    # V7 — inclusion proofs; log_index strictly increasing.
     try:
-        members = bund.read(bundle_path)
-    except VerifyError as e:
-        return {"verdict": "INVALID", "world": None,
-                "errors": [e.obj()], "warnings": [], "findings": [],
-                "stats": {"records": 0, "emitters": 0, "denials": 0,
-                          "tree_size": None}}
+        ix = _bundle.parse_index(members["index.json"])
+    except _bundle.BundleError as e:
+        res.errors.append(_f("E_BUNDLE", str(e)))
+        ix = None
+    if ix is not None:
+        if len(ix) != len(raw_lines):
+            res.errors.append(_f("E_BUNDLE",
+                                 "index.json has %d entries for %d records"
+                                 % (len(ix), len(raw_lines))))
+        else:
+            prev = -1
+            for i, e in enumerate(ix):
+                if e["log_index"] <= prev:
+                    res.errors.append(_fat("E_INCLUSION", i,
+                                           "log_index %d not strictly "
+                                           "increasing" % e["log_index"]))
+                prev = e["log_index"]
+                if cp is None:
+                    continue
+                if e["log_index"] >= cp["size"]:
+                    res.errors.append(_fat("E_INCLUSION", i,
+                                           "log_index %d ≥ checkpoint "
+                                           "size %d"
+                                           % (e["log_index"], cp["size"])))
+                    continue
+                leaf = mlog.leaf_hash(recs[i]["line"] or b"")
+                perr = mlog.inclusion_error(e["log_index"], cp["size"],
+                                            leaf, e["proof"], cp["root"])
+                if perr is not None:
+                    res.errors.append(_fat("E_INCLUSION", i, perr))
+
+    # V8 — first record is session.open; policy and contracts match digests.
+    sealed = False
+    open_body = None
+    if len(recs) == 0 or not recs[0]["ok"] or \
+            recs[0]["rec"]["type"] != "session.open":
+        res.errors.append(_f("E_OPEN", "first record is not session.open"))
+    else:
+        open_body = recs[0]["rec"]["body"]
+    if open_body is not None:
+        pol = members.get("policy.yaml")
+        if pol is None or \
+                hashlib.sha256(pol).hexdigest() != open_body["policy_digest"]:
+            res.errors.append(_f("E_POLICY",
+                                 "policy.yaml digest ≠ policy_digest %s"
+                                 % open_body["policy_digest"]))
+        contract_files = sorted(n for n in members
+                                if n.startswith("contracts/"))
+        got = [hashlib.sha256(members[n]).hexdigest()
+               for n in contract_files]
+        want = sorted(open_body["contract_digests"] or [])
+        if got != want:
+            res.errors.append(_f("E_POLICY", "contract digests %s ≠ %s"
+                                 % ("[" + " ".join(got) + "]",
+                                    "[" + " ".join(want) + "]")))
+
+    # V9 — world.closed exists, then session.seal as the last controller
+    # record. Otherwise verdict UNSEALED (not an error).
+    seal_body = None
+    world_closed = False
+    last_ctrl = -1
+    for i, d in enumerate(recs):
+        if not d["ok"]:
+            continue
+        try:
+            role, _ = dsse.emitter_role(d["rec"]["emitter"])
+        except ValueError:
+            role = ""
+        if role == "controller":
+            last_ctrl = i
+        if d["rec"]["type"] == "world.closed":
+            world_closed = True
+            res.world = d["rec"]["body"]["outcome"]
+    seal_rec = None
+    if last_ctrl >= 0 and recs[last_ctrl]["rec"]["type"] == "session.seal":
+        seal_body = recs[last_ctrl]["rec"]["body"]
+        seal_rec = recs[last_ctrl]["rec"]
+    sealed = world_closed and seal_body is not None
+
+    # V10 — for each emitter in the seal: final_eseq and head_hash equal the
+    # chain's head; no emitter missing; nothing after a sealed head.
+    if seal_body is not None:
+        claimed = {}
+        for se in seal_body["emitters"] or []:
+            claimed[se["emitter"]] = True
+            h = heads.get(se["emitter"])
+            if h is None:
+                res.errors.append(_f("E_SEAL",
+                                     "seal claims unknown emitter %s"
+                                     % se["emitter"]))
+                continue
+            # The sealing emitter cannot carry its own record hash inside
+            # the seal; its entry describes the chain head immediately
+            # before session.seal.
+            if se["emitter"] == seal_rec["emitter"]:
+                if se["final_eseq"] + 1 != h["eseq"] or \
+                        se["head_hash"].lower() != seal_rec["eprev"].lower():
+                    res.errors.append(
+                        _f("E_SEAL",
+                           "sealer head %s eseq %d hash %s ≠ pre-seal %d %s"
+                           % (se["emitter"], se["final_eseq"],
+                              se["head_hash"], h["eseq"],
+                              seal_rec["eprev"])))
+                continue
+            if se["final_eseq"] != h["eseq"] or \
+                    se["head_hash"].lower() != h["hash"].lower():
+                res.errors.append(
+                    _f("E_SEAL",
+                       "seal head %s eseq %d hash %s ≠ chain %d %s"
+                       % (se["emitter"], se["final_eseq"], se["head_hash"],
+                          h["eseq"], h["hash"])))
+        for e in order:
+            if e not in claimed:
+                res.errors.append(_f("E_SEAL",
+                                     "emitter %s missing from session.seal"
+                                     % e))
+
+    # V11 — structure rules of 03 §4.5 in log order.
+    res.errors.extend(_verify_structure(recs))
+
+    # V15 — warnings.
+    res.warnings = _verify_warnings(recs, seal_body)
+
+    res.sealed = sealed
+    res.learn = open_body is not None and open_body["mode"] == "learn"
+    res.denied = _has_denial(recs)
+    return _emit(res)
+
+
+def _dump(res):
+    """json.MarshalIndent(v, "", "  ") equivalent incl. HTML escaping."""
+    s = json.dumps(res, ensure_ascii=False, indent=2,
+                   separators=(",", ": "))
+    # Go escapes < > & U+2028 U+2029 inside strings; outside strings these
+    # bytes can only appear inside a string value anyway.
+    return (s.replace("&", "\\u0026").replace("<", "\\u003c")
+             .replace(">", "\\u003e")
+             .replace(" ", "\\u2028").replace(" ", "\\u2029"))
+
+
+def main(argv=None):
+    import argparse
+    import sys
+    ap = argparse.ArgumentParser(prog="refverify")
+    ap.add_argument("bundle")
+    ap.add_argument("--keys", required=True)
+    args = ap.parse_args(argv)
     try:
-        with open(keys_path, "rb") as f:
-            kobj = strict.loads(f.read(), "trusted keys", code="E_KEY")
-        trusted = keysmod.parse_manifest(kobj, "trusted keys")
-    except VerifyError as e:
-        return {"verdict": "INVALID", "world": None,
-                "errors": [e.obj()], "warnings": [], "findings": [],
-                "stats": {"records": 0, "emitters": 0, "denials": 0,
-                          "tree_size": None}}
+        with open(args.keys, "rb") as f:
+            trusted = _keys.unmarshal_manifest(f.read())
+    except OSError as e:
+        sys.stderr.write("%s\n" % e)
+        return 2
+    except _keys.KeysError as e:
+        sys.stderr.write("%s\n" % e)
+        return 2
     try:
-        return verify(members, trusted)
-    except VerifyError as e:
-        return {"verdict": "INVALID", "world": None,
-                "errors": [e.obj()], "warnings": [], "findings": [],
-                "stats": {"records": 0, "emitters": 0, "denials": 0,
-                          "tree_size": None}}
+        with open(args.bundle, "rb") as f:
+            data = f.read()
+    except OSError as e:
+        sys.stderr.write("%s\n" % e)
+        return 2
+    res = verify_bundle(data, trusted)
+    sys.stdout.write(_dump(res) + "\n")
+    return 0 if res["verdict"] in ("CLEAN", "CLEAN_WITH_DENIALS") else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

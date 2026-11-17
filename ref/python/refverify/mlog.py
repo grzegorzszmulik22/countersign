@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """RFC 6962 Merkle tree hashing and inclusion-proof verification.
 
-MTH per RFC 6962 §2.1; proof verification per RFC 9162 §2.1.3.2 (obsoletes
-6962, same tree construction and verification algorithm).
+MTH per RFC 6962 §2.1; proof verification per the inner/border decomposition
+(equivalent to RFC 9162 §2.1.3.2). ``inclusion_error`` carries the reference
+verifier's rejection diagnostics verbatim.
 """
 import hashlib
 
@@ -36,25 +37,48 @@ def mth(leaf_hashes):
 
 
 def verify_inclusion(leaf, leaf_index, tree_size, proof, root):
-    """RFC 9162 §2.1.3.2: prove ``leaf`` (a 32-byte leaf hash) is at
-    ``leaf_index`` in the tree of ``tree_size`` with ``root``."""
-    if leaf_index < 0 or leaf_index >= tree_size:
-        return False
-    if len(leaf) != 32 or len(root) != 32:
-        return False
-    fn = leaf_index
-    sn = tree_size - 1
-    r = leaf
+    """Prove ``leaf`` (a 32-byte leaf hash) is at ``leaf_index`` in the tree
+    of ``tree_size`` with ``root``. Boolean form used by RFC-vector tests."""
+    return inclusion_error(leaf_index, tree_size, leaf, proof, root) is None
+
+
+def _decomp(index, size):
+    inner = (index ^ (size - 1)).bit_length()
+    return inner, bin(index >> inner).count("1")
+
+
+def root_from_inclusion(index, size, leaf, proof):
+    """Fold an audit path to a candidate root, or raise ValueError."""
+    if size == 0 or index >= size:
+        raise ValueError("index out of range: inclusion %d/%d"
+                         % (index, size))
+    inner, border = _decomp(index, size)
+    if len(proof) != inner + border:
+        raise ValueError("inclusion proof size %d, want %d"
+                         % (len(proof), inner + border))
     for p in proof:
-        if len(p) != 32 or sn == 0:
-            return False
-        if (fn & 1) or fn == sn:
-            r = node_hash(p, r)
-            while not (fn & 1) and fn != 0:
-                fn >>= 1
-                sn >>= 1
+        if len(p) != 32:
+            raise ValueError("proof node is not 32 bytes")
+    r = leaf
+    for i, h in enumerate(proof[:inner]):
+        if (index >> i) & 1 == 0:
+            r = node_hash(r, h)
         else:
-            r = node_hash(r, p)
-        fn >>= 1
-        sn >>= 1
-    return sn == 0 and r == root
+            r = node_hash(h, r)
+    for h in proof[inner:]:
+        r = node_hash(h, r)
+    return r
+
+
+def inclusion_error(index, size, leaf, proof, root):
+    """Verify one inclusion proof; None on success, diagnostic otherwise."""
+    if size == 0 or index >= size:
+        return "index out of range: inclusion %d/%d" % (index, size)
+    try:
+        got = root_from_inclusion(index, size, leaf, proof)
+    except ValueError as e:
+        return str(e)
+    if got != root:
+        return ("inclusion proof root %s ≠ expected %s"
+                % (got.hex(), root.hex()))
+    return None
