@@ -25,11 +25,20 @@ func Digest(data []byte) string {
 // rejected: fields defined by 05 (autonomy, world, commit, budgets, tape,
 // attest at spec level; class, stager, compensate, tools, egress on grants)
 // are out of scope until their milestones and must fail here.
-func Load(data []byte) (*SessionPolicy, error) {
-	var p SessionPolicy
+//
+// The loader must never panic on untrusted input (C3.1.5). yaml.v3's merge
+// handling can panic on adversarial documents ("<<:" with a non-mapping
+// value panics in decoder.merge), so a decode panic becomes an error.
+func Load(data []byte) (p *SessionPolicy, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			p, err = nil, fmt.Errorf("policy: malformed document: %v", r)
+		}
+	}()
+	var doc SessionPolicy
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
-	if err := dec.Decode(&p); err != nil {
+	if err := dec.Decode(&doc); err != nil {
 		return nil, fmt.Errorf("policy: %w", err)
 	}
 	if err := dec.Decode(&struct{}{}); err != io.EOF {
@@ -38,11 +47,11 @@ func Load(data []byte) (*SessionPolicy, error) {
 		}
 		return nil, fmt.Errorf("policy: %w", err)
 	}
-	if err := validate(&p); err != nil {
+	if err := validate(&doc); err != nil {
 		return nil, err
 	}
-	p.digest = Digest(data)
-	return &p, nil
+	doc.digest = Digest(data)
+	return &doc, nil
 }
 
 // DigestHex is the digest of the bytes the policy was loaded from.
