@@ -19,11 +19,99 @@ class SchemaError(Exception):
     """One E_SCHEMA-class decode failure; message is the verifier detail."""
 
 
+import json as _json
+
+
+# ---------------------------------------------------------------------------
+# Fast path: the C json decoder validates syntax and object key order far
+# faster than the byte scanner. Any anomaly (dup key, NaN/Infinity, invalid
+# input, lone surrogate, non-finite float) falls back to the byte scanner so
+# error strings stay byte-for-byte identical on rejected input.
+# ---------------------------------------------------------------------------
+
+class _FastFallback(Exception):
+    pass
+
+
+class _Pairs(list):
+    """object_pairs_hook result: ordered (key, value) pairs, no dup keys."""
+    __slots__ = ()
+
+
+def _hook_pairs(pairs):
+    seen = set()
+    for k, _v in pairs:
+        if k in seen:
+            raise _FastFallback
+        seen.add(k)
+    return _Pairs(pairs)
+
+
+def _reject_const(_s):
+    raise _FastFallback
+
+
+def _to_node(v, depth=0):
+    """Python value → node tree in the same shape the scanner produces."""
+    if depth > _MAX_DEPTH:
+        raise _FastFallback
+    t = type(v)
+    if v is None:
+        return ("null", None, None)
+    if t is bool:
+        return ("bool", v, None)
+    if t is int:
+        r = str(v).encode()
+        return ("num", r, r)
+    if t is float:
+        if v != v or v in (float("inf"), float("-inf")):
+            raise _FastFallback
+        r = repr(v).encode()
+        return ("num", r, r)
+    if t is str:
+        try:
+            v.encode("utf-8")
+        except UnicodeEncodeError:
+            raise _FastFallback
+        return ("str", v, None)
+    if t is _Pairs:
+        return ("obj", [(k, _to_node(x, depth + 1)) for k, x in v], None)
+    if t is list:
+        return ("arr", [_to_node(x, depth + 1) for x in v], None)
+    if t is dict:
+        return ("obj",
+                [(k, _to_node(x, depth + 1)) for k, x in v.items()], None)
+    raise _FastFallback
+
+
+def _node_literal(node):
+    """Re-serialize a fast-path node to JSON bytes (raw-spec fallback).
+    Only used when the scanner did not keep the original literal; the
+    result is re-parsed, never compared, so escaping choices are free."""
+    k = node[0]
+    if k == "null":
+        return b"null"
+    if k == "bool":
+        return b"true" if node[1] else b"false"
+    if k == "num":
+        return node[1]
+    if k == "str":
+        return _json.dumps(node[1], ensure_ascii=False).encode("utf-8")
+    if k == "arr":
+        return b"[" + b",".join(_node_literal(x) for x in node[1]) + b"]"
+    if k == "obj":
+        return (b"{" + b",".join(
+            _json.dumps(kk, ensure_ascii=False).encode("utf-8") +
+            b":" + _node_literal(v) for kk, v in node[1]) + b"}")
+    raise AssertionError(k)
+
+
+_MAX_DEPTH = 64
+
+
 # ---------------------------------------------------------------------------
 # check_json: byte scanner.
 # ---------------------------------------------------------------------------
-
-_MAX_DEPTH = 64
 
 
 def _rune_q(c):
@@ -275,6 +363,12 @@ def parse_node(data):
     """check_json + node tree. Node = (kind, value, raw bytes) where kind is
     obj/arr/str/num/bool/null; obj value = [(key, node)] in order; str value =
     decoded string; num value = raw literal bytes."""
+    try:
+        return _to_node(_json.loads(
+            data, object_pairs_hook=_hook_pairs,
+            parse_constant=_reject_const))
+    except (ValueError, RecursionError, _FastFallback):
+        pass
     if not _valid_utf8(data):
         raise SchemaError("input is not valid UTF-8")
     p = _P(data)
@@ -378,7 +472,13 @@ def _b64_decode(s):
     Go skips \\r and \\n inside the input; positions reported are input
     offsets."""
     import base64 as _b
+    import binascii as _ba
     data = s.encode("utf-8")
+    clean = data.translate(None, b"\r\n")
+    try:
+        return _b.b64decode(clean, validate=True)
+    except (_ba.Error, ValueError):
+        pass
     alpha = (b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
              b"0123456789+/")
     # Positions of content bytes (excluding skipped \r\n).
@@ -482,7 +582,7 @@ def _typed(node, spec, path, inner):
                     num_err(_GO_TYPE[t])
             return v
         if t == "raw":
-            return node[2]
+            return node[2] if node[2] is not None else _node_literal(node)
         if t == "b64":
             # Custom unmarshaler: inner json.Unmarshal(data, &string).
             if kind != "str":
@@ -747,6 +847,11 @@ def _gvalue(d, i, top):
 def go_parse_first(data):
     """Parse one JSON value with encoding/json semantics → (node, endpos).
     node kind/values as in parse_node but without dup-key or UTF-8 checks."""
+    try:
+        v = _json.loads(data, parse_constant=_reject_const)
+        return _to_node(v), len(data.rstrip(b" \t\n\r"))
+    except (ValueError, RecursionError, _FastFallback):
+        pass
     if not data.strip(b" \t\n\r"):
         raise SchemaError("EOF")
     node, i = _gvalue(data, 0, True)

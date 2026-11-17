@@ -111,6 +111,28 @@ def ipath(m, datas):
     return ipath(m - k, datas[k:]) + [mth(datas[:k])]
 
 
+def _mtree(datas):
+    """(root, leaf_count, left, right) — the whole RFC 6962 tree once."""
+    n = len(datas)
+    if n == 1:
+        return (leaf_hash(datas[0]), 1, None, None)
+    k = 1 << (n.bit_length() - 1)
+    if k == n:
+        k >>= 1
+    l, r = _mtree(datas[:k]), _mtree(datas[k:])
+    return (node_hash(l[0], r[0]), n, l, r)
+
+
+def _ipath(m, t):
+    """Inclusion proof for leaf m of a cached _mtree."""
+    root, n, l, r = t
+    if n == 1:
+        return []
+    if m < l[1]:
+        return _ipath(m, l) + [r[0]]
+    return _ipath(m - l[1], r) + [l[0]]
+
+
 def note_key_id(name, pubkey):
     return int.from_bytes(sha(name.encode() + b"\x0a" + b"\x01" + pubkey)[:4], "big")
 
@@ -118,14 +140,18 @@ def note_key_id(name, pubkey):
 class Session:
     """A fabricated session: records, log, checkpoint, key manifest."""
 
-    def __init__(self, sid=None, log_base=0, mode="enforce"):
-        self.sid = sid or ulid()
-        self.origin = "countersign.dev/log/" + ulid()[:12].lower()
+    def __init__(self, sid=None, log_base=0, mode="enforce", roles=None,
+                 seed=None):
+        self.seed = seed
+        self._ulc = 0
+        self.sid = sid or self.sulid()
+        self.origin = "countersign.dev/log/" + self.sulid()[:12].lower()
         self.log_base = log_base
+        self.roles = list(roles) if roles else list(ROLES)
         self.keys = {r: KeyPair(b"emitter:" + r.encode()) for r in ROLES}
         self.keys["log"] = KeyPair(b"other:log")
         self.keys["attestor"] = KeyPair(b"other:attestor")
-        self.instances = {r: ulid() for r in ROLES}
+        self.instances = {r: self.sulid() for r in ROLES}
         self.chains = {r: [] for r in ROLES}      # record hashes per emitter
         self.lines = []                            # stored line bytes, no \n
         self.rec_meta = []                         # (emitter, eseq) per line
@@ -140,6 +166,21 @@ class Session:
         self._idc += 1
         return f"{p}{self._idc:05d}"
 
+    def sulid(self):
+        """Seed-derived ULID: fully deterministic when self.seed is set —
+        timestamp bits come from a fixed epoch, random bits from the seed."""
+        if self.seed is not None:
+            self._ulc += 1
+            n = int.from_bytes(
+                sha(f"{self.seed}:{self._ulc}".encode())[:16], "big")
+            ts_ms = 1_763_000_000_000 & ((1 << 48) - 1)
+            v = (ts_ms << 80) | n
+            out = ""
+            for i in range(26):
+                out = _CROCK[(v >> ((25 - i) * 5)) & 31] + out
+            return out
+        return ulid()
+
     def emitter(self, role):
         return f"{role}/{self.instances[role]}"
 
@@ -150,7 +191,7 @@ class Session:
         seq = len(ch) if eseq is None else eseq
         if eprev is None:
             eprev = ch[-1] if ch else "0" * 64
-        rid = record_id or ulid()
+        rid = record_id or self.sulid()
         sess = session or self.sid
         pred = {"v": 1, "type": rtype, "id": rid, "session": sess,
                 "emitter": self.emitter(role), "eseq": seq, "eprev": eprev,
@@ -186,7 +227,7 @@ class Session:
                 "contract_digests": sorted(sha_hex(c) for c in self.contracts.values()),
                 "ca_cert_sha256": sha_hex(b"ca"),
                 "log_origin": self.origin,
-                "world": {"id": ulid()},
+                "world": {"id": self.sulid()},
                 "start": {},
                 "tape": {"enabled": False}}
         body.update(over)
@@ -194,7 +235,7 @@ class Session:
 
     def effect(self, i=1, action="allow", cls="safe", actor="sandbox",
                result=True, effect_id=None, purpose=None, for_=None,
-               actor_ip="10.0.0.9"):
+               actor_ip="10.0.0.9", role="broker"):
         eid = effect_id or self.eid("eff")
         body = {"effect_id": eid, "actor": actor, "conn_id": f"c{i}",
                 "client": {"ip": actor_ip, "port": 40000 + i},
@@ -217,13 +258,13 @@ class Session:
             body["purpose"] = purpose
         if for_ is not None:
             body["for"] = for_
-        self.emit("broker", "effect.http", body)
+        self.emit(role, "effect.http", body)
         if result:
-            self.effect_result(eid)
+            self.effect_result(eid, role=role)
         return eid
 
-    def effect_result(self, eid):
-        self.emit("broker", "effect.http.result", {
+    def effect_result(self, eid, role="broker"):
+        self.emit(role, "effect.http.result", {
             "effect_id": eid, "served_by": "upstream", "status": 200,
             "response": {"header_names": ["content-type"],
                          "body_sha256": sha_hex(b"resp"), "body_len": 4},
@@ -292,7 +333,7 @@ class Session:
 
     def seal(self, clean=True, skip_roles=(), final_shift=0, hash_shift=b""):
         emitters = []
-        for r in ROLES:
+        for r in self.roles:
             if r in skip_roles or not self.chains[r]:
                 continue
             emitters.append({"emitter": self.emitter(r),
@@ -311,7 +352,7 @@ class Session:
         # emitter.seal is the last record an emitter writes; the sealer
         # (controller) finishes with session.seal instead, so it never
         # writes emitter.seal.
-        for r in ROLES:
+        for r in self.roles:
             if r != "controller" and self.chains[r]:
                 self.emit(r, "emitter.seal", {"final": True})
 
@@ -326,8 +367,9 @@ class Session:
         return out
 
     def index(self):
+        t = _mtree(self.lines) if self.lines else None
         return [{"log_index": self.log_base + i,
-                 "inclusion_proof": [b64e(p) for p in ipath(self.log_base + i, self.lines)]}
+                 "inclusion_proof": [b64e(p) for p in _ipath(i, t)]}
                 for i in range(len(self.lines))]
 
     def tree(self):
