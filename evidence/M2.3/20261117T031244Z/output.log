@@ -1,0 +1,4 @@
+SABOTAGE buffer-whole-response: caught (exit 2) by C2.3.2 C2.3.4 C2.3.5 lint.proxy 
+SABOTAGE digest-computed-after-truncation: caught (exit 2) by C2.3.1 
+SABOTAGE no-flush-on-sse: caught (exit 2) by C2.3.2 
+sabotage-M2.3: 3 caught, 0 uncaught (evidence: evidence/M2.3/20261117T031244Z/sabotage)

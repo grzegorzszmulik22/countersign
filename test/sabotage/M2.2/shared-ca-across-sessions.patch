@@ -1,0 +1,31 @@
+diff --git a/internal/proxy/session.go b/internal/proxy/session.go
+index f5e2f0e..a2543da 100644
+--- a/internal/proxy/session.go
++++ b/internal/proxy/session.go
+@@ -59,6 +59,10 @@ type Session struct {
+ 
+ const leafCacheMax = 4096 // spec M2.2: per-session leaf cache bounded LRU
+ 
++// brokerCA is minted once at table load; sessions reuse it for leaf
++// minting so one CA cert serves every session.
++var brokerCA *Session
++
+ // loadSessions reads the session table; each entry opens a session: policy
+ // loaded, session CA minted in memory (M2.2). Paths in the table are
+ // resolved relative to the table's directory.
+@@ -111,8 +115,13 @@ func loadSessions(path string, keys SessionKeyStore) (map[string]*Session, error
+ 			leafCache: map[string]*tls.Certificate{},
+ 		}
+ 		s.chain.eprev = zeroHash
+-		if err := s.mintCA(); err != nil {
+-			return nil, fmt.Errorf("session table: session %q CA: %w", e.ID, err)
++		if brokerCA == nil {
++			if err := s.mintCA(); err != nil {
++				return nil, fmt.Errorf("session table: session %q CA: %w", e.ID, err)
++			}
++			brokerCA = s
++		} else {
++			s.caKey, s.caCert = brokerCA.caKey, brokerCA.caCert
+ 		}
+ 		if keys != nil {
+ 			if err := keys.Put(e.ID, s.caKey); err != nil {

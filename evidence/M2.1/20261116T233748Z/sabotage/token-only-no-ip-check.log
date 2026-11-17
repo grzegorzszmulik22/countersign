@@ -1,0 +1,11 @@
+make[1]: Entering directory '/home/csbuild/src/cs-broker/.check-work/sabotage-M2.1-token-only-no-ip-check'
+CHECK C2.1.1 FAIL —     harness_test.go:112: broker: denied GET h1.example from 127.0.0.1: NO_SESSION (session not attributable)     check_m21_test.go:134: s2 denied records = [], want one NO_SESSION     harness_test.go:112: broker: tunnel 01M7KBJXYK00WKH4FBXZBRASGX inner serve: listener closed (conn err: read tcp 127.0.0.1:33247->127.0.0.1:51380: use of closed network connection) FAIL FAIL	github.com/countersign/countersign/internal/proxy	0.046s FAIL 
+CHECK C2.1.2 PASS
+CHECK C2.1.3 PASS
+CHECK C2.1.4 PASS
+CHECK C2.1.5 PASS
+CHECK lint.proxy FAIL — internal/proxy/session.go:144:19: func (*Session).admits is unused (unused) func (s *Session) admits(ip netip.Addr) bool {                   ^ 1 issues: * unused: 1 
+M2.1 suite: FAILURES
+check-M2.1: FAIL (exit 1, evidence: evidence/M2.1/20261116T233753Z)
+make[1]: *** [Makefile:37: check-M2.1] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-broker/.check-work/sabotage-M2.1-token-only-no-ip-check'

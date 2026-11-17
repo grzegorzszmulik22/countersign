@@ -1,0 +1,69 @@
+=== RUN   TestDecisionTable
+--- PASS: TestDecisionTable (0.27s)
+=== RUN   TestSchemaConformance
+--- PASS: TestSchemaConformance (0.21s)
+=== RUN   TestPropertyVsPython
+--- PASS: TestPropertyVsPython (14.03s)
+=== RUN   TestInvalidPolicies
+--- PASS: TestInvalidPolicies (0.00s)
+=== RUN   TestPolicyDigest
+--- PASS: TestPolicyDigest (0.03s)
+PASS
+ok  	github.com/countersign/countersign/internal/policy	14.735s
+CHECK C3.1.1 PASS
+CHECK C3.1.2 PASS
+CHECK C3.1.3 PASS
+CHECK C3.1.4 PASS
+CHECK C3.1.6 PASS
+fuzz: elapsed: 0s, gathering baseline coverage: 0/1976 completed
+failure while testing seed corpus entry: FuzzLoadPolicy/7c38d60c931b699a
+fuzz: elapsed: 0s, gathering baseline coverage: 6/1976 completed
+--- FAIL: FuzzLoadPolicy (0.42s)
+    --- FAIL: FuzzLoadPolicy (0.00s)
+        testing.go:2078: panic: runtime error: hash of unhashable type []interface {}
+            goroutine 42 [running]:
+            runtime/debug.Stack()
+            	/home/csbuild/src/cs-broker/.tools/go/src/runtime/debug/stack.go:26 +0xc4
+            testing.tRunner.func1()
+            	/home/csbuild/src/cs-broker/.tools/go/src/testing/testing.go:2078 +0x1c8
+            panic({0x6fff28?, 0x19bb002b690?})
+            	/home/csbuild/src/cs-broker/.tools/go/src/runtime/panic.go:859 +0x120
+            gopkg.in/yaml%2ev3.handleErr(0x19bafee3618)
+            	/home/csbuild/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1/yaml.go:294 +0x15c
+            panic({0x6fff28?, 0x19bb002b690?})
+            	/home/csbuild/src/cs-broker/.tools/go/src/runtime/panic.go:859 +0x120
+            gopkg.in/yaml%2ev3.(*decoder).merge(0x19bafe20d90, 0x19bb0059680, 0x19bb00597c0, {0x721130?, 0x19bafe6bc70?, 0x0?})
+            	/home/csbuild/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1/decode.go:966 +0x258
+            gopkg.in/yaml%2ev3.(*decoder).mappingStruct(0x19bafe20d90, 0x19bb0059680, {0x721130?, 0x19bafe6bc70?, 0x19bafee32b8?})
+            	/home/csbuild/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1/decode.go:950 +0x1d60
+            gopkg.in/yaml%2ev3.(*decoder).mapping(0x19bafe20d90, 0x19bb0059680, {0x721130?, 0x19bafe6bc70?, 0x400019bafee34a8?})
+            	/home/csbuild/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1/decode.go:786 +0x9e0
+            gopkg.in/yaml%2ev3.(*decoder).unmarshal(0x19bafe20d90, 0x19bb0059680, {0x721130?, 0x19bafe6bc70?, 0x19bafee3588?})
+            	/home/csbuild/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1/decode.go:510 +0xfa8
+            gopkg.in/yaml%2ev3.(*decoder).document(...)
+            	/home/csbuild/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1/decode.go:527
+            gopkg.in/yaml%2ev3.(*decoder).unmarshal(0x19bafe20d90, 0x19bb00595e0, {0x721130?, 0x19bafe6bc70?, 0x100799240?})
+            	/home/csbuild/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1/decode.go:498 +0x78c
+            gopkg.in/yaml%2ev3.(*Decoder).Decode(0x19bafe1d6d0, {0x6c76d8, 0x19bafe6bc70})
+            	/home/csbuild/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1/yaml.go:131 +0x560
+            github.com/countersign/countersign/internal/policy.Load({0x19bafff6cd8, 0x7, 0x8})
+            	/home/csbuild/src/cs-broker/internal/policy/policy.go:32 +0x25c
+            github.com/countersign/countersign/internal/policy_test.FuzzLoadPolicy.func1(0x19bafe1d7a8?, {0x19bafff6cd8?, 0x7, 0x0?})
+            	/home/csbuild/src/cs-broker/internal/policy/property_test.go:120 +0x30
+            reflect.Value.call({0x6dcfc8?, 0x737d50?, 0x13?}, {0x4304a8, 0x4}, {0x19bb005ac00, 0x2, 0x2?})
+            	/home/csbuild/src/cs-broker/.tools/go/src/reflect/value.go:586 +0xa88
+            reflect.Value.Call({0x6dcfc8?, 0x737d50?, 0x1778e0?}, {0x19bb005ac00?, 0x733840?, 0x71d2a0?})
+            	/home/csbuild/src/cs-broker/.tools/go/src/reflect/value.go:369 +0x94
+            testing.(*F).Fuzz.func1.1(0x19bb007a908?)
+            	/home/csbuild/src/cs-broker/.tools/go/src/testing/fuzz.go:341 +0x254
+            testing.tRunner(0x19bb007a908, 0x19bb002e630)
+            	/home/csbuild/src/cs-broker/.tools/go/src/testing/testing.go:2195 +0xc4
+            created by testing.(*F).Fuzz.func1 in goroutine 20
+            	/home/csbuild/src/cs-broker/.tools/go/src/testing/fuzz.go:328 +0x4b8
+            
+    
+FAIL
+exit status 1
+FAIL	github.com/countersign/countersign/internal/policy	0.482s
+CHECK C3.1.5 FAIL — --- FAIL: FuzzLoadPolicy (0.42s)     --- FAIL: FuzzLoadPolicy (0.00s) 
+M3.1 suite: FAILURES

@@ -1,0 +1,22 @@
+diff --git a/internal/proxy/connect.go b/internal/proxy/connect.go
+--- a/internal/proxy/connect.go
++++ b/internal/proxy/connect.go
+@@ -171,7 +171,6 @@
+ 		sni         string
+ 		sniMismatch bool
+ 	)
+-	wantName := normName(host)
+ 	tcfg := &tls.Config{
+ 		MinVersion: tls.VersionTLS12,
+ 		// ALPN offer to the client is fixed: h2 and http/1.1 (M2.2). The
+@@ -179,10 +178,6 @@
+ 		NextProtos: []string{"h2", "http/1.1"},
+ 		GetCertificate: func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+ 			sni = normName(hello.ServerName)
+-			if sni != wantName {
+-				sniMismatch = true
+-				return nil, errSNIMismatch
+-			}
+ 			return sess.mintLeaf(sni)
+ 		},
+ 	}

@@ -1,0 +1,6 @@
+CHECK C0.1.1 PASS
+CHECK C0.1.2 PASS
+CHECK C0.1.3 FAIL — make lint failed: The command is terminated due to an error: parallel golangci-lint is running make[2]: *** [Makefile:17: lint] Error 3 make[2]: Leaving directory '/home/csbuild/src/cs-broker' 
+CHECK C0.1.4 PASS
+CHECK C0.1.5 PASS
+M0.1 suite: FAILURES

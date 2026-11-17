@@ -1,0 +1,6 @@
+CHECK C0.1.1 PASS
+CHECK C0.1.2 PASS
+CHECK C0.1.3 FAIL — lint left the tree dirty: ?? spec/progress/broker.md 
+CHECK C0.1.4 FAIL — stray name strings: internal/proxy/harness_test.go 
+CHECK C0.1.5 PASS
+M0.1 suite: FAILURES
