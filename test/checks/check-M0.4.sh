@@ -11,9 +11,9 @@
 # names (--network-alias); scriptagent runs in the sandbox image as the
 # non-root agent user, trusting the shared test CA via standard CA env vars.
 set -u
-export PATH="$HOME/.local/bin:$HOME/.local/usr/bin:$PATH"
 cd "$(dirname "$0")/../.."
 ROOT=$PWD
+export PATH="$ROOT/.tools/bin:$HOME/.local/bin:$HOME/.local/usr/bin:$PATH"
 GO="$ROOT/.tools/bin/go"
 PY="$ROOT/.tools/bin/python3"
 MAKE=${MAKE:-make}
@@ -39,12 +39,67 @@ VOL=cs-m04-work-$$
 SNAP="$WORK/snap"
 BIN=$SNAP/bin
 CADIR=$WORK/ca
-SCEN=$ROOT/test/vectors/transcripts
+SCEN=$SNAP/test/vectors/transcripts
 AGENT=cs-m04-agent-$$
 AGENT_SRC=$ROOT/test/fixtures/scriptagent
-WPROB="$ROOT/.m04-wprobe-$$"
+WPROB="$WORK/wprobe"
+SCR="$WORK/scrrepo"
+SCRO="$WORK/scrsnap"
+
+# ---------- pre-run worktree state ------------------------------------------
+# tree.restored (emitted by the EXIT trap, before this script's exit status is
+# returned) proves the suite leaves the worktree exactly as it found it: no
+# tracked-file drift, no new or missing untracked files, and the per-run work
+# dir removed. The pre-* record is taken BEFORE any suite write to the live
+# tree and compared after cleanup has restored the snapshot probes below.
+# The snap-* record (taken right before the snapshot, below) is the reference
+# for snap.fidelity.
+#
+# Untracked lines under evidence/ and .lane/ are excluded from the drift
+# comparison: under `make regress` other suites legitimately create their own
+# evidence/<chunk>/<ts>/ dirs while this suite runs, and .lane/ verify logs
+# grow concurrently. Everything else must compare equal.
+record_state() { # out-stem — capture status + ls-files + content hashes
+    local s=$1 f
+    git status --porcelain -z -uall >"$s-status.z" 2>/dev/null || : >"$s-status.z"
+    tr '\0' '\n' <"$s-status.z" \
+        | grep -vE '^\?\? (evidence/|\.lane/)' >"$s-status-f.txt" || :
+    tr '\0' '\n' <"$s-status.z" | sed -n 's/^?? //p' >"$s-untracked.txt" || :
+    git ls-files >"$s-files.txt" 2>/dev/null || : >"$s-files.txt"
+    # Tracked files missing from the worktree are absent from the manifest;
+    # snap.fidelity asserts they are absent in SNAP too.
+    git ls-files -z | xargs -0r sha256sum >"$s-hashes.txt" 2>/dev/null || :
+    # Volatile untracked dirs (other suites' evidence/, .lane/ logs) are only
+    # asserted present in SNAP — their content legitimately changes between
+    # hashing and add -A.
+    grep -vE '^(evidence/|\.lane/)' "$s-untracked.txt" >"$s-uh-src.txt" || :
+    : >"$s-uhashes.txt"
+    while IFS= read -r f; do
+        [ -f "$f" ] && [ ! -L "$f" ] && sha256sum "$f" >>"$s-uhashes.txt"
+    done <"$s-uh-src.txt" 2>/dev/null
+}
+record_state "$WORK/pre"
+
+treecheck() {
+    local tfail=0 tmsg=""
+    record_state "$WORK/post"
+    if ! diff -q "$WORK/pre-status-f.txt" "$WORK/post-status-f.txt" >/dev/null; then
+        tfail=1
+        tmsg="worktree drifted: $(diff "$WORK/pre-status-f.txt" "$WORK/post-status-f.txt" | head -6 | tr '\n' '|')"
+    fi
+    if ! cmp -s "$WORK/pre-hashes.txt" "$WORK/post-hashes.txt"; then
+        tfail=1; tmsg="${tmsg:+$tmsg }tracked file content changed"
+    fi
+    rm -rf "$WORK"
+    [ -d "$WORK" ] && { tfail=1; tmsg="${tmsg:+$tmsg }per-run dir left: $WORK"; }
+    if [ "$tfail" -eq 0 ]; then pass tree.restored; else bad tree.restored "$tmsg"; fi
+    return "$tfail"
+}
 
 cleanup() {
+    local rc=$?
+    rm -f "$WPROB/.run" 2>/dev/null
+    [ -n "${wprobpid:-}" ] && { kill "$wprobpid" 2>/dev/null; wait "$wprobpid" 2>/dev/null; }
     for c in cs-m04-mockllm-$$ cs-m04-fakehub-$$ cs-m04-echo-$$ cs-m04-mcpdemo-$$ "$AGENT"; do
         docker rm -f "$c" >/dev/null 2>&1
     done
@@ -52,14 +107,20 @@ cleanup() {
     docker volume rm "$VOL" >/dev/null 2>&1
     docker image rm -f "$IMG" >/dev/null 2>&1
     # Restore the live tree: the snapshot probes below edit tracked files
-    # and add untracked ones; none of that may outlive the suite.
+    # and add untracked ones; none of that may outlive the suite. treecheck
+    # verifies all of it (and the work-dir removal) and reports tree.restored.
     [ -f "$WORK/agent.go.orig" ] && cp -f "$WORK/agent.go.orig" "$AGENT_SRC/agent.go"
     [ -f "$WORK/Dockerfile.orig" ] && cp -f "$WORK/Dockerfile.orig" "$AGENT_SRC/Dockerfile"
     rm -f "$AGENT_SRC/zz_m04snap_$$.go" "$AGENT_SRC/zz_m04snappost_$$.go"
     rm -rf "$WPROB"
-    [ "${rmbin:-0}" -eq 1 ] && rm -rf "$ROOT/bin"
+    treecheck
+    local trc=$?
+    [ "$rc" -ne 0 ] && exit "$rc"
+    exit "$trc"
 }
 trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # ---------- snapshot probes ----------------------------------------------------
 # The suite verifies its own snapshot (the snap.* checks at the end). Marker
@@ -115,31 +176,119 @@ mv -f "$WORK/zz_m04snap_$$.go" "$AGENT_SRC/zz_m04snap_$$.go"
 # ---------- snapshot of the working tree under test ---------------------------
 # check-M0.4 tests exactly the working tree it is run in — uncommitted edits
 # and untracked, non-ignored files included; ignored files (.check-work,
-# .tools, bin/, __pycache__) and .check-work excluded. ONE immutable snapshot
-# is taken now: a temporary git index captures on-disk content into the object
-# store (git add -A honours .gitignore, records deletions, includes untracked
-# files), write-tree freezes it, and git archive extracts it. Nothing written
-# to the live tree afterwards can change the image or the fixture binaries,
-# and the docker build context is never the live tree — under parallel regress
-# another suite writing a file mid-tar breaks `docker build`.
+# .tools, bin/, __pycache__) excluded. ONE immutable snapshot is taken now:
+# mksnap() captures on-disk content via a temporary git index (git add -A
+# honours .gitignore, records deletions, includes untracked files), write-tree
+# freezes it, and git archive extracts it. Nothing written to the live tree
+# afterwards can change the image or the fixture binaries, and the docker
+# build context is never the live tree — under parallel regress another suite
+# writing a file mid-tar breaks `docker build`.
+mksnap() { # repo index-dir-stem outdir
+    local repo=$1 idx=$2 out=$3 tree
+    mkdir -p "$out" || return 1
+    GIT_INDEX_FILE="$idx" git -C "$repo" add -A || { rm -f "$idx"; return 1; }
+    tree=$(GIT_INDEX_FILE="$idx" git -C "$repo" write-tree) || { rm -f "$idx"; return 1; }
+    rm -f "$idx"
+    git -C "$repo" archive "$tree" | tar -x -C "$out"
+}
+
+# snap.capture: exercise mksnap() on a scratch repo seeded with every worktree
+# state the real snapshot must handle — an uncommitted tracked edit, an
+# untracked file, an ignored file and a .check-work dir — then prove the
+# snapshot is frozen by writing more afterwards. This catches snapshot
+# sabotage (e.g. archiving HEAD, or add -u dropping untracked files) even when
+# the real tree happens to be clean.
+csnap_capture() {
+    rm -rf "$SCR" "$SCRO"; mkdir -p "$SCR"
+    git init -q "$SCR" || { echo "scratch git init failed"; return 1; }
+    printf 'ignored/\n.check-work/\n' >"$SCR/.gitignore"
+    printf 'v1\n' >"$SCR/tracked.txt"
+    git -C "$SCR" add .gitignore tracked.txt >/dev/null 2>&1 \
+        && git -C "$SCR" -c user.name=m04 -c user.email=m04@m04 \
+            commit -qm base >/dev/null 2>&1 || { echo "scratch seed commit failed"; return 1; }
+    printf 'v2\n' >>"$SCR/tracked.txt"
+    printf 'u\n' >"$SCR/untracked.txt"
+    mkdir -p "$SCR/ignored" "$SCR/.check-work"
+    printf 'i\n' >"$SCR/ignored/skip.txt" && printf 'c\n' >"$SCR/.check-work/cw.txt"
+    mksnap "$SCR" "$WORK/scr-index" "$SCRO" || { echo "scratch snapshot failed"; return 1; }
+    local rc=0
+    grep -q 'v2' "$SCRO/tracked.txt" 2>/dev/null || { echo "uncommitted tracked edit missing from snapshot"; rc=1; }
+    [ -f "$SCRO/untracked.txt" ] || { echo "untracked file missing from snapshot"; rc=1; }
+    [ ! -e "$SCRO/ignored/skip.txt" ] || { echo "ignored file leaked into snapshot"; rc=1; }
+    [ ! -e "$SCRO/.check-work" ] || { echo ".check-work leaked into snapshot"; rc=1; }
+    printf 'v3\n' >>"$SCR/tracked.txt" && printf 'l\n' >"$SCR/late.txt"
+    ! grep -q 'v3' "$SCRO/tracked.txt" 2>/dev/null || { echo "post-snapshot edit leaked into snapshot"; rc=1; }
+    [ ! -e "$SCRO/late.txt" ] || { echo "post-snapshot file leaked into snapshot"; rc=1; }
+    return "$rc"
+}
+if out=$(csnap_capture); then
+    pass snap.capture
+else
+    bad snap.capture "$out"
+fi
+
 mkdir -p "$SNAP" "$BIN"
-SNAPIDX="$WORK/snap-index"
 snapfail() {
-    for id in C0.4.1 C0.4.2 C0.4.3 C0.4.4 C0.4.image; do
+    for id in C0.4.1 C0.4.2 C0.4.3 C0.4.4 C0.4.image snap.fidelity; do
         bad "$id" "$1"
     done
     exit "$fail"
 }
-if ! GIT_INDEX_FILE="$SNAPIDX" git add -A >"$WORK/logs/snapshot.log" 2>&1; then
-    snapfail "worktree snapshot (git add) failed: $(tail -3 "$WORK/logs/snapshot.log" | tr '\n' ' ')"
+# snap.fidelity's reference: the worktree at the instant it is snapshotted
+# (the suite's own pre-snapshot probes are already in place and must be in
+# SNAP; nothing written after this record can be expected there).
+record_state "$WORK/snap"
+if ! mksnap "$ROOT" "$WORK/snap-index" "$SNAP" >"$WORK/logs/snapshot.log" 2>&1; then
+    snapfail "worktree snapshot failed: $(tail -3 "$WORK/logs/snapshot.log" | tr '\n' ' ')"
 fi
-if ! snaptree=$(GIT_INDEX_FILE="$SNAPIDX" git write-tree 2>>"$WORK/logs/snapshot.log"); then
-    snapfail "worktree snapshot (write-tree) failed: $(tail -3 "$WORK/logs/snapshot.log" | tr '\n' ' ')"
+
+# snap.fidelity: SNAP must equal the worktree as recorded at suite start —
+# every tracked file identical (or absent iff it was already deleted), and
+# every untracked non-ignored file captured with identical content. Compared
+# against the recorded pre-state, not the live tree, so writes made after the
+# snapshot — this suite's own post-probes or other suites' files — cannot
+# produce a false verdict.
+csnap_fidelity() {
+    local rc=0 p h
+    while IFS= read -r line; do
+        h=${line%% *}; p=${line#*  }
+        if [ ! -f "$SNAP/$p" ]; then
+            echo "tracked $p missing from snapshot"; rc=1
+        elif [ "$(sha256sum "$SNAP/$p" | cut -d' ' -f1)" != "$h" ]; then
+            echo "tracked $p differs in snapshot"; rc=1
+        fi
+    done <"$WORK/snap-hashes.txt"
+    while IFS= read -r p; do
+        if [ -L "$p" ]; then
+            # tracked symlinks are not hashed; assert the link is mirrored
+            [ -L "$SNAP/$p" ] && [ "$(readlink "$SNAP/$p")" = "$(readlink "$p")" ] \
+                || { echo "tracked symlink $p not mirrored in snapshot"; rc=1; }
+        elif [ ! -e "$p" ]; then
+            [ -e "$SNAP/$p" ] || [ -L "$SNAP/$p" ] \
+                && { echo "worktree-deleted $p present in snapshot"; rc=1; }
+        fi
+    done <"$WORK/snap-files.txt"
+    while IFS= read -r line; do
+        h=${line%% *}; p=${line#*  }
+        if [ ! -e "$SNAP/$p" ] && [ ! -L "$SNAP/$p" ]; then
+            echo "untracked $p missing from snapshot"; rc=1
+        elif [ -f "$SNAP/$p" ] && [ "$(sha256sum "$SNAP/$p" | cut -d' ' -f1)" != "$h" ]; then
+            echo "untracked $p differs in snapshot"; rc=1
+        fi
+    done <"$WORK/snap-uhashes.txt"
+    # Volatile untracked dirs (foreign evidence writes, verify logs) can grow
+    # between hashing and add -A: assert capture-by-existence only.
+    while IFS= read -r p; do
+        [ -e "$SNAP/$p" ] || [ -L "$SNAP/$p" ] \
+            || { echo "untracked $p missing from snapshot"; rc=1; }
+    done < <(grep -E '^(evidence/|\.lane/)' "$WORK/snap-untracked.txt")
+    return "$rc"
+}
+if out=$(csnap_fidelity); then
+    pass snap.fidelity
+else
+    bad snap.fidelity "$out"
 fi
-if ! git archive "$snaptree" | tar -x -C "$SNAP" 2>>"$WORK/logs/snapshot.log"; then
-    snapfail "worktree snapshot (archive) failed: $(tail -3 "$WORK/logs/snapshot.log" | tr '\n' ' ')"
-fi
-rm -f "$SNAPIDX"
 
 # Post-snapshot probes: edits made from here on must NOT reach SNAP, the
 # image or the fixture binaries — the snapshot is already frozen above.
@@ -180,13 +329,12 @@ if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
 fi
 
 # Concurrent writer: for the whole fixture+image build window a background
-# loop creates, appends to, renames, replaces and deletes non-ignored files
-# in the live tree — including bin/scriptagent, the exact file the sandbox
-# image COPYs. With a live-tree build context this is precisely what breaks
-# `docker build` mid-tar; against the immutable snapshot it must be harmless.
-rmbin=0
-[ -d "$ROOT/bin" ] || rmbin=1
-mkdir -p "$WPROB" "$ROOT/bin"
+# loop creates, appends to, renames, replaces and deletes files in a scratch
+# dir inside the work dir — a sibling of the build context, churning the same
+# filesystem. With a live-tree build context this is precisely what breaks
+# `docker build` mid-tar (WPROB sits inside the context then); against the
+# immutable snapshot it must be harmless.
+mkdir -p "$WPROB/bin"
 : >"$WPROB/.run"
 (
     i=0
@@ -197,7 +345,7 @@ mkdir -p "$WPROB" "$ROOT/bin"
         mv -f "$f" "$f.moving" 2>/dev/null
         printf 'w%s\n' "$i" >"$WPROB/n$i" 2>/dev/null
         rm -f "$f.moving" "$WPROB/n$((i - 4))" 2>/dev/null
-        head -c 65536 /dev/urandom >"$ROOT/bin/scriptagent" 2>/dev/null
+        head -c 65536 /dev/urandom >"$WPROB/bin/scriptagent" 2>/dev/null
     done
     printf '%s\n' "$i" >"$WPROB/.count"
 ) &

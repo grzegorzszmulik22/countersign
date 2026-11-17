@@ -1,0 +1,11 @@
+--- a/test/checks/check-M0.4.sh
++++ b/test/checks/check-M0.4.sh
+@@ -111,7 +111,7 @@
+     # verifies all of it (and the work-dir removal) and reports tree.restored.
+     [ -f "$WORK/agent.go.orig" ] && cp -f "$WORK/agent.go.orig" "$AGENT_SRC/agent.go"
+     [ -f "$WORK/Dockerfile.orig" ] && cp -f "$WORK/Dockerfile.orig" "$AGENT_SRC/Dockerfile"
+-    rm -f "$AGENT_SRC/zz_m04snap_$$.go" "$AGENT_SRC/zz_m04snappost_$$.go"
++    rm -f "$AGENT_SRC/zz_m04snappost_$$.go"
+     rm -rf "$WPROB"
+     treecheck
+     local trc=$?
