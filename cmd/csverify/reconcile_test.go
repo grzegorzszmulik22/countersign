@@ -21,7 +21,7 @@ import (
 
 // reconPolicy is a real-format policy.yaml. grant api requires an intent
 // (exact match); cdn is unconditional; ads is a deny grant.
-var reconPolicy = []byte(`apiVersion: countersign.dev/v1alpha1
+var reconPolicy = []byte(`apiVersion: ` + names.APIGroup + `/v1alpha1
 kind: Policy
 metadata: {name: recon-test}
 spec:
