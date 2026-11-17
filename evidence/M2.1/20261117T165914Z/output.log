@@ -1,0 +1,7 @@
+CHECK C2.1.1 PASS
+CHECK C2.1.2 PASS
+CHECK C2.1.3 PASS
+CHECK C2.1.4 PASS
+CHECK C2.1.5 PASS
+CHECK lint.proxy FAIL — internal/proxy/check_m32_test.go:88:1: File is not properly formatted (gofmt) 	mu      sync.Mutex ^ 7 issues: * errcheck: 6 * gofmt: 1 
+M2.1 suite: FAILURES

@@ -85,9 +85,9 @@ func m3PolicySecrets(t *testing.T, dir, grants string) (pol, sec string) {
 // JSON echo. It never inspects credential material itself — assertions
 // live in the tests.
 type headerSink struct {
-	mu      sync.Mutex
-	seen    []http.Header
-	bodies  int64
+	mu           sync.Mutex
+	seen         []http.Header
+	bodies       int64
 	secretInResp string // when set, the response body carries it (leak oracle)
 }
 
@@ -142,26 +142,26 @@ func (h *headerSink) scrubEP(w http.ResponseWriter, r *http.Request) {
 	h.mu.Unlock()
 	switch {
 	case r.URL.Path == "/scrub/raw":
-		fmt.Fprintf(w, "start %s mid %s end", k, k)
+		_, _ = fmt.Fprintf(w, "start %s mid %s end", k, k)
 	case r.URL.Path == "/scrub/forms":
 		// All three §4.5 wire forms of an x-api-key-style secret.
-		fmt.Fprintf(w, "raw=%s b64=%s enc=%s", k,
+		_, _ = fmt.Fprintf(w, "raw=%s b64=%s enc=%s", k,
 			base64.StdEncoding.EncodeToString([]byte(k)), url.QueryEscape(k))
 	case r.URL.Path == "/scrub/gzip":
 		gz := &bytes.Buffer{}
 		gw := gzip.NewWriter(gz)
-		fmt.Fprintf(gw, "zipped %s payload", k)
+		_, _ = fmt.Fprintf(gw, "zipped %s payload", k)
 		_ = gw.Close()
 		w.Header().Set("Content-Encoding", "gzip")
 		w.Header().Set("Content-Type", "application/octet-stream")
 		_, _ = w.Write(gz.Bytes())
 	case r.URL.Path == "/scrub/trailer":
 		w.Header().Set("Trailer", "X-Leak-Key")
-		fmt.Fprint(w, "trailer body")
+		_, _ = fmt.Fprint(w, "trailer body")
 		w.Header().Set("X-Leak-Key", k)
 	case r.URL.Path == "/scrub/hdr":
 		w.Header().Set("X-Leak-Key", k)
-		fmt.Fprint(w, "header body")
+		_, _ = fmt.Fprint(w, "header body")
 	case strings.HasPrefix(r.URL.Path, "/scrub/big"):
 		n, _ := strconv.ParseInt(r.URL.Query().Get("n"), 10, 64)
 		if n <= 0 {
@@ -192,14 +192,14 @@ func (h *headerSink) scrubEP(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/redir":
 		w.Header().Set("Location", r.URL.Query().Get("to"))
 		w.WriteHeader(http.StatusFound)
-		fmt.Fprint(w, "redirect")
+		_, _ = fmt.Fprint(w, "redirect")
 	case r.URL.Path == "/scrub/basic":
 		// The Basic wire form: Authorization arrives as
 		// "Basic base64(user:secret)" upstream-side; reflect it whole.
-		fmt.Fprintf(w, "auth=%s", k)
+		_, _ = fmt.Fprintf(w, "auth=%s", k)
 	case r.URL.Path == "/scrub/badenc":
 		w.Header().Set("Content-Encoding", "br")
-		fmt.Fprintf(w, "unverifiable %s", k)
+		_, _ = fmt.Fprintf(w, "unverifiable %s", k)
 	default:
 		http.Error(w, "unknown scrub endpoint", http.StatusNotFound)
 	}
@@ -602,8 +602,8 @@ func TestC325InjectionInvariant(t *testing.T) {
 
 	rng := rand.New(rand.NewSource(32025))
 	type ev struct {
-		Grant  string          `json:"grant"`
-		Req    json.RawMessage `json:"req"`
+		Grant string          `json:"grant"`
+		Req   json.RawMessage `json:"req"`
 	}
 	var events []ev
 	var batch []map[string]any
@@ -806,8 +806,6 @@ func repoRoot() string {
 	return filepath.Clean(filepath.Join(wd, "..", ".."))
 }
 
-
-
 // --- C3.2.6 -------------------------------------------------------------
 // Write-ahead: a credential is injected only after the effect.http record
 // is durable. A failing sink must surface LEDGER_UNAVAILABLE with zero
@@ -868,8 +866,6 @@ func TestC326InjectAfterAck(t *testing.T) {
 		t.Fatal("no allowed effect with credentials recorded")
 	}
 }
-
-
 
 // --- MM3.3 ----------------------------------------------------------------
 // Added p50 latency of policy evaluation + injection over M2's pipeline:
