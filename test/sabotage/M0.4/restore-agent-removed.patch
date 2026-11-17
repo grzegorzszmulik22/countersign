@@ -1,10 +1,13 @@
+diff --git a/test/checks/check-M0.4.sh b/test/checks/check-M0.4.sh
+index e04d74a..32df085 100755
 --- a/test/checks/check-M0.4.sh
 +++ b/test/checks/check-M0.4.sh
-@@ -109,7 +109,6 @@
-     # Restore the live tree: the snapshot probes below edit tracked files
-     # and add untracked ones; none of that may outlive the suite. treecheck
-     # verifies all of it (and the work-dir removal) and reports tree.restored.
--    [ -f "$WORK/agent.go.orig" ] && cp -f "$WORK/agent.go.orig" "$AGENT_SRC/agent.go"
-     [ -f "$WORK/Dockerfile.orig" ] && cp -f "$WORK/Dockerfile.orig" "$AGENT_SRC/Dockerfile"
-     rm -f "$AGENT_SRC/zz_m04snap_$$.go" "$AGENT_SRC/zz_m04snappost_$$.go"
-     rm -rf "$WPROB"
+@@ -262,7 +262,7 @@ fi
+ #
+ # Injected "uncommitted" edits: append an init() to the snapshot's agent.go
+ # and a RUN line to the snapshot's sandbox Dockerfile.
+-cat >>"$SNAP/test/fixtures/scriptagent/agent.go" <<EOF
++cat >>"$ROOT/test/fixtures/scriptagent/agent.go" <<EOF
+ 
+ // initM04SnapEdited is a check-M0.4 snapshot probe: marker content that
+ // reached the image under test only because it was in the snapshot.
