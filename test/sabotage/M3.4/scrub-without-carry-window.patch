@@ -1,81 +1,12 @@
 diff --git a/internal/creds/scrub.go b/internal/creds/scrub.go
-index ee15798..89bc3ff 100644
+index 8d89005..62c77df 100644
 --- a/internal/creds/scrub.go
 +++ b/internal/creds/scrub.go
-@@ -99,45 +99,46 @@ func (s *Scrubber) Flush() []byte {
- 	return out
- }
- 
--// scan emits buf with all complete matches replaced. When !last, the
--// final max-1 bytes are retained as carry instead.
-+// scan emits buf with all complete matches replaced, leftmost-longest
-+// among the patterns. When !last the final max-1 bytes are retained as
-+// carry: a pattern that starts later could only complete inside that
-+// window, so everything before it is provably free of partial matches.
-+// bytes.Index keeps the scan near memory bandwidth on long streams.
- func (s *Scrubber) scan(buf []byte, last bool) []byte {
+@@ -125,6 +125,7 @@ func (s *Scrubber) scan(buf []byte, last bool) []byte {
+ 		if limit < 0 {
+ 			limit = 0
+ 		}
++		limit = len(buf)
+ 	}
  	var out []byte
--	i := 0
--	for i < len(buf) {
--		if !last && i+s.max > len(buf) {
--			break // tail cannot yet be proven safe — hold it
-+	pos := 0
-+	for {
-+		bi, bl := -1, 0
-+		for _, p := range s.pats {
-+			if idx := bytes.Index(buf[pos:], p); idx < 0 {
-+				continue
-+			} else if abs := pos + idx; bi < 0 || abs < bi || (abs == bi && len(p) > bl) {
-+				bi, bl = abs, len(p)
-+			}
- 		}
--		plen := s.matchAt(buf, i)
--		if plen == 0 {
--			out = append(out, buf[i])
--			i++
--			continue
-+		if bi < 0 {
-+			break
- 		}
-+		out = append(out, buf[pos:bi]...)
- 		out = append(out, s.repl...)
- 		s.Count++
--		i += plen
--	}
--	if !last {
--		s.carry = append(s.carry, buf[i:]...)
-+		pos = bi + bl
- 	}
--	return out
--}
--
--// matchAt returns the length of the longest pattern matching at buf[i],
--// or 0. Longest-first so a pattern that is a prefix of another wins the
--// longer replacement.
--func (s *Scrubber) matchAt(buf []byte, i int) int {
--	best := 0
--	for _, p := range s.pats {
--		if len(p) <= best || len(buf)-i < len(p) {
--			continue
--		}
--		if bytes.Equal(buf[i:i+len(p)], p) {
--			best = len(p)
-+	emit := len(buf)
-+	if !last && s.max > 0 {
-+		emit = len(buf)
-+		if emit < pos {
-+			emit = pos
- 		}
- 	}
--	return best
-+	// Fast path: no pattern anywhere — emit a subslice, no copy.
-+	if pos == 0 {
-+		s.carry = append(s.carry[:0], buf[emit:]...)
-+		return buf[:emit]
-+	}
-+	out = append(out, buf[pos:emit]...)
-+	s.carry = append(s.carry[:0], buf[emit:]...)
-+	return out
- }
- 
- // Scrub replaces all pattern occurrences in a complete string (headers,
+ 	i := 0

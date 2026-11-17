@@ -1,0 +1,4 @@
+SABOTAGE scrub-skips-gzip: caught (exit 2) by C3.4.1 C3.4.2 C3.4.3 C3.4.4 C3.4.5 C3.4.6 
+SABOTAGE scrub-skips-headers: caught (exit 2) by C3.4.3 C3.4.4 
+SABOTAGE scrub-without-carry-window: caught (exit 2) by C3.4.2 
+sabotage-M3.4: 3 caught, 0 uncaught (evidence: evidence/M3.4/20261117T162934Z/sabotage)
