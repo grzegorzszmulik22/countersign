@@ -1,5 +1,5 @@
 diff --git a/internal/proxy/limits.go b/internal/proxy/limits.go
-index 4b229ad..d21e5f6 100644
+index ee2a96d..ac360ed 100644
 --- a/internal/proxy/limits.go
 +++ b/internal/proxy/limits.go
 @@ -30,7 +30,7 @@ func checkLimits(grant *policy.Grant, r *http.Request, tgt forwardTarget) string
