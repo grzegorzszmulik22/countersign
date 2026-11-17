@@ -217,7 +217,7 @@ func cmdReconcileTrace(path, packsDir string) {
 	if err != nil {
 		fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	meta, records, err := reconcile.ParseTrace(f)
 	if err != nil {
 		fatal(err)
@@ -240,11 +240,11 @@ func cmdReconcileBatch(path, packsDir string) {
 	if err != nil {
 		fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 1<<20), 64<<20)
 	w := bufio.NewWriter(os.Stdout)
-	defer w.Flush()
+	defer func() { _ = w.Flush() }()
 	bad := false
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
@@ -259,14 +259,14 @@ func cmdReconcileBatch(path, packsDir string) {
 		if err != nil {
 			bad = true
 			b, _ := json.Marshal(map[string]any{"error": err.Error()})
-			fmt.Fprintln(w, string(b))
+			_, _ = fmt.Fprintln(w, string(b))
 			continue
 		}
 		b, err := json.Marshal(res)
 		if err != nil {
 			fatal(err)
 		}
-		fmt.Fprintln(w, string(b))
+		_, _ = fmt.Fprintln(w, string(b))
 	}
 	if err := sc.Err(); err != nil {
 		fatal(err)
@@ -303,7 +303,7 @@ func cmdReconcileCorpus(dir, packsDir string) {
 			fatal(err)
 		}
 		meta, records, err := reconcile.ParseTrace(f)
-		f.Close()
+		_ = f.Close()
 		var diffs []string
 		if err != nil {
 			diffs = []string{err.Error()}

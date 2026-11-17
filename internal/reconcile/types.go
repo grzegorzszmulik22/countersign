@@ -141,24 +141,6 @@ func inStrSlice(l []string, s string) bool {
 	return false
 }
 
-// sameStrings compares a recorded JSON list with a computed []string in
-// order (Python list ==).
-func sameStrings(v any, want []string) bool {
-	l, ok := v.([]any)
-	if !ok {
-		return len(want) == 0
-	}
-	if len(l) != len(want) {
-		return false
-	}
-	for i, e := range l {
-		if str(e) != want[i] {
-			return false
-		}
-	}
-	return true
-}
-
 // sameValue compares a recorded JSON value with a computed one
 // (Python ==).
 func sameValue(a, b any) bool {

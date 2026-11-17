@@ -8,6 +8,8 @@
 package main
 
 import (
+	"encoding/json"
+	"os"
 	"testing"
 
 	"github.com/countersign/countersign/internal/keys"
@@ -244,6 +246,26 @@ func TestC924_AuditUnattributed(t *testing.T) {
 	}
 	if res.Verdict != "VIOLATIONS" {
 		t.Fatalf("verdict %s", res.Verdict)
+	}
+}
+
+// TestDumpBundle writes a bundle + keys.json to $CS_DUMP_DIR for manual
+// CLI exercise (`csverify --reconcile`, `csverify explain`).
+func TestDumpBundle(t *testing.T) {
+	dir := os.Getenv("CS_DUMP_DIR")
+	if dir == "" {
+		t.Skip("CS_DUMP_DIR unset")
+	}
+	b, m := reconBundle(t, "enforce", honestEffects, true, nil)
+	if err := os.WriteFile(dir+"/bundle.tar", b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	kb, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dir+"/keys.json", kb, 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
 

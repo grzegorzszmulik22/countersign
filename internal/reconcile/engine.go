@@ -312,8 +312,6 @@ func decide(grant map[string]any, cond, cls, lvl, lreason string) (action, reaso
 // result accumulates the recomputed values for one effect.
 type effectResult map[string]any
 
-func (r effectResult) set(k string, v any) { r[k] = v }
-
 // claim is which broker claims a record actually carries. On the abstract
 // trace any of class/decision/attribution present activates all compares
 // (the reference's rule); on real evidence the record type fixes the
@@ -333,7 +331,7 @@ func claimOf(r rec) (claim, bool) {
 func compareRecorded(r rec, res effectResult, findings *[]Finding) {
 	cl, explicit := claimOf(r)
 	if !explicit {
-		if !(cl.class || cl.decision || cl.attribution) {
+		if !cl.class && !cl.decision && !cl.attribution {
 			return
 		}
 		cl = claim{true, true, true}
@@ -407,18 +405,6 @@ func nilIfEmpty(v any) any {
 		return nil
 	}
 	return v
-}
-
-func listEq(a, b []any) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if !jsonDeepEqual(a[i], b[i]) {
-			return false
-		}
-	}
-	return true
 }
 
 // evalEffect recomputes one sandbox effect.http (agent session).
@@ -735,7 +721,7 @@ func evalServerEffect(st *session, r rec, findings *[]Finding) (effectResult, er
 func compareServer(r rec, res effectResult, findings *[]Finding) {
 	cl, explicit := claimOf(r)
 	if !explicit {
-		if !(cl.class || cl.decision || cl.attribution) {
+		if !cl.class && !cl.decision && !cl.attribution {
 			return
 		}
 		cl = claim{true, true, has(r, "attribution")}

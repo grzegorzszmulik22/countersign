@@ -89,11 +89,11 @@ func shellWords(s string) ([]string, bool) {
 	}
 	for i := 0; i < len(s); {
 		c := s[i]
-		switch {
-		case c == ' ' || c == '\t':
+		switch c {
+		case ' ', '\t':
 			flush()
 			i++
-		case c == '\'':
+		case '\'':
 			inTok = true
 			end := strings.IndexByte(s[i+1:], '\'')
 			if end < 0 {
@@ -101,7 +101,7 @@ func shellWords(s string) ([]string, bool) {
 			}
 			cur.WriteString(s[i+1 : i+1+end])
 			i += end + 2
-		case c == '"':
+		case '"':
 			inTok = true
 			i++
 			for {
@@ -133,7 +133,7 @@ func shellWords(s string) ([]string, bool) {
 				cur.WriteByte(c)
 				i++
 			}
-		case c == '\\':
+		case '\\':
 			inTok = true
 			if i+1 >= len(s) {
 				return nil, false // No escaped character

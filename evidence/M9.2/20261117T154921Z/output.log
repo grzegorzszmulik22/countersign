@@ -1,0 +1,4 @@
+SABOTAGE exact-match-ignores-access-level: caught (exit 2) by C9.2.1 C9.2.2 
+SABOTAGE mcp-intent-reusable: caught (exit 2) by C9.2.1 
+SABOTAGE verifier-trusts-broker-attribution: caught (exit 2) by C9.2.1 C9.2.4 C9.2.5 
+sabotage-M9.2: 3 caught, 0 uncaught (evidence: evidence/M9.2/20261117T154921Z/sabotage)
