@@ -7,12 +7,14 @@ package proxy
 
 import (
 	"bufio"
+	"context"
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"runtime"
@@ -239,9 +241,9 @@ func TestC232SSEFlush(t *testing.T) {
 		w.WriteHeader(200)
 		fl := w.(http.Flusher)
 		for i := 0; i < N; i++ {
-			// The payload carries the upstream flush instant so added delay
-			// is measurable end to end.
-			_, _ = fmt.Fprintf(w, "data: %d\n\n", time.Now().UnixNano())
+			// The payload carries the event index and the upstream flush
+			// instant so per-event delay is measurable end to end.
+			_, _ = fmt.Fprintf(w, "data: %d:%d\n\n", i, time.Now().UnixNano())
 			fl.Flush()
 			if i != N-1 {
 				time.Sleep(10 * time.Millisecond)
@@ -252,67 +254,115 @@ func TestC232SSEFlush(t *testing.T) {
 	defer closeUp()
 	routes["sse.example"] = addr
 
-	cli := e.proxyClient(t, "tok-one", e.combinedPool(t, "s1"), "http/1.1")
-	start := time.Now()
-	res, err := cli.Get("https://sse.example/sse")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = res.Body.Close() }()
+	// Control arm: the identical stream direct to the upstream. MM2.3's
+	// "added per-event delay" is the delay the broker adds — subtracting
+	// the concurrent direct-path delay removes scheduler noise that the
+	// broker does not cause (a shared host or a GC pause inflates both
+	// arms equally).
+	direct := &http.Client{Transport: &http.Transport{
+		ForceAttemptHTTP2: false,
+		TLSClientConfig:   &tls.Config{RootCAs: e.ca.Pool(), NextProtos: []string{"http/1.1"}},
+		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			var d net.Dialer
+			return d.DialContext(ctx, network, addr)
+		},
+	}}
+	proxied := e.proxyClient(t, "tok-one", e.combinedPool(t, "s1"), "http/1.1")
 
-	// Count reads, events and coalesced events; measure added delay. A
-	// read() on the body is the client's granularity — if the broker held
-	// flushes back, events would arrive batched in few large reads.
-	var (
-		events, reads, coalesced int
-		delays                   []float64
-		pending                  []byte
-	)
-	buf := make([]byte, 1<<16)
-	for events < N {
-		n, err := res.Body.Read(buf)
-		readAt := time.Now()
-		if n > 0 {
-			reads++
-			data := append(pending, buf[:n]...)
-			var evs [][]byte
-			for {
-				i := bytesIndex(data, []byte("\n\n"))
-				if i < 0 {
-					break
-				}
-				evs = append(evs, data[:i])
-				data = data[i+2:]
-			}
-			pending = append(pending[:0], data...)
-			if len(evs) > 1 {
-				coalesced += len(evs) - 1
-			}
-			for _, ev := range evs {
-				events++
-				if ts, perr := strconv.ParseInt(strings.TrimPrefix(string(ev), "data: "), 10, 64); perr == nil {
-					delays = append(delays, float64(readAt.UnixNano()-ts)/1e6)
-				}
-			}
-		}
+	readStream := func(cli *http.Client) ([]float64, int, int, int, error) {
+		res, err := cli.Get("https://sse.example/sse")
 		if err != nil {
-			break
+			return nil, 0, 0, 0, err
 		}
+		defer func() { _ = res.Body.Close() }()
+		var (
+			events, reads, coalesced int
+			delays                   = make([]float64, N)
+			pending                  []byte
+		)
+		buf := make([]byte, 1<<16)
+		for events < N {
+			n, rerr := res.Body.Read(buf)
+			readAt := time.Now()
+			if n > 0 {
+				reads++
+				data := append(pending, buf[:n]...)
+				var evs [][]byte
+				for {
+					i := bytesIndex(data, []byte("\n\n"))
+					if i < 0 {
+						break
+					}
+					evs = append(evs, data[:i])
+					data = data[i+2:]
+				}
+				pending = append(pending[:0], data...)
+				if len(evs) > 1 {
+					coalesced += len(evs) - 1
+				}
+				for _, ev := range evs {
+					events++
+					var seq int
+					var ts int64
+					if _, perr := fmt.Sscanf(strings.TrimPrefix(string(ev), "data: "), "%d:%d", &seq, &ts); perr == nil {
+						delays[seq] = float64(readAt.UnixNano()-ts) / 1e6
+					}
+				}
+			}
+			if rerr != nil {
+				return delays, reads, coalesced, events, rerr
+			}
+		}
+		return delays, reads, coalesced, events, nil
 	}
-	if events != N {
-		t.Fatalf("events = %d, want %d", events, N)
+
+	start := time.Now()
+	type out struct {
+		delays               []float64
+		reads, coalesced, ev int
+		err                  error
 	}
-	// MM2.3: events coalesced ≤ 1%.
-	if coalesced > N/100 {
-		t.Errorf("coalesced events = %d (>1%% of %d)", coalesced, N)
+	pch, dch := make(chan out, 1), make(chan out, 1)
+	go func() { d, r, c, v, err := readStream(proxied); pch <- out{d, r, c, v, err} }()
+	go func() { d, r, c, v, err := readStream(direct); dch <- out{d, r, c, v, err} }()
+	p, d := <-pch, <-dch
+	if p.err != nil && p.err != io.EOF {
+		t.Fatalf("proxied stream: %v", p.err)
 	}
-	sort.Float64s(delays)
-	p99 := delays[int(0.99*float64(len(delays)-1))]
+	if d.err != nil && d.err != io.EOF {
+		t.Fatalf("direct stream: %v", d.err)
+	}
+	if p.ev != N || d.ev != N {
+		t.Fatalf("events proxied=%d direct=%d, want %d each", p.ev, d.ev, N)
+	}
+	// MM2.3: events coalesced ≤ 1% (the proxied stream must deliver
+	// essentially one read per event).
+	if p.coalesced > N/100 {
+		t.Errorf("coalesced events = %d (>1%% of %d)", p.coalesced, N)
+	}
+	// MM2.3: p99 added delay ≤ 2 ms, with a wide absolute bound as
+	// backstop (a held-back stream shows seconds, noise never does).
+	added := make([]float64, N)
+	abs := make([]float64, N)
+	for i := 0; i < N; i++ {
+		added[i] = p.delays[i] - d.delays[i]
+		abs[i] = p.delays[i]
+	}
+	sort.Float64s(added)
+	sort.Float64s(abs)
+	dsrt := append([]float64(nil), d.delays...)
+	sort.Float64s(dsrt)
+	i99 := int(0.99 * float64(len(added)-1))
+	p99 := added[i99]
+	ap99 := abs[i99]
 	if p99 > 2.0 {
-		t.Errorf("p99 added delay %.3f ms > 2 ms (MM2.3)", p99)
+		t.Errorf("p99 added delay %.3f ms > 2 ms (MM2.3; proxied p99 %.3f ms)", p99, ap99)
 	}
-	t.Logf("SSE: %d events in %v (%d reads), p99 added delay %.3f ms, coalesced %d",
-		events, time.Since(start), reads, p99, coalesced)
+	if ap99 > 25.0 {
+		t.Errorf("p99 end-to-end delay %.3f ms: stream held back (MM2.3)", ap99)
+	}
+	t.Logf("SSE: %d events in %v (%d proxied reads), p99 added %.3f ms (proxied p99 %.3f, direct p99 %.3f), coalesced %d",
+		N, time.Since(start), p.reads, p99, ap99, dsrt[i99], p.coalesced)
 }
 
 func bytesIndex(b, needle []byte) int {
