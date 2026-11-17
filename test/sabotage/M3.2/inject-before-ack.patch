@@ -1,0 +1,31 @@
+diff --git a/internal/proxy/pipeline.go b/internal/proxy/pipeline.go
+index 0000000..0000000 100644
+--- a/internal/proxy/pipeline.go
++++ b/internal/proxy/pipeline.go
+@@ -275,18 +275,18 @@
+ 	// Write-ahead: the effect.http record is durable before the first byte
+ 	// goes upstream — and before the credential materializes (02 §6:
+ 	// evidence first, then secrets touch the wire). Sink failure fails
+ 	// closed.
+-	if err := s.appendRecord(sess, "effect.http", effect); err != nil {
+-		s.Logf("record append failed: %v", err)
+-		w.Header().Set("X-Countersign-Reason", "LEDGER_UNAVAILABLE")
+-		http.Error(w, "evidence store unavailable", http.StatusBadGateway)
+-		return
+-	}
+ 	if plan.spec != nil {
+ 		plan.spec.Apply(outHdr)
+ 		plan.injected = true
+ 		if injectHook != nil {
+ 			injectHook(sess.ID, mres.Grant, plan.refID)
+ 		}
+ 	}
++	if err := s.appendRecord(sess, "effect.http", effect); err != nil {
++		s.Logf("record append failed: %v", err)
++		w.Header().Set("X-Countersign-Reason", "LEDGER_UNAVAILABLE")
++		http.Error(w, "evidence store unavailable", http.StatusBadGateway)
++		return
++	}
+ 
+ 	result := &ResultBody{
+ 		EffectID:  effectID,

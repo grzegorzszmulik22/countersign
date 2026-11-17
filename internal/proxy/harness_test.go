@@ -95,6 +95,9 @@ func newTestEnvFull(t *testing.T, dir string, entries []SessionEntry, routes map
 	for _, e := range entries {
 		fmt.Fprintf(&b, "  - id: %s\n    token: %s\n    client_ip: %s\n    policy: %s\n",
 			e.ID, e.Token, e.ClientIP, e.Policy)
+		if e.Credentials != "" {
+			fmt.Fprintf(&b, "    credentials: %s\n", e.Credentials)
+		}
 	}
 	if err := os.WriteFile(sessFile, []byte(b.String()), 0o644); err != nil {
 		t.Fatal(err)
@@ -158,6 +161,30 @@ func writePolicy(t *testing.T, dir, name, grantsYAML string) string {
 // sessionEntry makes a session-table row.
 func sessionEntry(id, token, clientIP, policyPath string) SessionEntry {
 	return SessionEntry{ID: id, Token: token, ClientIP: clientIP, Policy: policyPath}
+}
+
+// sessionEntryCreds makes a session-table row bound to a secrets file.
+func sessionEntryCreds(id, token, clientIP, policyPath, credsPath string) SessionEntry {
+	return SessionEntry{ID: id, Token: token, ClientIP: clientIP, Policy: policyPath, Credentials: credsPath}
+}
+
+// writeSecrets writes a local-mode credential store file (04 §4: the
+// broker-side secrets table, never part of the client environment).
+func writeSecrets(t *testing.T, dir string, secrets map[string]map[string]string) string {
+	t.Helper()
+	var b strings.Builder
+	b.WriteString("secrets:\n")
+	for name, keys := range secrets {
+		fmt.Fprintf(&b, "  %s:\n", name)
+		for k, v := range keys {
+			fmt.Fprintf(&b, "    %s: %s\n", k, v)
+		}
+	}
+	p := filepath.Join(dir, "secrets.yaml")
+	if err := os.WriteFile(p, []byte(b.String()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return p
 }
 
 // proxyClient returns an http.Client that tunnels through the broker. The

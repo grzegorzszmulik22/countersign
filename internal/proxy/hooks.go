@@ -26,3 +26,10 @@ var defaultRootCAs = func() *x509.CertPool {
 	}
 	return pool
 }
+
+// injectHook, when non-nil, is invoked at the moment a credential is
+// injected into an outbound request — after the write-ahead record is
+// durable, before the first upstream byte (02 §6). Fixture tests wrap it
+// to assert that ordering and the 04 §2 injection invariant; it is nil in
+// production.
+var injectHook func(sessionID, grantID, credRef string)
