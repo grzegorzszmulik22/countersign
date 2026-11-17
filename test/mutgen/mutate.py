@@ -179,7 +179,6 @@ def class5_truncate(s, files, keys, rng):
     """Truncate the last k records, with and without substituting an
     older genuine checkpoint (spec 03 §11 class 5). Both forms keep
     lines and index consistent so the first finding is in-class."""
-    return files, keys
     lines = lines_of(files)
     n = len(lines)
     k = rng.randrange(1, min(6, n - 2))
