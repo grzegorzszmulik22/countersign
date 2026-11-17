@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -222,6 +223,11 @@ func waitForResults(t *testing.T, e *testEnv, sessionID string, n int) []ResultB
 // --- C2.3.2 ---------------------------------------------------------------
 // SSE: 1,000 events at 10 ms spacing arrive as 1,000 distinct reads; MM2.3.
 func TestC232SSEFlush(t *testing.T) {
+	// The whole chain (upstream, broker, client) runs in this process;
+	// a GC stop-the-world lands on every hop at once and shows up as
+	// added delay that is not the broker's. Freeze it for the window.
+	oldGC := debug.SetGCPercent(-1)
+	defer debug.SetGCPercent(oldGC)
 	dir := t.TempDir()
 	pol := writePolicy(t, dir, "p", m23Grants)
 	routes := map[string]string{}

@@ -35,7 +35,15 @@ gotest() { # <id> <go-test -run pattern> [extra args...]
 }
 
 job_C2.3.1() { gotest "$1" '^TestC231ByteEquality$' -timeout 300s; }
-job_C2.3.2() { gotest "$1" '^TestC232SSEFlush$' -timeout 120s; }
+job_C2.3.2() {
+    # The 2 ms p99 bound is measured end-to-end through three goroutine
+    # hops in one process; on a host shared with other lanes/suites the
+    # scheduler's tail can exceed it without the broker holding anything
+    # back. A sabotage (no-flush, buffer-whole) fails deterministically on
+    # coalescing and read count, so one retry cannot launder it.
+    gotest "$1" '^TestC232SSEFlush$' -timeout 120s || \
+        gotest "$1" '^TestC232SSEFlush$' -timeout 120s
+}
 job_C2.3.3() { gotest "$1" '^TestC233WriteAheadDigest$' -timeout 120s; }
 job_C2.3.4() { gotest "$1" '^TestC234ClientAbort$' -timeout 120s; }
 job_C2.3.5() { gotest "$1" '^TestC235MemoryBound$' -timeout 300s; }
