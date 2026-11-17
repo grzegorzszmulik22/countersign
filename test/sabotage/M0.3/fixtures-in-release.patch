@@ -1,0 +1,11 @@
+--- a/test/fixtures/echo/echo.go
++++ b/test/fixtures/echo/echo.go
+@@ -1,8 +1,6 @@
+ // Copyright 2026 The Countersign Authors
+ // SPDX-License-Identifier: Apache-2.0
+ 
+-//go:build fixtures
+-
+ // Package echo plays a generic upstream (M0.3). It echoes request details and
+ // serves /sse (timed events), /bytes (n streamed bytes), /status/<code>, and a
+ // WebSocket echo at /ws. TLS only, HTTP/1.1 and HTTP/2.

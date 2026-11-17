@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://countersign.dev/schema/records/replay.divergence.json",
+  "title": "countersign record replay.divergence (03 §4)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "id",
+    "session",
+    "emitter",
+    "eseq",
+    "eprev",
+    "ts",
+    "body"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "type": {
+      "const": "replay.divergence"
+    },
+    "id": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "session": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "emitter": {
+      "$ref": "_common.json#/$defs/emitter"
+    },
+    "eseq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "eprev": {
+      "$ref": "_common.json#/$defs/hex64"
+    },
+    "ts": {
+      "$ref": "_common.json#/$defs/ts"
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "position",
+        "expected",
+        "observed",
+        "policy_decision"
+      ],
+      "properties": {
+        "position": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expected": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "effect_id",
+                "request_digest"
+              ],
+              "properties": {
+                "effect_id": {
+                  "type": "string"
+                },
+                "request_digest": {
+                  "$ref": "_common.json#/$defs/hex64"
+                }
+              }
+            }
+          ]
+        },
+        "observed": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "authority",
+            "path",
+            "request_digest",
+            "class"
+          ],
+          "properties": {
+            "method": {
+              "type": "string"
+            },
+            "authority": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "request_digest": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "_common.json#/$defs/hex64"
+                }
+              ]
+            },
+            "class": {
+              "type": "string",
+              "enum": [
+                "control",
+                "safe",
+                "staged",
+                "compensable",
+                "irreversible"
+              ]
+            }
+          }
+        },
+        "policy_decision": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

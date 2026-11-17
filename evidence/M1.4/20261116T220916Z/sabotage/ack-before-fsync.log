@@ -1,0 +1,13 @@
+make[1]: Entering directory '/home/csbuild/src/cs-evidence-go/.check-work/sabotage-M1.4-ack-before-fsync'
+CHECK C1.4.1 FAIL —     ledger_test.go:106: 60 durable appends took 15.592037ms — ack before fsync --- FAIL: TestC141_FsyncCadence (0.02s) === RUN   TestC141Helper     ledger_test.go:113: helper --- SKIP: TestC141Helper (0.00s) FAIL FAIL	github.com/countersign/countersign/internal/ledger	26.435s FAIL 
+CHECK C1.4.2 PASS
+CHECK C1.4.3 PASS
+CHECK C1.4.4 PASS
+CHECK C1.4.5 PASS
+CHECK C1.4.6 PASS
+CHECK C1.4.7 PASS
+CHECK C1.4.7 PASS
+M1.4 suite: FAILURES
+check-M1.4: FAIL (exit 1, evidence: evidence/M1.4/20261116T220916Z)
+make[1]: *** [Makefile:37: check-M1.4] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-evidence-go/.check-work/sabotage-M1.4-ack-before-fsync'

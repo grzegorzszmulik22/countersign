@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "name": "m04-mcp",
+  "model": "fixture-model-1",
+  "turns": [
+    {
+      "expect_user_contains": "mcp",
+      "response": {
+        "stop": "tool_use",
+        "text": "Creating the declared record.",
+        "calls": [
+          {"key": "mc1", "tool": "mcp__demo__create_record", "input": {"title": "declared record", "body": "asked by the model"}}
+        ]
+      }
+    },
+    {
+      "expect_results": {"mc1": "declared record"},
+      "response": {
+        "stop": "end_turn",
+        "text": "record created"
+      }
+    }
+  ]
+}

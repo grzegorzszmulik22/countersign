@@ -1,0 +1,6 @@
+CHECK C0.1.1 PASS
+CHECK C0.1.2 PASS
+CHECK C0.1.3 FAIL — lint left the tree dirty:  M spec/00-north-star.md  M test/checks/check-M0.5.sh 
+CHECK C0.1.4 PASS
+CHECK C0.1.5 PASS
+M0.1 suite: FAILURES

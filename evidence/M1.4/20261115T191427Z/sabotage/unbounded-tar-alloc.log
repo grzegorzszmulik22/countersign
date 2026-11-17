@@ -1,0 +1,14 @@
+make[1]: Entering directory '/home/csbuild/src/cs-evidence-go/.check-work/sabotage-M1.4-unbounded-tar-alloc'
+CHECK C1.4.1 PASS
+CHECK C1.4.2 PASS
+CHECK C1.4.3 PASS
+CHECK C1.4.4 PASS
+CHECK C1.4.5 PASS
+CHECK C1.4.6 PASS
+CHECK C1.4.7 FAIL —     --- FAIL: TestC147_ReaderRejects/over_member_cap (0.26s)     --- PASS: TestC147_ReaderRejects/missing_required (0.00s)     --- PASS: TestC147_ReaderRejects/duplicate_member (0.00s)     --- PASS: TestC147_ReaderRejects/non_regular_member (0.00s)     --- PASS: TestC147_ReaderRejects/extra_member (0.00s) FAIL FAIL	github.com/countersign/countersign/internal/ledger	0.679s FAIL 
+Terminated
+CHECK C1.4.7 FAIL — fuzz: elapsed: 1m40s, execs: 454563 (3108/sec), new interesting: 1 (total: 1406) fuzz: elapsed: 1m43s, execs: 461331 (2256/sec), new interesting: 1 (total: 1406) fuzz: elapsed: 1m46s, execs: 469236 (2635/sec), new interesting: 1 (total: 1406) fuzz: elapsed: 1m49s, execs: 475008 (1924/sec), new interesting: 1 (total: 1406) fuzz: elapsed: 1m52s, execs: 481111 (2035/sec), new interesting: 1 (total: 1406) fuzz: elapsed: 1m55s, execs: 485496 (1462/sec), new interesting: 1 (total: 1406) fuzz: elapsed: 2m1s, execs: 485981 (74/sec), new interesting: 1 (total: 1406) fuzz: elapsed: 2m4s, execs: 486098 (47/sec), new interesting: 1 (total: 1406) 
+M1.4 suite: FAILURES
+check-M1.4: FAIL (exit 1, evidence: evidence/M1.4/20261115T195709Z)
+make[1]: *** [Makefile:35: check-M1.4] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-evidence-go/.check-work/sabotage-M1.4-unbounded-tar-alloc'

@@ -1,0 +1,32 @@
+{
+  "verdict": "INVALID",
+  "world": "committed",
+  "errors": [
+    {
+      "code": "E_CHAIN",
+      "index": 29,
+      "detail": "controller/M3YCD3ZQYEA7S7H92M0T6QXG60: first eseq is 1, want 0"
+    },
+    {
+      "code": "E_CHAIN",
+      "index": 34,
+      "detail": "controller/M3YCD3ZQYEA7S7H92M0T6QXG60: eseq gap or reuse at 2 after 0"
+    },
+    {
+      "code": "E_OPEN",
+      "detail": "first record is not session.open"
+    },
+    {
+      "code": "E_SEAL",
+      "detail": "sealer head controller/M3YCD3ZQYEA7S7H92M0T6QXG60 eseq 1 hash e6ba19182680c188b17f91272f757f6a367b4fecdc38ac635b67ea5202726052 ≠ pre-seal 0 e6ba19182680c188b17f91272f757f6a367b4fecdc38ac635b67ea5202726052"
+    }
+  ],
+  "warnings": null,
+  "findings": [],
+  "stats": {
+    "emitters": 4,
+    "records": 35,
+    "session": "8GW8N07P48G30P8X0M0T6QXG60",
+    "tree_size": 36
+  }
+}

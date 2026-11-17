@@ -1,0 +1,20 @@
+diff --git a/internal/ledger/bundle.go b/internal/ledger/bundle.go
+index b80ec6e..6748c6a 100644
+--- a/internal/ledger/bundle.go
++++ b/internal/ledger/bundle.go
+@@ -282,15 +282,6 @@ func ReadBundle(data []byte) (map[string][]byte, error) {
+ 		if hdr.Size < 0 {
+ 			return nil, &BundleError{fmt.Sprintf("member %q: negative size %d", hdr.Name, hdr.Size)}
+ 		}
+-		if hdr.Size > MaxMemberBytes {
+-			return nil, &BundleError{fmt.Sprintf("member %q: size %d exceeds %d-byte limit", hdr.Name, hdr.Size, MaxMemberBytes)}
+-		}
+-		if remaining := int64(len(data)) - cr.n; hdr.Size > remaining {
+-			return nil, &BundleError{fmt.Sprintf("member %q: declared size %d exceeds %d bytes remaining", hdr.Name, hdr.Size, remaining)}
+-		}
+-		if total+hdr.Size > MaxTotalBytes {
+-			return nil, &BundleError{fmt.Sprintf("members exceed %d-byte total limit", MaxTotalBytes)}
+-		}
+ 		buf := make([]byte, hdr.Size)
+ 		if _, err := readFull(tr, buf); err != nil {
+ 			return nil, &BundleError{fmt.Sprintf("member %q: %v", hdr.Name, err)}

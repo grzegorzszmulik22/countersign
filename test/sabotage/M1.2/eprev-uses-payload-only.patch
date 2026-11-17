@@ -1,0 +1,23 @@
+diff --git a/internal/keys/emitter.go b/internal/keys/emitter.go
+index 5dbb3d7..9edde60 100644
+--- a/internal/keys/emitter.go
++++ b/internal/keys/emitter.go
+@@ -4,6 +4,8 @@
+ package keys
+ 
+ import (
++	"crypto/sha256"
++	"encoding/hex"
+ 	"fmt"
+ 
+ 	"github.com/countersign/countersign/internal/evidence"
+@@ -72,7 +74,8 @@ func (e *Emitter) Emit(typeName string, body any, ts string) ([]byte, *evidence.
+ 	if err != nil {
+ 		return nil, nil, err
+ 	}
+-	e.eprev = evidence.RecordHash(env)
++	sum := sha256.Sum256(env.Payload)
++	e.eprev = hex.EncodeToString(sum[:])
+ 	e.eseq++
+ 	if typeName == "emitter.seal" {
+ 		e.sealed = true

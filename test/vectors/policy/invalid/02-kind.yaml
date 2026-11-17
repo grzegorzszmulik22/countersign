@@ -1,0 +1,10 @@
+# field: kind
+# rule: kind must be SessionPolicy
+apiVersion: "countersign.dev/v1alpha1"
+kind: "Policy"
+metadata: {name: bad}
+spec:
+  mode: "enforce"
+  scenario: "agent"
+  grants:
+    - {id: g1, match: {hosts: ["api.example.com"]}}

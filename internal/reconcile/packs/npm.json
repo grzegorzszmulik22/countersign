@@ -1,0 +1,12 @@
+{
+  "kind": "expectation-pack/v1",
+  "pack": "npm",
+  "comment": "spec/04 §6.2 npm row: `npm install` and `npm ci` expect GET/HEAD on the registry hosts (npmjs).",
+  "rules": [
+    {
+      "id": "npm-install",
+      "when": {"tool": "Bash", "tool_class": "exec", "argv0": ["npm"], "argv1": ["install", "ci"]},
+      "expect": [{"shape": "http", "methods": ["GET", "HEAD"], "hosts": ["registry.npmjs.org"]}]
+    }
+  ]
+}

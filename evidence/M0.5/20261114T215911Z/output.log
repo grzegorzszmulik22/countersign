@@ -1,0 +1,5 @@
+CHECK C0.5.1 PASS
+CHECK C0.5.2 PASS
+CHECK C0.5.3 FAIL — regress still failing after restore: make[2]: *** wait: No child processes.  Stop. make[2]: *** Waiting for unfinished jobs.... make[2]: *** wait: No child processes.  Stop. 
+CHECK C0.5.4 PASS
+M0.5 suite: FAILURES

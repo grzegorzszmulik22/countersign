@@ -1,0 +1,175 @@
+=== RUN   TestDecisionTable
+--- PASS: TestDecisionTable (0.21s)
+=== RUN   TestSchemaConformance
+--- PASS: TestSchemaConformance (0.18s)
+=== RUN   TestPropertyVsPython
+--- PASS: TestPropertyVsPython (19.51s)
+=== RUN   TestInvalidPolicies
+--- PASS: TestInvalidPolicies (0.01s)
+=== RUN   TestPolicyDigest
+--- PASS: TestPolicyDigest (0.01s)
+PASS
+ok  	github.com/countersign/countersign/internal/policy	20.122s
+CHECK C3.1.1 PASS
+CHECK C3.1.2 PASS
+CHECK C3.1.3 PASS
+CHECK C3.1.4 PASS
+CHECK C3.1.6 PASS
+fuzz: elapsed: 0s, gathering baseline coverage: 0/1974 completed
+fuzz: elapsed: 3s, gathering baseline coverage: 548/1974 completed
+fuzz: elapsed: 6s, gathering baseline coverage: 1081/1974 completed
+fuzz: elapsed: 9s, gathering baseline coverage: 1781/1974 completed
+fuzz: elapsed: 10s, gathering baseline coverage: 1974/1974 completed, now fuzzing with 2 workers
+fuzz: elapsed: 12s, execs: 20195 (6137/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 15s, execs: 44142 (7984/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 18s, execs: 76278 (10711/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 21s, execs: 103832 (9185/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 24s, execs: 126816 (7660/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 27s, execs: 139900 (4358/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 30s, execs: 154544 (4886/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 33s, execs: 170605 (5355/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 36s, execs: 185096 (4829/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 39s, execs: 244162 (19691/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 42s, execs: 272499 (9446/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 45s, execs: 303804 (10433/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 48s, execs: 337535 (11245/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 51s, execs: 370782 (11066/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 54s, execs: 396654 (8638/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 57s, execs: 409461 (4267/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 1m0s, execs: 423305 (4616/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 1m3s, execs: 440618 (5755/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 1m6s, execs: 455597 (5007/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 1m9s, execs: 469322 (4575/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 1m12s, execs: 486321 (5667/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 1m15s, execs: 500062 (4580/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 1m18s, execs: 517990 (5975/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 1m21s, execs: 517990 (0/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 1m24s, execs: 534888 (5648/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 1m27s, execs: 553066 (6069/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 1m30s, execs: 573922 (6950/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 1m33s, execs: 594812 (6964/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 1m36s, execs: 618482 (7890/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 1m39s, execs: 640864 (7462/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 1m42s, execs: 664721 (7952/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 1m45s, execs: 686604 (7294/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 1m48s, execs: 707641 (7011/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 1m51s, execs: 723906 (5422/sec), new interesting: 0 (total: 1974)
+fuzz: elapsed: 1m54s, execs: 754042 (10047/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 1m57s, execs: 802138 (16031/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 2m0s, execs: 848447 (15438/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 2m3s, execs: 880110 (10552/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 2m6s, execs: 888296 (2721/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 2m9s, execs: 907965 (6575/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 2m12s, execs: 928526 (6854/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 2m15s, execs: 949064 (6846/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 2m18s, execs: 974128 (8353/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 2m21s, execs: 1024173 (16684/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 2m24s, execs: 1071093 (15641/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 2m27s, execs: 1119317 (16074/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 2m30s, execs: 1161011 (13898/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 2m33s, execs: 1210125 (16370/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 2m36s, execs: 1252514 (14132/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 2m39s, execs: 1302697 (16729/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 2m42s, execs: 1339446 (12249/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 2m45s, execs: 1361865 (7473/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 2m48s, execs: 1385880 (8005/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 2m51s, execs: 1411230 (8449/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 2m54s, execs: 1493369 (27382/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 2m57s, execs: 1539355 (15332/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 3m0s, execs: 1585340 (15325/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 3m3s, execs: 1634696 (16454/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 3m6s, execs: 1678375 (14561/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 3m9s, execs: 1705219 (8947/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 3m12s, execs: 1728894 (7890/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 3m15s, execs: 1752438 (7849/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 3m18s, execs: 1821982 (23178/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 3m21s, execs: 1866278 (14767/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 3m24s, execs: 1911107 (14945/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 3m27s, execs: 1955723 (14870/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 3m30s, execs: 1977247 (7174/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 3m33s, execs: 2002892 (8550/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 3m36s, execs: 2071010 (22699/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 3m39s, execs: 2114551 (14518/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 3m42s, execs: 2152925 (12766/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 3m45s, execs: 2187852 (11664/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 3m48s, execs: 2220363 (10835/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 3m51s, execs: 2242695 (7444/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 3m54s, execs: 2255177 (4155/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 3m57s, execs: 2255177 (0/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 4m0s, execs: 2255177 (0/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 4m3s, execs: 2255177 (0/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 4m6s, execs: 2353500 (32916/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 4m9s, execs: 2396351 (14279/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 4m12s, execs: 2444382 (16014/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 4m15s, execs: 2488584 (14735/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 4m18s, execs: 2531546 (14319/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 4m21s, execs: 2579967 (16139/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 4m24s, execs: 2628869 (16302/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 4m27s, execs: 2677576 (16232/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 4m30s, execs: 2721273 (14569/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 4m33s, execs: 2767165 (15296/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 4m36s, execs: 2815617 (16148/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 4m39s, execs: 2865683 (16693/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 4m42s, execs: 2910970 (15094/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 4m45s, execs: 2952904 (13976/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 4m48s, execs: 2999805 (15632/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 4m51s, execs: 3044014 (14741/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 4m54s, execs: 3088999 (14995/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 4m57s, execs: 3118811 (9936/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 5m0s, execs: 3141644 (7613/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 5m3s, execs: 3165958 (8105/sec), new interesting: 1 (total: 1975)
+fuzz: elapsed: 5m6s, execs: 3235844 (23294/sec), new interesting: 1 (total: 1975)
+fuzz: minimizing 36-byte failing input file
+fuzz: elapsed: 5m7s, minimizing
+--- FAIL: FuzzLoadPolicy (307.15s)
+    --- FAIL: FuzzLoadPolicy (0.00s)
+        testing.go:2078: panic: runtime error: hash of unhashable type []interface {}
+            goroutine 1703633 [running]:
+            runtime/debug.Stack()
+            	/home/csbuild/src/cs-broker/.tools/go/src/runtime/debug/stack.go:26 +0xc4
+            testing.tRunner.func1()
+            	/home/csbuild/src/cs-broker/.tools/go/src/testing/testing.go:2078 +0x1c8
+            panic({0x6fff28?, 0x69133e382d0?})
+            	/home/csbuild/src/cs-broker/.tools/go/src/runtime/panic.go:859 +0x120
+            gopkg.in/yaml%2ev3.handleErr(0x6912a6e3618)
+            	/home/csbuild/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1/yaml.go:294 +0x15c
+            panic({0x6fff28?, 0x69133e382d0?})
+            	/home/csbuild/src/cs-broker/.tools/go/src/runtime/panic.go:859 +0x120
+            gopkg.in/yaml%2ev3.(*decoder).merge(0x69133e3e3f0, 0x69133e4a000, 0x69133e4a140, {0x721130?, 0x69133e28b60?, 0x0?})
+            	/home/csbuild/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1/decode.go:966 +0x258
+            gopkg.in/yaml%2ev3.(*decoder).mappingStruct(0x69133e3e3f0, 0x69133e4a000, {0x721130?, 0x69133e28b60?, 0x6912a6e32b8?})
+            	/home/csbuild/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1/decode.go:950 +0x1d60
+            gopkg.in/yaml%2ev3.(*decoder).mapping(0x69133e3e3f0, 0x69133e4a000, {0x721130?, 0x69133e28b60?, 0x40006912a6e34a8?})
+            	/home/csbuild/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1/decode.go:786 +0x9e0
+            gopkg.in/yaml%2ev3.(*decoder).unmarshal(0x69133e3e3f0, 0x69133e4a000, {0x721130?, 0x69133e28b60?, 0x6912a6e3588?})
+            	/home/csbuild/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1/decode.go:510 +0xfa8
+            gopkg.in/yaml%2ev3.(*decoder).document(...)
+            	/home/csbuild/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1/decode.go:527
+            gopkg.in/yaml%2ev3.(*decoder).unmarshal(0x69133e3e3f0, 0x69133e23e00, {0x721130?, 0x69133e28b60?, 0x200000100000000?})
+            	/home/csbuild/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1/decode.go:498 +0x78c
+            gopkg.in/yaml%2ev3.(*Decoder).Decode(0x69136e426d0, {0x6c76d8, 0x69133e28b60})
+            	/home/csbuild/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1/yaml.go:131 +0x560
+            github.com/countersign/countersign/internal/policy.Load({0x691339ddbf8, 0x7, 0x8})
+            	/home/csbuild/src/cs-broker/internal/policy/policy.go:32 +0x25c
+            github.com/countersign/countersign/internal/policy_test.FuzzLoadPolicy.func1(0x69136e427a8?, {0x691339ddbf8?, 0x7, 0x0?})
+            	/home/csbuild/src/cs-broker/internal/policy/property_test.go:120 +0x30
+            reflect.Value.call({0x6dcfc8?, 0x737d50?, 0x13?}, {0x4304a8, 0x4}, {0x69133e26fc0, 0x2, 0x2?})
+            	/home/csbuild/src/cs-broker/.tools/go/src/reflect/value.go:586 +0xa88
+            reflect.Value.Call({0x6dcfc8?, 0x737d50?, 0x1778e0?}, {0x69133e26fc0?, 0x733840?, 0x71d2a0?})
+            	/home/csbuild/src/cs-broker/.tools/go/src/reflect/value.go:369 +0x94
+            testing.(*F).Fuzz.func1.1(0x69133e3afc8?)
+            	/home/csbuild/src/cs-broker/.tools/go/src/testing/fuzz.go:341 +0x254
+            testing.tRunner(0x69133e3afc8, 0x69133e30b40)
+            	/home/csbuild/src/cs-broker/.tools/go/src/testing/testing.go:2195 +0xc4
+            created by testing.(*F).Fuzz.func1 in goroutine 5
+            	/home/csbuild/src/cs-broker/.tools/go/src/testing/fuzz.go:328 +0x4b8
+            
+    
+    Failing input written to testdata/fuzz/FuzzLoadPolicy/7c38d60c931b699a
+    To re-run:
+    go test -run=FuzzLoadPolicy/7c38d60c931b699a
+FAIL
+exit status 1
+FAIL	github.com/countersign/countersign/internal/policy	307.227s
+CHECK C3.1.5 FAIL — --- FAIL: FuzzLoadPolicy (307.15s)     --- FAIL: FuzzLoadPolicy (0.00s) 
+M3.1 suite: FAILURES

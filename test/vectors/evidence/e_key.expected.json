@@ -1,0 +1,94 @@
+{
+  "verdict": "INVALID",
+  "world": "committed",
+  "errors": [
+    {
+      "code": "E_KEY",
+      "index": 1,
+      "detail": "E_KEY: key 10ba682c8ad13513971e8b56881aab8b role \"emitter:world\" cannot sign broker/TV47F3QFXPGE4V93VS6S6QXG60"
+    },
+    {
+      "code": "E_KEY",
+      "index": 2,
+      "detail": "E_KEY: key 10ba682c8ad13513971e8b56881aab8b role \"emitter:world\" cannot sign broker/TV47F3QFXPGE4V93VS6S6QXG60"
+    },
+    {
+      "code": "E_KEY",
+      "index": 3,
+      "detail": "E_KEY: key 10ba682c8ad13513971e8b56881aab8b role \"emitter:world\" cannot sign broker/TV47F3QFXPGE4V93VS6S6QXG60"
+    },
+    {
+      "code": "E_KEY",
+      "index": 4,
+      "detail": "E_KEY: key 10ba682c8ad13513971e8b56881aab8b role \"emitter:world\" cannot sign broker/TV47F3QFXPGE4V93VS6S6QXG60"
+    },
+    {
+      "code": "E_KEY",
+      "index": 5,
+      "detail": "E_KEY: key 10ba682c8ad13513971e8b56881aab8b role \"emitter:world\" cannot sign broker/TV47F3QFXPGE4V93VS6S6QXG60"
+    },
+    {
+      "code": "E_KEY",
+      "index": 6,
+      "detail": "E_KEY: key 10ba682c8ad13513971e8b56881aab8b role \"emitter:world\" cannot sign broker/TV47F3QFXPGE4V93VS6S6QXG60"
+    },
+    {
+      "code": "E_KEY",
+      "index": 7,
+      "detail": "E_KEY: key 10ba682c8ad13513971e8b56881aab8b role \"emitter:world\" cannot sign broker/TV47F3QFXPGE4V93VS6S6QXG60"
+    },
+    {
+      "code": "E_KEY",
+      "index": 8,
+      "detail": "E_KEY: key 10ba682c8ad13513971e8b56881aab8b role \"emitter:world\" cannot sign broker/TV47F3QFXPGE4V93VS6S6QXG60"
+    },
+    {
+      "code": "E_KEY",
+      "index": 9,
+      "detail": "E_KEY: key 10ba682c8ad13513971e8b56881aab8b role \"emitter:world\" cannot sign broker/TV47F3QFXPGE4V93VS6S6QXG60"
+    },
+    {
+      "code": "E_KEY",
+      "index": 11,
+      "detail": "E_KEY: key 10ba682c8ad13513971e8b56881aab8b role \"emitter:world\" cannot sign broker/TV47F3QFXPGE4V93VS6S6QXG60"
+    },
+    {
+      "code": "E_KEY",
+      "index": 12,
+      "detail": "E_KEY: key 10ba682c8ad13513971e8b56881aab8b role \"emitter:world\" cannot sign broker/TV47F3QFXPGE4V93VS6S6QXG60"
+    },
+    {
+      "code": "E_KEY",
+      "index": 16,
+      "detail": "E_KEY: key 10ba682c8ad13513971e8b56881aab8b role \"emitter:world\" cannot sign broker/TV47F3QFXPGE4V93VS6S6QXG60"
+    },
+    {
+      "code": "E_KEY",
+      "index": 17,
+      "detail": "E_KEY: key 10ba682c8ad13513971e8b56881aab8b role \"emitter:world\" cannot sign broker/TV47F3QFXPGE4V93VS6S6QXG60"
+    },
+    {
+      "code": "E_KEY",
+      "index": 28,
+      "detail": "E_KEY: key 10ba682c8ad13513971e8b56881aab8b role \"emitter:world\" cannot sign broker/TV47F3QFXPGE4V93VS6S6QXG60"
+    },
+    {
+      "code": "E_KEY",
+      "index": 29,
+      "detail": "E_KEY: key 10ba682c8ad13513971e8b56881aab8b role \"emitter:world\" cannot sign broker/TV47F3QFXPGE4V93VS6S6QXG60"
+    },
+    {
+      "code": "E_KEY",
+      "index": 32,
+      "detail": "E_KEY: key 10ba682c8ad13513971e8b56881aab8b role \"emitter:world\" cannot sign broker/TV47F3QFXPGE4V93VS6S6QXG60"
+    }
+  ],
+  "warnings": null,
+  "findings": [],
+  "stats": {
+    "emitters": 4,
+    "records": 36,
+    "session": "284865YFPFJ0X2XKRS6S6QXG60",
+    "tree_size": 36
+  }
+}

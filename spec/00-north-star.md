@@ -128,6 +128,14 @@ Targets are set **before** measurement and marked [T] throughout. An unreachable
 | H21 | Benign task completion relative to no protection | ≥ **95%** |
 | H22 | Empty cluster to a staged, reviewed, committed and verified session, following the quickstart | ≤ **10 minutes** |
 
+### Real agents (CR-001)
+
+| ID | Metric | Target |
+|---|---|---|
+| H23 | Over ≥ 90 runs of two unmodified production agents from different vendors under `cs run` in enforced mode (M14.0): real secrets found inside the sandbox; attacks becoming real; world oracle equal to its prior digest after abort; bundles verifying in both verifiers; requests observed by a fixture with no ledger record | **0**; **0**; **100%**; **100%**; **0** |
+
+H23 holds whatever the agent does: it is a property of the boundary, not of the agent's behaviour. Completion, interruptions and reviews on real agents are reported beside it and never claimed.
+
 ## 5. The bar
 
 Asked at every milestone exit review (`06` §3).
@@ -143,6 +151,7 @@ Asked at every milestone exit review (`06` §3).
 - *Proof for customers that a hosted agent did only what was allowed.* → P6, P10, P14
 - *Policy rollouts tested against history.* → H17
 - *Drop-in, fail-closed, bounded overhead.* → H5, H22
+- *One command around an unmodified production agent, rootless, and the guarantees hold for agents from two vendors speaking two model API formats; the agent never holds its own model credential.* → H23, M2.7
 
 **Would a researcher at a frontier lab respect it?**
 

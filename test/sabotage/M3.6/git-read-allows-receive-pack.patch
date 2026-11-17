@@ -1,0 +1,27 @@
+diff --git a/internal/policy/git.go b/internal/policy/git.go
+index 0000000..1111111 100644
+--- a/internal/policy/git.go
++++ b/internal/policy/git.go
+@@ -33,8 +33,8 @@ func gitSmartHTTPMatch(git *GitSmartHTTP, method, path, query string) bool {
+ 		switch query {
+ 		case "service=git-upload-pack":
+ 			need = "read"
+ 		case "service=git-receive-pack":
+-			need = "write"
++			need = "read"
+ 		default:
+ 			return false
+ 		}
+@@ -42,11 +42,7 @@ func gitSmartHTTPMatch(git *GitSmartHTTP, method, path, query string) bool {
+ 		if method != "POST" || query != "" {
+ 			return false
+ 		}
+-		if segs[2] == "git-upload-pack" {
+-			need = "read"
+-		} else {
+-			need = "write"
+-		}
++		need = "read"
+ 	default:
+ 		return false
+ 	}

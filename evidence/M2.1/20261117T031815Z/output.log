@@ -1,0 +1,7 @@
+CHECK C2.1.1 PASS
+CHECK C2.1.2 PASS
+CHECK C2.1.3 PASS
+CHECK C2.1.4 PASS
+CHECK C2.1.5 PASS
+CHECK lint.proxy PASS
+M2.1 suite: all checks passed

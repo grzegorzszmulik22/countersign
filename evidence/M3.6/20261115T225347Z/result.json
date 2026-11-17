@@ -1,0 +1,9 @@
+{
+  "chunk": "M3.6",
+  "command": "make check-M3.6 (test/checks/check-M3.6.sh)",
+  "started_utc": "20261115T225347Z",
+  "duration_ms": 233931,
+  "exit_code": 0,
+  "git_commit": "4351966f38441dbb73474028b16331e497d385a9",
+  "git_dirty": "yes"
+}

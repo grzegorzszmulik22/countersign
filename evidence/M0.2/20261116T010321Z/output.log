@@ -1,0 +1,5 @@
+SABOTAGE allow-all-policy: caught (exit 2) by C0.2.1 C0.2.2 M0.2 
+SABOTAGE offline-noop: caught (exit 2) by C0.2.2 
+SABOTAGE offline-on: caught (exit 2) by C0.2.2 
+SABOTAGE offline-v4-only: caught (exit 2) by C0.2.2 
+sabotage-M0.2: 4 caught, 0 uncaught (evidence: evidence/M0.2/20261116T010321Z/sabotage)

@@ -1,0 +1,13 @@
+make[1]: Entering directory '/home/csbuild/src/cs-broker/.check-work/sabotage-M2.2-ignore-sni-mismatch'
+CHECK C2.2.1 PASS
+CHECK C2.2.2 PASS
+CHECK C2.2.3 PASS
+CHECK C2.2.4 FAIL — --- FAIL: TestC224SNICrossCheck (0.02s)     check_m22_test.go:231: handshake with mismatched SNI succeeded     harness_test.go:112: broker: tunnel 01M7KBK3Q3009MEK4X06TZ15KK inner serve: listener closed (conn err: read tcp 127.0.0.1:40523->127.0.0.1:51372: use of closed network connection) FAIL FAIL	github.com/countersign/countersign/internal/proxy	0.046s FAIL 
+CHECK C2.2.5 PASS
+CHECK C2.2.6 PASS
+CHECK C2.2.7 PASS
+CHECK lint.proxy FAIL — internal/proxy/connect.go:135:5: var errSNIMismatch is unused (unused) var errSNIMismatch = errors.New("proxy: SNI does not match CONNECT authority")     ^ 1 issues: * unused: 1 
+M2.2 suite: FAILURES
+check-M2.2: FAIL (exit 1, evidence: evidence/M2.2/20261116T233758Z)
+make[1]: *** [Makefile:37: check-M2.2] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-broker/.check-work/sabotage-M2.2-ignore-sni-mismatch'

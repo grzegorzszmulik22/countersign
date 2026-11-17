@@ -1,0 +1,13 @@
+{
+  "verdict": "UNSEALED",
+  "world": "open",
+  "errors": [],
+  "warnings": null,
+  "findings": [],
+  "stats": {
+    "emitters": 2,
+    "records": 3,
+    "session": "GXG4GTCEGCPYSFH3JAKR6QXG60",
+    "tree_size": 3
+  }
+}

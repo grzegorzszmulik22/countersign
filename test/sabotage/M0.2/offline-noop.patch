@@ -1,0 +1,13 @@
+diff --git a/tools/cluster/offline.sh b/tools/cluster/offline.sh
+--- a/tools/cluster/offline.sh
++++ b/tools/cluster/offline.sh
+@@ -70,8 +70,7 @@ case "$cmd" in
+     on)
+         touch "$FLAG"
+         ns=$(nodes || true)
+-        [ -n "$ns" ] || { echo "offline-on: no nodes (flag recorded)"; exit 0; }
+-        for n in $ns; do apply_rules "$n"; echo "offline-on: rules on $n"; done
++        echo "offline-on: done"
+         ;;
+     off)
+         for n in $(nodes || true); do remove_rules "$n"; echo "offline-off: rules removed on $n"; done

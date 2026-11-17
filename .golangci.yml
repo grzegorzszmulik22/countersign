@@ -1,6 +1,12 @@
 # Copyright 2026 The Countersign Authors
 # SPDX-License-Identifier: Apache-2.0
 version: "2"
+run:
+  # regress runs every DONE chunk's suite in parallel, and several lanes
+  # share this host; golangci-lint's default single-instance file lock
+  # fails every concurrent run otherwise. Each caller pins its own
+  # GOLANGCI_LINT_CACHE so parallel runs do not share a cache dir.
+  allow-parallel-runners: true
 linters:
   default: standard
 formatters:

@@ -16,7 +16,11 @@ rc=0
 echo "== frozen files =="
 if [ -f spec/FROZEN.sha256 ]; then
     if ! tools/verify-frozen.sh; then
-        rc=1
+        # Frozen files are the inputs to every chunk check; once one is
+        # tampered with the verdict is already FAIL and re-running the chunk
+        # suites (~tens of minutes on a contended host) cannot change it.
+        echo "regress: FAIL" >&2
+        exit 1
     fi
 else
     echo "spec/FROZEN.sha256 not present yet; nothing frozen"
@@ -41,14 +45,50 @@ done_chunks=$(awk -F'|' '
 if [ -z "${done_chunks:-}" ]; then
     echo "no DONE chunks"
 fi
+
+# Independent suites run in parallel — sequential runs pushed `make regress`
+# past the wall-clock budget on this contended host even when every suite
+# passed. A suite that itself invokes `make regress`/`make check-*` (e.g.
+# M0.5's frozen-tamper check, which dirties the main tree and re-runs other
+# chunks' suites) must not overlap other suites; it runs alone afterwards.
+solo=(); par=()
 for c in $done_chunks; do
     if [ "$c" = "${CS_CHECK_RUNNING:-}" ]; then
         echo "skip $c (currently running)"
         continue
     fi
-    echo "-- make check-$c"
-    "${MAKE:-make}" "check-$c" || rc=1
+    if grep -qE '("\$MAKE"|make|MAKE)[[:space:]]+"?(regress|check-[A-Za-z0-9])' \
+            "test/checks/check-$c.sh" 2>/dev/null; then
+        solo+=("$c")
+    else
+        par+=("$c")
+    fi
 done
+
+tmpd=$(mktemp -d)
+declare -A pids=()
+for c in ${par[@]+"${par[@]}"}; do
+    "${MAKE:-make}" "check-$c" >"$tmpd/$c.log" 2>&1 &
+    pids[$c]=$!
+done
+# A failing suite is accepted only when every non-PASS check is a SKIP that
+# tools/env-skips.txt allows on this host (and the suite checked something).
+host=$(hostname -s)
+env_ok() { python3 tools/env_skip_ok.py tools/env-skips.txt "$host" <"$1"; }
+for c in ${par[@]+"${par[@]}"}; do
+    echo "-- make check-$c"
+    r=0; wait "${pids[$c]}" || r=$?
+    cat "$tmpd/$c.log"
+    [ "$r" -eq 0 ] || env_ok "$tmpd/$c.log" || rc=1
+done
+
+for c in ${solo[@]+"${solo[@]}"}; do
+    echo "-- make check-$c"
+    r=0; "${MAKE:-make}" "check-$c" >"$tmpd/$c.log" 2>&1 || r=$?
+    cat "$tmpd/$c.log"
+    [ "$r" -eq 0 ] || env_ok "$tmpd/$c.log" || rc=1
+done
+rm -rf "$tmpd"
 
 if [ "$rc" -eq 0 ]; then
     echo "regress: PASS"

@@ -1,0 +1,7 @@
+CHECK C2.1.1 PASS
+CHECK C2.1.2 PASS
+CHECK C2.1.3 PASS
+CHECK C2.1.4 PASS
+CHECK C2.1.5 PASS
+CHECK lint.proxy FAIL — Error: parallel golangci-lint is running The command is terminated due to an error: parallel golangci-lint is running 
+M2.1 suite: FAILURES

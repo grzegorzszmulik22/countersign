@@ -1,0 +1,5 @@
+CHECK C0.2.1 SKIP — no usable Docker on agent-vpc
+CHECK C0.2.2 SKIP — no usable Docker on agent-vpc
+CHECK C0.2.3 SKIP — no usable Docker on agent-vpc
+CHECK C0.2.4 SKIP — no usable Docker on agent-vpc
+CHECK C0.2.5 SKIP — no usable Docker on agent-vpc

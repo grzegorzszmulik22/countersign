@@ -1,0 +1,19 @@
+make[1]: Entering directory '/home/csbuild/src/cs-fixtures/.check-work/sabotage-M0.3-mockllm-accepts-wrong-tool-result'
+CHECK C0.3.1.echo PASS
+CHECK C0.3.1.sink PASS
+CHECK C0.3.1.fakehub PASS
+CHECK C0.3.1.fakereg FAIL — --- FAIL: TestC031Fakereg (4.92s)     fakereg_test.go:116: client tool resolved outside .tools: "/home/csbuild/src/cs-fixtures/.check-work/sabotage-M0.3-mockllm-accepts-wrong-tool-result/.tools/bin/python3" (tools under /home/csbuild/src/cs-fixtures/.check-work/sabotage-M0.3-mockllm-accepts-wrong-tool-result/.tools) FAIL FAIL	github.com/countersign/countersign/test/fixtures/fakereg	4.982s FAIL 
+CHECK C0.3.1.fakemsg PASS
+CHECK C0.3.1.mockllm FAIL — --- FAIL: TestC031Mockllm (0.23s)     mockllm_test.go:270: wrong-content rejection has wrong reason: {"error":{"message":"mockllm: ","type":"invalid_request_error"}} FAIL FAIL	github.com/countersign/countersign/test/fixtures/mockllm	0.516s FAIL 
+CHECK C0.3.1.mcpdemo PASS
+CHECK C0.3.2 PASS
+CHECK C0.3.3 PASS
+CHECK C0.3.4 PASS
+CHECK C0.3.5 PASS
+CHECK lint.fixtures PASS
+CHECK tools.provision PASS
+CHECK C0.3.1.binaries PASS
+M0.3 suite: FAILURES
+check-M0.3: FAIL (exit 1, evidence: evidence/M0.3/20261115T210223Z)
+make[1]: *** [Makefile:35: check-M0.3] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-fixtures/.check-work/sabotage-M0.3-mockllm-accepts-wrong-tool-result'

@@ -1,0 +1,11 @@
+make[1]: Entering directory '/home/csbuild/src/cs-broker/.check-work/sabotage-M2.3-buffer-whole-response'
+CHECK C2.3.1 PASS
+CHECK C2.3.2 FAIL —     check_m23_test.go:431: p99 end-to-end delay 10221.518 ms: stream held back (MM2.3)     check_m23_test.go:433: SSE: 1000 events in 10.345004853s (1 proxied reads), p99 added 10221.398 ms (proxied p99 10221.518, direct p99 0.320), coalesced 999     harness_test.go:123: broker: tunnel 01M7KQX66B00QMY11ZN7KD3GZC inner serve: listener closed (conn err: read tcp 127.0.0.1:42463->127.0.0.1:54000: use of closed network connection) FAIL FAIL	github.com/countersign/countersign/internal/proxy	10.363s FAIL 
+CHECK C2.3.3 PASS
+CHECK C2.3.4 FAIL —     harness_test.go:123: broker: tunnel 01M7KQXHF2006RP8NBC7ZTE9BY inner serve: listener closed (conn err: EOF)     check_m23_test.go:909: upstream never saw the connection close     check_m23_test.go:928: no client-abort result record FAIL FAIL	github.com/countersign/countersign/internal/proxy	38.067s FAIL 
+CHECK C2.3.5 FAIL —     check_m23_test.go:1009: download RSS growth 2631 MiB > 64 MiB     harness_test.go:123: broker: tunnel 01M7KQYQ4E00J3WWEZWC4J38F3 inner serve: listener closed (conn err: read tcp 127.0.0.1:38779->127.0.0.1:53376: use of closed network connection)     harness_test.go:123: broker: tunnel 01M7KQYV9Y00QBEZEMSAF7C94V inner serve: listener closed (conn err: read tcp 127.0.0.1:38779->127.0.0.1:53392: use of closed network connection) FAIL FAIL	github.com/countersign/countersign/internal/proxy	10.825s FAIL 
+CHECK lint.proxy FAIL — internal/proxy/pipeline.go:380:6: func relayStream is unused (unused) func relayStream(w http.ResponseWriter, src io.Reader, dst *hashCounter) error {      ^ 1 issues: * unused: 1 
+M2.3 suite: FAILURES
+check-M2.3: FAIL (exit 1, evidence: evidence/M2.3/20261117T031245Z)
+make[1]: *** [Makefile:37: check-M2.3] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-broker/.check-work/sabotage-M2.3-buffer-whole-response'

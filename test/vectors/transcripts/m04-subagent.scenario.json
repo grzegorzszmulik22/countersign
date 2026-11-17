@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "name": "m04-subagent",
+  "model": "fixture-model-1",
+  "turns": [
+    {
+      "expect_user_contains": "task-main",
+      "response": {
+        "stop": "tool_use",
+        "text": "Main starts work.",
+        "calls": [
+          {"key": "m1", "tool": "Bash", "input": {"command": "sleep 1"}}
+        ]
+      }
+    },
+    {
+      "expect_user_contains": "task-sub",
+      "response": {
+        "stop": "tool_use",
+        "text": "Subagent starts work.",
+        "calls": [
+          {"key": "s1", "tool": "Bash", "input": {"command": "sleep 2.5"}}
+        ]
+      }
+    },
+    {
+      "expect_results": {"m1": ""},
+      "response": {
+        "stop": "end_turn",
+        "text": "main done"
+      }
+    },
+    {
+      "expect_results": {"s1": ""},
+      "response": {
+        "stop": "end_turn",
+        "text": "sub done"
+      }
+    }
+  ]
+}
