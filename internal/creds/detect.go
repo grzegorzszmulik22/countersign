@@ -107,7 +107,7 @@ func matchPEM(b []byte, i int) (end int, ok bool) {
 		return 0, false
 	}
 	for _, c := range rem[:idx] {
-		if !(('A' <= c && c <= 'Z') || ('0' <= c && c <= '9') || c == ' ') {
+		if ('A' > c || c > 'Z') && ('0' > c || c > '9') && c != ' ' {
 			return 0, false
 		}
 	}

@@ -45,10 +45,10 @@ func TestFileStoreGet(t *testing.T) {
 
 func TestFileStoreStrict(t *testing.T) {
 	for _, bad := range []string{
-		"secrets: {a: {k: \"\"}}\n",          // empty value
-		"secrets: {\"\": {k: v}}\n",          // empty name
-		"other: {a: 1}\n",                    // unknown top-level key
-		"secrets: [1,2]\n",                   // wrong shape
+		"secrets: {a: {k: \"\"}}\n", // empty value
+		"secrets: {\"\": {k: v}}\n", // empty name
+		"other: {a: 1}\n",           // unknown top-level key
+		"secrets: [1,2]\n",          // wrong shape
 	} {
 		if _, err := ParseFile([]byte(bad)); err == nil {
 			t.Fatalf("ParseFile accepted %q", bad)

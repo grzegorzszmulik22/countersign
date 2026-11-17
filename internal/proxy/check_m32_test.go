@@ -162,7 +162,7 @@ func (h *headerSink) scrubEP(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/scrub/hdr":
 		w.Header().Set("X-Leak-Key", k)
 		fmt.Fprint(w, "header body")
-	case r.URL.Path == "/scrub/big":
+	case strings.HasPrefix(r.URL.Path, "/scrub/big"):
 		n, _ := strconv.ParseInt(r.URL.Query().Get("n"), 10, 64)
 		if n <= 0 {
 			n = 1 << 20

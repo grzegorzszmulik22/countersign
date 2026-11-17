@@ -36,6 +36,8 @@ const m34Grants = `  grants:
         ref: {secret: github-token, key: value}
         inject: {basic: {username: svc-user}}
         placeholderEnv: GH_TOK
+    - id: anthro-plain
+      match: {hosts: [api.anthropic.com], paths: [/scrub/bigplain]}
     - id: anthro-all
       match: {hosts: [api.anthropic.com]}
       credential:
@@ -332,12 +334,14 @@ func TestC346ScrubThroughput(t *testing.T) {
 
 	// Warm both paths, then take 5 adjacent (plain, cred) pairs. The
 	// per-pair penalty cancels machine-wide load drift; the best pair is
-	// the least-contended sample of the real scrub cost.
-	dl("https://pypi.org/scrub/big?n=1048576")
+	// the least-contended sample of the real scrub cost. Both legs run
+	// the same h1 upstream: the plain baseline is the non-credentialed
+	// anthro-plain grant on a sibling path of the same host.
+	dl("https://api.anthropic.com/scrub/bigplain?n=1048576")
 	dl("https://api.anthropic.com/scrub/big?n=1048576")
 	var best, bCred, bPlain float64 = 1e18, 0, 0
 	for i := 0; i < 5; i++ {
-		pb, pt := dl("https://pypi.org/scrub/big?n=" + itoaMib(mib))
+		pb, pt := dl("https://api.anthropic.com/scrub/bigplain?n=" + itoaMib(mib))
 		cb, ct := dl("https://api.anthropic.com/scrub/big?n=" + itoaMib(mib))
 		perByte := (float64(ct) / float64(cb)) / (float64(pt) / float64(pb))
 		if p := (perByte - 1) * 100; p < best {
