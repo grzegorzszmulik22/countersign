@@ -70,7 +70,7 @@ Corpus `test/vectors/reconcile/`: at least 80 hand-written traces, each with exp
 
 **Build.** The broker keeps, per session, the set of open intents (from its own appended records, in append order) and applies `04` §6.4 before releasing credentials. `audit` and `learn` modes per §6.4. The `attribution` and `decision` it records are what it actually used.
 
-End-to-end flows `test/e2e/m6/` (scripted agent on kind): ten benign flows (clone, push, install, API call, MCP call, parallel calls, subagent, compound command push, `curl` exact, no-network task) and the rogue variants.
+End-to-end flows `test/e2e/m6/` (scripted agent under `cs run` in enforced mode; also on kind once M4 is merged): ten benign flows (clone, push, install, API call, MCP call, parallel calls, subagent, compound command push, `curl` exact, no-network task) and the rogue variants.
 
 **Checks.**
 - C9.3.1 Benign flows complete in `enforce` mode; MM9.3.

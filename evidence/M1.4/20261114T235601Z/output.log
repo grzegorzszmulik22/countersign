@@ -1,0 +1,8 @@
+CHECK C1.4.1 PASS
+CHECK C1.4.2 PASS
+CHECK C1.4.3 PASS
+CHECK C1.4.4 PASS
+CHECK C1.4.5 PASS
+CHECK C1.4.6 PASS
+CHECK C1.4.7 FAIL — --- FAIL: FuzzC147_BundleReader (107.77s)     fuzzing process hung or terminated unexpectedly while minimizing: EOF     Failing input written to testdata/fuzz/FuzzC147_BundleReader/34a99ee8716cf2f4     To re-run:     go test -run=FuzzC147_BundleReader/34a99ee8716cf2f4 FAIL exit status 1 FAIL	github.com/countersign/countersign/internal/ledger	108.013s 
+M1.4 suite: FAILURES

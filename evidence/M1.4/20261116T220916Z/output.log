@@ -1,0 +1,7 @@
+SABOTAGE ack-before-fsync: caught (exit 2) by C1.4.1 
+SABOTAGE nondeterministic-tar: caught (exit 2) by C1.4.2 
+SABOTAGE seal-not-required-for-clean: caught (exit 2) by C1.4.3 
+SABOTAGE skip-inclusion-check: caught (exit 2) by C1.4.3 
+SABOTAGE swallow-tar-errors: caught (exit 2) by C1.4.1 C1.4.2 C1.4.3 C1.4.4 C1.4.5 C1.4.6 C1.4.7 
+SABOTAGE unbounded-tar-alloc: caught (exit 2) by C1.4.7 
+sabotage-M1.4: 6 caught, 0 uncaught (evidence: evidence/M1.4/20261116T220916Z/sabotage)

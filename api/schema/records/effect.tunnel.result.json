@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://countersign.dev/schema/records/effect.tunnel.result.json",
+  "title": "countersign record effect.tunnel.result (03 §4)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "id",
+    "session",
+    "emitter",
+    "eseq",
+    "eprev",
+    "ts",
+    "body"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "type": {
+      "const": "effect.tunnel.result"
+    },
+    "id": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "session": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "emitter": {
+      "$ref": "_common.json#/$defs/emitter"
+    },
+    "eseq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "eprev": {
+      "$ref": "_common.json#/$defs/hex64"
+    },
+    "ts": {
+      "$ref": "_common.json#/$defs/ts"
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "effect_id",
+        "bytes_up",
+        "bytes_down",
+        "duration_ms",
+        "error"
+      ],
+      "properties": {
+        "effect_id": {
+          "type": "string"
+        },
+        "bytes_up": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bytes_down": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "duration_ms": {
+          "type": "number"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

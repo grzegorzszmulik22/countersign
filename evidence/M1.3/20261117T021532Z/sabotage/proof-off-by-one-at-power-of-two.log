@@ -1,0 +1,10 @@
+make[1]: Entering directory '/home/csbuild/src/cs-evidence-go/.check-work/sabotage-M1.3-proof-off-by-one-at-power-of-two'
+CHECK C1.3.1 FAIL — 	/home/csbuild/src/cs-evidence-go/.tools/go/src/runtime/asm_arm64.s:1039 +0x4 fp=0x625de20817d0 sp=0x625de20817d0 pc=0x98da4 created by runtime.(*cleanupQueue).createGs in goroutine 1 	/home/csbuild/src/cs-evidence-go/.tools/go/src/runtime/mcleanup.go:672 +0x108 FAIL	github.com/countersign/countersign/internal/mlog	1.006s FAIL 
+CHECK C1.3.2 FAIL — 	/home/csbuild/src/cs-evidence-go/.tools/go/src/runtime/asm_arm64.s:1039 +0x4 fp=0x1b58d0f697d0 sp=0x1b58d0f697d0 pc=0x98da4 created by runtime.(*cleanupQueue).createGs in goroutine 1 	/home/csbuild/src/cs-evidence-go/.tools/go/src/runtime/mcleanup.go:672 +0x108 FAIL	github.com/countersign/countersign/internal/mlog	0.893s FAIL 
+CHECK C1.3.3 FAIL — 	/home/csbuild/src/cs-evidence-go/.tools/go/src/runtime/asm_arm64.s:1039 +0x4 fp=0x7287b13c0fd0 sp=0x7287b13c0fd0 pc=0x98da4 created by runtime.(*cleanupQueue).createGs in goroutine 1 	/home/csbuild/src/cs-evidence-go/.tools/go/src/runtime/mcleanup.go:672 +0x108 FAIL	github.com/countersign/countersign/internal/mlog	0.981s FAIL 
+CHECK C1.3.4 PASS
+CHECK C1.3.5 PASS
+M1.3 suite: FAILURES
+check-M1.3: FAIL (exit 1, evidence: evidence/M1.3/20261117T021539Z)
+make[1]: *** [Makefile:37: check-M1.3] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-evidence-go/.check-work/sabotage-M1.3-proof-off-by-one-at-power-of-two'

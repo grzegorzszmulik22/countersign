@@ -1,0 +1,4 @@
+SABOTAGE ignore-sni-mismatch: caught (exit 2) by C2.2.4 lint.proxy 
+SABOTAGE shared-ca-across-sessions: caught (exit 2) by C2.2.2 
+SABOTAGE skip-upstream-verify: caught (exit 2) by C2.2.3 
+sabotage-M2.2: 3 caught, 0 uncaught (evidence: evidence/M2.2/20261117T031137Z/sabotage)

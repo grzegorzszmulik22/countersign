@@ -1,0 +1,4 @@
+SABOTAGE checkpoint-signed-by-emitter-key-allowed: caught (exit 2) by C1.3.5 
+SABOTAGE leaf-prefix-missing: caught (exit 2) by C1.3.4 
+SABOTAGE proof-off-by-one-at-power-of-two: caught (exit 2) by C1.3.1 C1.3.2 C1.3.3 
+sabotage-M1.3: 3 caught, 0 uncaught (evidence: evidence/M1.3/20261116T215825Z/sabotage)

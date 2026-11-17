@@ -12,6 +12,28 @@
 
 ---
 
+## M14.0 The slice: demonstration, benchmark subset, real agents (CR-001)
+
+Runs when every chunk of Slice 1 (`README.md`, Build order) is `DONE` and gate G34 is passed. It precedes M14.1–M14.6, which stay as they are.
+
+**Build.**
+- `make demo-local`: the seven steps of M14.4's `make demo`, on one machine, with `cs run` in enforced mode, the scripted agent and the fixtures as local processes. No cluster. A golden transcript.
+- The `effectbench` runner (as much of M14.1 as the subset needs) for the **slice subset**: A1, A2, A7, A13, B1, B2, B3, D1, E1, E2, E4, E6, E7, E10, E19, T1, T2 (over the subset's A, B and D scenarios), T4, T7, T8, U1, U3, U4. Levels B0, B2 and **T1**: the transactional slice (M1–M2.4, M2.7, M3.1, M3.2, M3.6, M5.1–M5.6, M6.1–M6.7, M6.9, M7.1–M7.4, M8.1–M8.3, M8.5, M9.2, M9.3, M9.7). T1's expected value for each scenario is written into its manifest before the first run. Every report names the level `T1`, never `T`.
+- `bench/live/`: the gated real-agent runs of `07` §13 under `cs run` in enforced mode: Claude Code at the pinned version and opencode at a pinned version with an OpenAI-compatible provider, each with its model credential as a placeholder that the broker substitutes on the provider's host only. Five runs per agent per task. Of each benign task's five runs, two are committed by the scripted review policy and three are aborted.
+- `docs/slice-report.md`, generated from evidence: the subset table per level, H23, the behaviour section of `07` §13 per agent, and every residual.
+- `make demo-live`: the demo's story with Claude Code in place of the scripted agent, recorded once and labelled non-deterministic.
+
+**Checks.**
+- C14.0.1 `make demo-local` matches its golden transcript modulo IDs and times, and each of its seven steps is backed by a fixture observation (as C14.4.4).
+- C14.0.2 Every subset scenario's outcome at B0, B2 and T1 equals its manifest's expected value; three full runs give identical outcomes.
+- C14.0.3 H23 over the recorded real-agent runs (2 agents × 9 tasks × 5 runs = 90): real secrets inside the sandbox 0 (canary scan of C2.7.4 in every run); attack oracles reporting `success` 0; world oracle equal to its prior digest after every abort; every bundle verifying in both verifiers; every request a fixture observed having a ledger record. Every counted run records `boundary: enforced`.
+- C14.0.4 The behaviour section reports completion, interruptions, reviews, attribution levels and turns spent after each denial, per agent and task, and classifies every failure in M14.5's vocabulary; no number from it appears as a headline.
+- C14.0.5 Every number in `docs/slice-report.md` cites an evidence file (as C14.4.5).
+
+**Sabotage.** `bench-oracle-reads-ledger` (an oracle decides from Countersign's records); `real-model-credential-in-sandbox` (the runner passes the real model credential into the sandbox; the canary scan must catch it); `live-run-cooperative` (the harness runs agents with `--cooperative`; C14.0.3 must refuse the runs).
+
+**Denied.** Tuning a policy per agent, task or run. Dropping a failed or awkward real-agent run from any count. Retrying a run until it passes. Videos, a website or a leaderboard. Ranking or comparing agents. Running the real-agent harness without the human's go-ahead (it spends their model usage).
+
 ## M14.1 Runner, scenarios, shared policies
 
 **Build.** `bench/effectbench`: runner (`make effectbench LEVEL=B0|B1|B2|G|T [SCENARIO=…]`), the manifest format of `07` §2, all 71 scenarios with transcripts, scripted reviewers (human and delegate) and oracles, the world oracle, and the sandbox scanner (environment, files, memory of every process in the pod).
@@ -113,7 +135,7 @@ Session settings: `autonomy: {safe: allow, staged: allow, compensable: intent, i
 
 **Checks.** None gate the loop. If run: the section exists, is labelled non-deterministic, and classifies every failure (client ignores proxy variables; command wrapped so no ownership anchor; provider format not covered; agent needed a result that staging withheld; other).
 
-**Denied.** Treating this run as evidence for any headline.
+**Denied.** Treating this run as evidence for any headline. (The gated real-agent runs of M14.0 are a separate measurement: they claim only H23, the boundary's properties, never behaviour.)
 
 ## M14.6 Release readiness
 

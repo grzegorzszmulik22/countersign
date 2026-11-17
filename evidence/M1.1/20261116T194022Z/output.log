@@ -1,0 +1,4 @@
+SABOTAGE accept-unknown-fields: caught (exit 2) by C1.1.3 C1.1.5 
+SABOTAGE allow-two-signatures: caught (exit 2) by C1.1.3 
+SABOTAGE pae-wrong-length: caught (exit 2) by C1.1.2 
+sabotage-M1.1: 3 caught, 0 uncaught (evidence: evidence/M1.1/20261116T194022Z/sabotage)

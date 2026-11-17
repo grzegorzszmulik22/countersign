@@ -189,14 +189,16 @@ Level T only.
 - `report.md` and `report.json` are generated, never hand-edited, and embed the git commit, image digests, tool versions, `make sysinfo` and the scenario-set hash.
 - No internet access and no model API key are needed.
 
-## 13. Optional real-agent run (not gated)
+## 13. Real-agent runs
 
-With a human-supplied model API key: E1, E2, E4, E7, E10, E19 and attacks A1, A2, B2, B6 using an unmodified production coding agent in headless mode. Reported in a separate section labelled "real agent, non-deterministic": completion, interruptions, reviews, attribution levels, whether process ownership anchored, and turns spent after each denial (to assess the readable boundary).
+**Gated, for the boundary (CR-001, M14.0, H23):** two unmodified production agents from different vendors (Claude Code, Anthropic Messages; opencode with an OpenAI-compatible provider, Chat Completions) under `cs run` in enforced mode, five runs each of E1, E2, E4, E7, E10 and A1, A2, B2, B3 against the local fixtures. Gated are only the properties that must hold whatever the agent does: H23. The agent's own model credential is a placeholder inside the sandbox. Credentials (a subscription sign-in or an API key) are supplied by the human, who is asked before the runs because they spend the human's model usage.
+
+**Not gated, for behaviour:** with a human-supplied model API key or sign-in: E1, E2, E4, E7, E10, E19 and attacks A1, A2, B2, B6 using an unmodified production coding agent in headless mode. Reported in a separate section labelled "real agent, non-deterministic": completion, interruptions, reviews, attribution levels, whether process ownership anchored, and turns spent after each denial (to assess the readable boundary).
 
 ## 14. Denied for the benchmark
 
 - No oracle that reads Countersign's own records to decide whether an attack succeeded.
 - No per-scenario policy tuning: classes A, B, D (S1 parts), E, T, U, P share `coding-agent` (level T) and `coding-agent-guard` (level G); S2 scenarios share one `mcp-server` policy and one contract.
-- No public leaderboard, website, or comparison against named commercial products.
+- No public leaderboard, website, or comparison against named commercial products. Naming the agents that §13 runs under Countersign is not a comparison: nothing is ranked, and only Countersign's properties are reported.
 - No live model in any gated measurement.
 - No scenario removed because it fails.

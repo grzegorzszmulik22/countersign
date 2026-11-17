@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://countersign.dev/schema/records/effect.connect.json",
+  "title": "countersign record effect.connect (03 §4)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "id",
+    "session",
+    "emitter",
+    "eseq",
+    "eprev",
+    "ts",
+    "body"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "type": {
+      "const": "effect.connect"
+    },
+    "id": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "session": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "emitter": {
+      "$ref": "_common.json#/$defs/emitter"
+    },
+    "eseq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "eprev": {
+      "$ref": "_common.json#/$defs/hex64"
+    },
+    "ts": {
+      "$ref": "_common.json#/$defs/ts"
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exec_id",
+        "pid",
+        "dst",
+        "src_port",
+        "proto",
+        "outcome"
+      ],
+      "properties": {
+        "exec_id": {
+          "type": "string"
+        },
+        "pid": {
+          "type": "integer"
+        },
+        "dst": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ip",
+            "port"
+          ],
+          "properties": {
+            "ip": {
+              "type": "string"
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 65535
+            }
+          }
+        },
+        "src_port": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "proto": {
+          "type": "string",
+          "enum": [
+            "tcp",
+            "udp"
+          ]
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "to-broker",
+            "blocked"
+          ]
+        }
+      }
+    }
+  }
+}

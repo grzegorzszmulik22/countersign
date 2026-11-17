@@ -57,6 +57,16 @@ fi
 # --------------------------------------------------------------------------
 # Preamble: images pulled + loaded, cluster up. All checks need this.
 # --------------------------------------------------------------------------
+# A host without a usable Docker (agent-vpc, by its host rules) cannot run this
+# suite: every check reports SKIP. tools/regress.sh accepts that only on the
+# hosts listed in tools/env-skips.txt; anywhere else it fails.
+if ! docker info >/dev/null 2>&1; then
+    for c in C0.2.1 C0.2.2 C0.2.3 C0.2.4 C0.2.5; do
+        say "$c" SKIP "no usable Docker on $(hostname -s)"
+    done
+    exit 1
+fi
+
 echo "== preamble: make images && make cluster-up =="
 if ! "$MAKE" images 2>&1 || ! "$MAKE" cluster-up 2>&1; then
     for c in C0.2.1 C0.2.2 C0.2.3 C0.2.4 C0.2.5; do

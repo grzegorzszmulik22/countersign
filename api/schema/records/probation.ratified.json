@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://countersign.dev/schema/records/probation.ratified.json",
+  "title": "countersign record probation.ratified (03 §4)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "id",
+    "session",
+    "emitter",
+    "eseq",
+    "eprev",
+    "ts",
+    "body"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "type": {
+      "const": "probation.ratified"
+    },
+    "id": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "session": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "emitter": {
+      "$ref": "_common.json#/$defs/emitter"
+    },
+    "eseq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "eprev": {
+      "$ref": "_common.json#/$defs/hex64"
+    },
+    "ts": {
+      "$ref": "_common.json#/$defs/ts"
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit_id",
+        "webauthn"
+      ],
+      "properties": {
+        "commit_id": {
+          "type": "string"
+        },
+        "webauthn": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "key_id",
+            "authenticator_data",
+            "client_data_json",
+            "signature"
+          ],
+          "properties": {
+            "key_id": {
+              "type": "string"
+            },
+            "authenticator_data": {
+              "type": "string"
+            },
+            "client_data_json": {
+              "type": "string"
+            },
+            "signature": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

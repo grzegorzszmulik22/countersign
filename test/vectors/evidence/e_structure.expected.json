@@ -1,0 +1,19 @@
+{
+  "verdict": "INVALID",
+  "world": "empty",
+  "errors": [
+    {
+      "code": "E_STRUCTURE",
+      "index": 2,
+      "detail": "result for unknown intent i1"
+    }
+  ],
+  "warnings": null,
+  "findings": [],
+  "stats": {
+    "emitters": 4,
+    "records": 10,
+    "session": "P9XSZ3W93DCQC1BKVRDT6QXG60",
+    "tree_size": 10
+  }
+}

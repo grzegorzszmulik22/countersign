@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://countersign.dev/schema/records/undo.closed.json",
+  "title": "countersign record undo.closed (03 §4)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "id",
+    "session",
+    "emitter",
+    "eseq",
+    "eprev",
+    "ts",
+    "body"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "type": {
+      "const": "undo.closed"
+    },
+    "id": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "session": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "emitter": {
+      "$ref": "_common.json#/$defs/emitter"
+    },
+    "eseq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "eprev": {
+      "$ref": "_common.json#/$defs/hex64"
+    },
+    "ts": {
+      "$ref": "_common.json#/$defs/ts"
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "undo_id",
+        "restored",
+        "conflicts",
+        "not_compensable",
+        "failed"
+      ],
+      "properties": {
+        "undo_id": {
+          "type": "string"
+        },
+        "restored": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "conflicts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "not_compensable": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

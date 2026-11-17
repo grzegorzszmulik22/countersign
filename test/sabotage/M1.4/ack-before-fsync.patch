@@ -1,0 +1,13 @@
+diff --git a/internal/ledger/ledger.go b/internal/ledger/ledger.go
+index 3b456c7..5b416ed 100644
+--- a/internal/ledger/ledger.go
++++ b/internal/ledger/ledger.go
+@@ -142,7 +142,7 @@ func (l *Ledger) syncFiles() {
+ // waitDurable blocks until seq is covered by an fsync.
+ func (l *Ledger) waitDurable(seq uint64) error {
+ 	l.mu.Lock()
+-	for l.durable < seq && !l.closed {
++	for l.durable < seq && !l.closed && seq == 0 {
+ 		l.cond.Wait()
+ 	}
+ 	err := l.syncErr

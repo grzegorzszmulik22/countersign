@@ -36,6 +36,27 @@ This folder is the complete brief for an implementation agent working in a loop.
 | **4. Time and trust** | M12–M13 | Policies are tested against history. Sessions replay without touching the world. Leaks have a stated upper bound. Every committed artifact carries a verifiable statement of where it came from |
 | **5. The argument** | M14 | `effectbench`: 71 scenarios against five defence levels, reproducible offline |
 
+## Build order (CR-001): the slice first
+
+The milestones keep their numbers and their content. They are **built** in this order, so that the first thing anyone sees is the whole idea working on real agents, not infrastructure. Read `CHANGE_REQUESTS/001-demo-first-slice.md`.
+
+**Slice 1, "The transaction, demonstrated"** (one machine, no cluster, rootless):
+
+| Step | Chunks | What it adds |
+|---|---|---|
+| 1 | M1.1–M1.6, then **G1** | Evidence core, two verifiers, mutation suite; the format frozen |
+| 2 | M2.1–M2.4, **M2.7**, M3.2, then **G2L** (the local runner's boundary, `06` §10) | Broker in local mode with write-ahead evidence; `cs run -- <agent>` in an enforced namespace; placeholders, including the agent's own model credential |
+| 3 | M5.1–M5.6 | Classes, autonomy, worlds, the git stager, abort with the world-unchanged proof |
+| 4 | M6.1–M6.7, M6.9 | Changeset, invariants and automatic commit, passkey-signed review, apply, barriers, the readable boundary, the review page, verifier integration |
+| 5 | M7.1–M7.4 | Prior state, compensation, undo with evidence, deferred sends |
+| 6 | M8.1–M8.3, M8.5 | Declared intent from Anthropic Messages and OpenAI-format traffic, with redaction |
+| 7 | M9.2, M9.3, M9.7, then **G34** (the slice's transaction and reconciliation semantics, `06` §10) | Go reconciliation engine, inline enforcement, intent annotations on the review |
+| 8 | **M14.0** | `make demo-local`; the slice benchmark at B0, B2, T1; H23 on two unmodified agents from different vendors |
+
+Chunks may be built in parallel lanes when their packages do not overlap and their dependencies in this table are merged; M9.2 depends only on M9.1 and M1, M8.1–M8.3 only on M2.3.
+
+**After the slice**, in this order: M3.3–M3.5, M2.5, M2.6, M4 (cluster mode, then G2), M6.8, M7.5–M7.7, M8.4, M9.4–M9.6, M9.8, M10, M11, M12, M13, M1–M14 exit reviews, M14.1–M14.6 (the full benchmark, five levels, G5).
+
 ## Milestone map
 
 | ID | Name | Produces | Depends on |
@@ -45,10 +66,10 @@ This folder is the complete brief for an implementation agent working in a loop.
 | M2 | Broker data plane | Intercepting egress proxy with write-ahead evidence | M1 |
 | M3 | Policy and credential binding | Grants, placeholders, pinning, response scrubbing | M2 |
 | M4 | Kubernetes integration | Controller, webhook, network lockdown, Helm chart, completeness vs packet capture | M3 |
-| M5 | Worlds and staging | Reversibility classes, autonomy policy, the world service, the git stager, abort and rewind | M4 |
+| M5 | Worlds and staging | Reversibility classes, autonomy policy, the world service, the git stager, abort and rewind | M2.7, M3.2 (local mode); M4 for cluster mode |
 | M6 | Commit and review | Changesets, invariants, passkey-signed commit, apply with preconditions, barriers, world groups, the readable boundary | M5 |
 | M7 | Undo and deferral | Prior-state capture, compensation, undo sessions, deferred sends with provisional IDs, probation, the delegated reviewer | M6 |
-| M8 | Intent capture | Declared intents read from inference and MCP traffic, with no agent changes | M4 |
+| M8 | Intent capture | Declared intents read from inference and MCP traffic, with no agent changes | M2 |
 | M9 | Reconciliation | Declared-vs-observed engine, MCP effect contracts, transaction propagation into MCP servers, policy learning | M7, M8 |
 | M10 | Taint and lineage | Label-based taint, causal chain from untrusted source to effect | M9 |
 | M11 | Process observer | Second independent emitter (Tetragon), bypass evidence, process ownership of effects | M9 |

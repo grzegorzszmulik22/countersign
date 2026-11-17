@@ -1,0 +1,19 @@
+{
+  "verdict": "CLEAN",
+  "world": "empty",
+  "errors": [],
+  "warnings": [
+    {
+      "code": "W_DANGLING",
+      "index": 1,
+      "detail": "effect e9 has no result"
+    }
+  ],
+  "findings": [],
+  "stats": {
+    "emitters": 4,
+    "records": 7,
+    "session": "CA33WCVSWYDYHDF8JHKR6QXG60",
+    "tree_size": 7
+  }
+}

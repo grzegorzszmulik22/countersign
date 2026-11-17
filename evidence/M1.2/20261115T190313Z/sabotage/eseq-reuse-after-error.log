@@ -1,0 +1,10 @@
+make[1]: Entering directory '/home/csbuild/src/cs-evidence-go/.check-work/sabotage-M1.2-eseq-reuse-after-error'
+CHECK C1.2.1 PASS
+CHECK C1.2.2 FAIL —     emitter_test.go:59: line 3: broker/Y766ETEX1R1SW8HPNJCX51YG60: eseq gap or reuse at 0 after 0 --- FAIL: TestC122_InterleavedChains (0.43s) FAIL FAIL	github.com/countersign/countersign/internal/keys	0.444s FAIL 
+CHECK C1.2.3 PASS
+CHECK C1.2.4 PASS
+CHECK C1.2.5 FAIL —     emitter_test.go:133: broker/G5PM850KKMJ04WWRE4NX51YG60: eseq gap or reuse at 0 after 0 --- FAIL: TestC125_EmitterRestart (0.01s) FAIL FAIL	github.com/countersign/countersign/internal/keys	0.029s FAIL 
+M1.2 suite: FAILURES
+check-M1.2: FAIL (exit 1, evidence: evidence/M1.2/20261115T190317Z)
+make[1]: *** [Makefile:35: check-M1.2] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-evidence-go/.check-work/sabotage-M1.2-eseq-reuse-after-error'

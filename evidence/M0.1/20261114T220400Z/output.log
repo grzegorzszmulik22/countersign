@@ -1,0 +1,6 @@
+CHECK C0.1.1 FAIL — make tools/lint/test failed in fresh clone: The command is terminated due to an error: parallel golangci-lint is running make[4]: *** [Makefile:15: lint] Error 3 make[4]: Leaving directory '/tmp/tmp.tHM5WHaHhg/repo' 
+CHECK C0.1.2 PASS
+CHECK C0.1.3 FAIL — make lint failed: The command is terminated due to an error: parallel golangci-lint is running make[4]: *** [Makefile:15: lint] Error 3 make[4]: Leaving directory '/home/csbuild/src/cs-evidence-go' 
+CHECK C0.1.4 PASS
+CHECK C0.1.5 PASS
+M0.1 suite: FAILURES

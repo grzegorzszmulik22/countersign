@@ -1,0 +1,13 @@
+diff --git a/internal/evidence/envelope.go b/internal/evidence/envelope.go
+index f3298d9..68864ee 100644
+--- a/internal/evidence/envelope.go
++++ b/internal/evidence/envelope.go
+@@ -61,7 +61,7 @@ type Envelope struct {
+ func PAE(payloadType string, payload []byte) []byte {
+ 	var b bytes.Buffer
+ 	b.WriteString("DSSEv1 ")
+-	fmt.Fprintf(&b, "%d", len(payloadType))
++	fmt.Fprintf(&b, "%d", len(payloadType)+1)
+ 	b.WriteByte(' ')
+ 	b.WriteString(payloadType)
+ 	b.WriteByte(' ')

@@ -1,0 +1,22 @@
+diff --git a/internal/proxy/pipeline.go b/internal/proxy/pipeline.go
+index e6188c3..ab0d763 100644
+--- a/internal/proxy/pipeline.go
++++ b/internal/proxy/pipeline.go
+@@ -304,7 +304,16 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
+ 	w.WriteHeader(res.StatusCode)
+ 
+ 	respBody := &hashCounter{h: sha256.New()}
+-	err = relayStream(w, res.Body, respBody)
++	var whole []byte
++	whole, err = io.ReadAll(res.Body)
++	if err == nil {
++		var werr error
++		_, werr = w.Write(whole)
++		_, _ = respBody.Write(whole)
++		if werr != nil {
++			err = &writeErr{werr}
++		}
++	}
+ 	result.Response.BodySHA256 = hex_SHA(respBody.h.Sum(nil))
+ 	result.Response.BodyLen = respBody.n
+ 	result.RequestBody = BodyDigest{SHA256: hex_SHA(reqBody.h.Sum(nil)), Len: reqBody.n}

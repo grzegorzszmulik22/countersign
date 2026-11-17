@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://countersign.dev/schema/records/context.observed.json",
+  "title": "countersign record context.observed (03 §4)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "id",
+    "session",
+    "emitter",
+    "eseq",
+    "eprev",
+    "ts",
+    "body"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "type": {
+      "const": "context.observed"
+    },
+    "id": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "session": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "emitter": {
+      "$ref": "_common.json#/$defs/emitter"
+    },
+    "eseq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "eprev": {
+      "$ref": "_common.json#/$defs/hex64"
+    },
+    "ts": {
+      "$ref": "_common.json#/$defs/ts"
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "via_effect",
+        "provider",
+        "model",
+        "block_count",
+        "context_sha256",
+        "new_blocks"
+      ],
+      "properties": {
+        "via_effect": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "block_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "context_sha256": {
+          "$ref": "_common.json#/$defs/hex64"
+        },
+        "new_blocks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "index",
+              "role",
+              "kind",
+              "sha256",
+              "len",
+              "intent_id"
+            ],
+            "properties": {
+              "index": {
+                "type": "integer"
+              },
+              "role": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "sha256": {
+                "$ref": "_common.json#/$defs/hex64"
+              },
+              "len": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "intent_id": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

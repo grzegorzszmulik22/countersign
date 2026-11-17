@@ -1,0 +1,14 @@
+diff --git a/internal/proxy/proxy.go b/internal/proxy/proxy.go
+index 03351bd..542a14e 100644
+--- a/internal/proxy/proxy.go
++++ b/internal/proxy/proxy.go
+@@ -261,8 +261,7 @@ func (s *Server) identifySession(r *http.Request) (sess *Session, attributed boo
+ 	if err != nil {
+ 		return nil, false
+ 	}
+-	ip, err := netip.ParseAddr(host)
+-	if err != nil || !sess.admits(ip) {
++	if _, err := netip.ParseAddr(host); err != nil {
+ 		return sess, true
+ 	}
+ 	return sess, false

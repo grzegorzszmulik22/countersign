@@ -71,17 +71,24 @@ for c in ${par[@]+"${par[@]}"}; do
     "${MAKE:-make}" "check-$c" >"$tmpd/$c.log" 2>&1 &
     pids[$c]=$!
 done
+# A failing suite is accepted only when every non-PASS check is a SKIP that
+# tools/env-skips.txt allows on this host (and the suite checked something).
+host=$(hostname -s)
+env_ok() { python3 tools/env_skip_ok.py tools/env-skips.txt "$host" <"$1"; }
 for c in ${par[@]+"${par[@]}"}; do
     echo "-- make check-$c"
-    wait "${pids[$c]}" || rc=1
+    r=0; wait "${pids[$c]}" || r=$?
     cat "$tmpd/$c.log"
+    [ "$r" -eq 0 ] || env_ok "$tmpd/$c.log" || rc=1
 done
-rm -rf "$tmpd"
 
 for c in ${solo[@]+"${solo[@]}"}; do
     echo "-- make check-$c"
-    "${MAKE:-make}" "check-$c" || rc=1
+    r=0; "${MAKE:-make}" "check-$c" >"$tmpd/$c.log" 2>&1 || r=$?
+    cat "$tmpd/$c.log"
+    [ "$r" -eq 0 ] || env_ok "$tmpd/$c.log" || rc=1
 done
+rm -rf "$tmpd"
 
 if [ "$rc" -eq 0 ]; then
     echo "regress: PASS"

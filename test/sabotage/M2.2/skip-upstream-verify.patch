@@ -1,0 +1,20 @@
+diff --git a/internal/proxy/forward.go b/internal/proxy/forward.go
+index cdf67a4..06af4a5 100644
+--- a/internal/proxy/forward.go
++++ b/internal/proxy/forward.go
+@@ -78,10 +78,11 @@ func (s *Server) upstreamTransport() *http.Transport {
+ 				serverName = host
+ 			}
+ 			cfg := &tls.Config{
+-				RootCAs:    s.upstreamRoots(),
+-				MinVersion: tls.VersionTLS12,
+-				ServerName: serverName,
+-				NextProtos: []string{"h2", "http/1.1"},
++				RootCAs:            s.upstreamRoots(),
++				MinVersion:         tls.VersionTLS12,
++				ServerName:         serverName,
++				NextProtos:         []string{"h2", "http/1.1"},
++				InsecureSkipVerify: true, //nolint:gosec
+ 			}
+ 			tc := tls.Client(raw, cfg)
+ 			if err := tc.HandshakeContext(ctx); err != nil {

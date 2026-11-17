@@ -3,6 +3,8 @@
 Updated by the implementation agent on every loop iteration (`06-agent-loop.md` §1, §13).
 Statuses: `TODO`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-CR-NNN`, `SKIPPED-ENV`, `AWAITING-GATE`.
 
+Build order: Slice 1 first (`README.md`, Build order; CR-001).
+
 | chunk | title | status | attempts | last evidence folder | note |
 |---|---|---|---|---|---|
 | M0.1 | Repository and toolchain | DONE | 1 | evidence/M0.1/20261114T161541Z | lane foundation; re-verified by supervisor on oci-free-a1 and agent-vpc |
@@ -10,21 +12,23 @@ Statuses: `TODO`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-CR-NNN`, `SKIPPED-E
 | M0.3 | Fixture services | DONE | 7 | evidence/M0.3/20261115T205828Z | lane fixtures; reopened for host-dependent pip/npm, then for a pinned node that did not run on oci-free-a1 (libatomic) and tests that did not prove which binary ran. Final supervisor review of main+lane on BOTH hosts: make tools and regress green on oci-free-a1, 10/10 unseen sabotages caught on each host. One C0.1.2 failure during the agent-vpc review, under load from another lane, did not reproduce on a fresh clone |
 | M0.4 | Scripted agent | DONE | 1 | evidence/M0.4/20261114T173517Z | lane agent; held for M0.3, then reviewed as main+lane on both hosts: on oci-free-a1 (its Docker host) 3/3 unseen sabotages caught; on agent-vpc every check is SKIPPED-ENV by design (no Docker). A first regress on oci-free-a1 failed in C0.5.3 while the cluster lane was starting kind; a second full regress was green |
 | M0.5 | Check, sabotage and evidence tooling | DONE | 2 | evidence/M0.5/20261114T161922Z | lane foundation; re-verified by supervisor, frozen-file sabotages caught |
-| M1.1 | Records and envelope | TODO | 0 | | |
-| M1.2 | Signing, keys, emitter chains | TODO | 0 | | |
-| M1.3 | Merkle log and checkpoints | TODO | 0 | | |
-| M1.4 | Ledger storage, bundle, csverify | TODO | 0 | | |
+| M1.1 | Records and envelope | DONE | 2 | lane/evidence-go | merged 2026-11-17. Supervisor review on agent-vpc: lane checks and sabotages green on a fresh clone, regress green, race-clean, 7/7 unseen sabotages caught (nested and escaped duplicate keys, eseq gap, old root unchecked in consistency, key validity, checkpoint origin, subject digest; inclusion proof trimmed of trailing extra hashes). Merge conflict in internal/policy/policy.go: both sides added the same Load panic guard, main kept. Lint and M1.1-M1.4, M3.1 checks green on the merged tree |
+| M1.2 | Signing, keys, emitter chains | DONE | 2 | lane/evidence-go | merged 2026-11-17. Supervisor review on agent-vpc: lane checks and sabotages green on a fresh clone, regress green, race-clean, 7/7 unseen sabotages caught (nested and escaped duplicate keys, eseq gap, old root unchecked in consistency, key validity, checkpoint origin, subject digest; inclusion proof trimmed of trailing extra hashes). Merge conflict in internal/policy/policy.go: both sides added the same Load panic guard, main kept. Lint and M1.1-M1.4, M3.1 checks green on the merged tree |
+| M1.3 | Merkle log and checkpoints | DONE | 2 | lane/evidence-go | merged 2026-11-17. Supervisor review on agent-vpc: lane checks and sabotages green on a fresh clone, regress green, race-clean, 7/7 unseen sabotages caught (nested and escaped duplicate keys, eseq gap, old root unchecked in consistency, key validity, checkpoint origin, subject digest; inclusion proof trimmed of trailing extra hashes). Merge conflict in internal/policy/policy.go: both sides added the same Load panic guard, main kept. Lint and M1.1-M1.4, M3.1 checks green on the merged tree |
+| M1.4 | Ledger storage, bundle, csverify | DONE | 2 | lane/evidence-go | merged 2026-11-17. Supervisor review on agent-vpc: lane checks and sabotages green on a fresh clone, regress green, race-clean, 7/7 unseen sabotages caught (nested and escaped duplicate keys, eseq gap, old root unchecked in consistency, key validity, checkpoint origin, subject digest; inclusion proof trimmed of trailing extra hashes). Merge conflict in internal/policy/policy.go: both sides added the same Load panic guard, main kept. Lint and M1.1-M1.4, M3.1 checks green on the merged tree |
 | M1.5 | Python reference verifier | BLOCKED | 1 | lane/evidence-py bf9be33 | C1.5.2 needs csverify and golden bundles (M1.4). Supervisor review: lane marked DONE with C1.5.2 BLOCKED (not allowed by 06 §2); its suite misses an index/record count mismatch (supervisor sabotage). Resume after M1.4 lands |
 | M1.6 | Mutation suite and measurements | TODO | 0 | | |
 | **G1** | **Human gate: freeze the evidence format** | TODO | | | |
-| M2.1 | Proxy listener and sessions | TODO | 0 | | |
-| M2.2 | TLS interception | TODO | 0 | | |
-| M2.3 | Streaming and digests | TODO | 0 | | |
+| M2.1 | Proxy listener and sessions | DONE | 1 | evidence/M2.1/20261117T003115Z | lane broker. Supervisor review on agent-vpc (fresh clone, after one send-back): 3/3 unseen sabotages caught (Connection-listed header forwarded, TE forwarded, client IP not checked) |
+| M2.2 | TLS interception | DONE | 2 | evidence/M2.2/20261117T031137Z | lane broker. Supervisor review: SNI suffix accepted caught by C2.2.4 (sabotage rewritten after the code changed); race detector clean |
+| M2.3 | Streaming and digests | DONE | 2 | evidence/M2.3/20261117T031244Z | lane broker. Supervisor review: 2/2 unseen sabotages caught (digest ignores query, default port kept in authority). C2.3.2 failed once at nice 19 under load (p99 added 2.65 ms > 2 ms), passed 3/3 at nice 10: timing-sensitive on a shared host |
 | M2.4 | Write-ahead evidence and fail-closed | TODO | 0 | | |
 | M2.5 | Protocol edges and hardening | TODO | 0 | | |
 | M2.6 | Performance harness | TODO | 0 | | |
+| M2.7 | Local runner (CR-001, slice step 2) | TODO | 0 | | |
 | M3.1 | Policy schema and matcher | DONE | 1 | evidence/M3.1/20261114T194524Z | merged 2026-11-15 after second review on agent-vpc (3/3 unseen sabotages caught again; one scan finding was a test file, false positive). run ahead of M2 by supervisor waiver (no code dependency). Supervisor review: regress green, 3/3 unseen sabotages caught (http default port, trailing-dot host, ** zero segments), race-clean. Lane edited shared tooling (sabotage.sh evidence, lint cache dirs): reviewed, sound, kept |
 | M3.2 | Credential store, placeholders, injection | TODO | 0 | | |
+| **G2L** | **Human gate: the local runner's boundary (CR-001)** | TODO | | | |
 | M3.3 | Pinning, placeholder misuse, credential shapes | TODO | 0 | | |
 | M3.4 | Response scrubbing | TODO | 0 | | |
 | M3.5 | Limits | TODO | 0 | | |
@@ -72,6 +76,7 @@ Statuses: `TODO`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-CR-NNN`, `SKIPPED-E
 | M9.5 | MCP: undeclared calls and server contracts | TODO | 0 | | |
 | M9.6 | Policy and contract learning | TODO | 0 | | |
 | M9.7 | Intent annotations on changesets | TODO | 0 | | |
+| **G34** | **Human gate: slice transaction and reconciliation semantics (CR-001)** | TODO | | | |
 | M9.8 | Transaction propagation into MCP servers | TODO | 0 | | |
 | **G4** | **Human gate: reconciliation semantics** | TODO | | | |
 | M10.1 | Labels and taint state | TODO | 0 | | |
@@ -94,6 +99,7 @@ Statuses: `TODO`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-CR-NNN`, `SKIPPED-E
 | M13.2 | Write budget | TODO | 0 | | |
 | M13.3 | Attested outputs | TODO | 0 | | |
 | M13.4 | The gate | TODO | 0 | | |
+| M14.0 | The slice: demonstration, benchmark subset, real agents (CR-001) | TODO | 0 | | |
 | M14.1 | Benchmark runner, scenarios, shared policies | TODO | 0 | | |
 | M14.2 | Defence levels | TODO | 0 | | |
 | M14.3 | Results | TODO | 0 | | |

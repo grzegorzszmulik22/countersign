@@ -1,0 +1,13 @@
+make[1]: Entering directory '/home/csbuild/src/cs-evidence-go/.check-work/sabotage-M1.4-skip-inclusion-check'
+CHECK C1.4.1 PASS
+CHECK C1.4.2 PASS
+CHECK C1.4.3 FAIL —     --- PASS: TestC143_V15Warnings/unparsed (0.13s)     --- PASS: TestC143_V15Warnings/partial_commit (0.13s)     --- PASS: TestC143_V15Warnings/apply_unknown (0.13s)     --- PASS: TestC143_V15Warnings/undo_conflict (0.12s)     --- PASS: TestC143_V15Warnings/unclean_emitter (0.08s) FAIL FAIL	github.com/countersign/countersign/internal/ledger	1.537s FAIL 
+CHECK C1.4.4 PASS
+CHECK C1.4.5 PASS
+CHECK C1.4.6 PASS
+CHECK C1.4.7 PASS
+CHECK C1.4.7 PASS
+M1.4 suite: FAILURES
+check-M1.4: FAIL (exit 1, evidence: evidence/M1.4/20261116T224119Z)
+make[1]: *** [Makefile:37: check-M1.4] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-evidence-go/.check-work/sabotage-M1.4-skip-inclusion-check'

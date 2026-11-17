@@ -1,0 +1,12 @@
+diff --git a/internal/keys/emitter.go b/internal/keys/emitter.go
+index 5dbb3d7..bd540f7 100644
+--- a/internal/keys/emitter.go
++++ b/internal/keys/emitter.go
+@@ -73,7 +73,6 @@ func (e *Emitter) Emit(typeName string, body any, ts string) ([]byte, *evidence.
+ 		return nil, nil, err
+ 	}
+ 	e.eprev = evidence.RecordHash(env)
+-	e.eseq++
+ 	if typeName == "emitter.seal" {
+ 		e.sealed = true
+ 	}

@@ -1,0 +1,11 @@
+make[1]: Entering directory '/home/csbuild/src/cs-broker/.check-work/sabotage-M2.3-digest-computed-after-truncation'
+CHECK C2.3.1 FAIL —     check_m23_test.go:181: download 1073741824: no result record with matching response body     harness_test.go:112: broker: tunnel 01M7KBP7DQ00YSY6N8E3RVZNFC inner serve: listener closed (conn err: read tcp 127.0.0.1:32817->127.0.0.1:56782: use of closed network connection)     harness_test.go:112: broker: tunnel 01M7KBPT1A00K4MDAS072HNCW5 inner serve: listener closed (conn err: read tcp 127.0.0.1:32817->127.0.0.1:59420: use of closed network connection) FAIL FAIL	github.com/countersign/countersign/internal/proxy	128.669s FAIL 
+CHECK C2.3.2 FAIL —     check_m23_test.go:306: p99 added delay 2.337 ms > 2 ms (MM2.3)     check_m23_test.go:308: SSE: 1000 events in 11.34229575s (1000 reads), p99 added delay 2.337 ms, coalesced 0     harness_test.go:112: broker: tunnel 01M7KBTVZE00T9BQSVJ8Z8S5SE inner serve: listener closed (conn err: read tcp 127.0.0.1:45913->127.0.0.1:50830: use of closed network connection) FAIL FAIL	github.com/countersign/countersign/internal/proxy	11.419s FAIL 
+CHECK C2.3.3 PASS
+CHECK C2.3.4 PASS
+CHECK C2.3.5 PASS
+CHECK lint.proxy PASS
+M2.3 suite: FAILURES
+check-M2.3: FAIL (exit 1, evidence: evidence/M2.3/20261116T233941Z)
+make[1]: *** [Makefile:37: check-M2.3] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-broker/.check-work/sabotage-M2.3-digest-computed-after-truncation'

@@ -1,0 +1,11 @@
+make[1]: Entering directory '/home/csbuild/src/cs-broker/.check-work/sabotage-M2.3-no-flush-on-sse'
+CHECK C2.3.1 PASS
+CHECK C2.3.2 FAIL —     check_m23_test.go:431: p99 end-to-end delay 10279.832 ms: stream held back (MM2.3)     check_m23_test.go:433: SSE: 1000 events in 10.402009987s (1 proxied reads), p99 added 10279.729 ms (proxied p99 10279.832, direct p99 0.520), coalesced 999     harness_test.go:123: broker: tunnel 01M7KR49PM002971M3P2JMG9G3 inner serve: listener closed (conn err: read tcp 127.0.0.1:33809->127.0.0.1:44242: use of closed network connection) FAIL FAIL	github.com/countersign/countersign/internal/proxy	10.418s FAIL 
+CHECK C2.3.3 PASS
+CHECK C2.3.4 PASS
+CHECK C2.3.5 PASS
+CHECK lint.proxy PASS
+M2.3 suite: FAILURES
+check-M2.3: FAIL (exit 1, evidence: evidence/M2.3/20261117T031639Z)
+make[1]: *** [Makefile:37: check-M2.3] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-broker/.check-work/sabotage-M2.3-no-flush-on-sse'
