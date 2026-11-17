@@ -1,0 +1,13 @@
+diff --git a/internal/proxy/scrub.go b/internal/proxy/scrub.go
+index baf107e..f9c248f 100644
+--- a/internal/proxy/scrub.go
++++ b/internal/proxy/scrub.go
+@@ -67,7 +67,7 @@ func scrubBody(res *http.Response) (io.Reader, error) {
+ 	case "", "identity":
+ 		return res.Body, nil
+ 	case "gzip":
+-		return gzip.NewReader(res.Body)
++		return res.Body, nil
+ 	default:
+ 		// The broker offers only gzip and identity upstream (04 §4.5); an
+ 		// upstream answering in another encoding cannot be scanned, so the

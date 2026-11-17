@@ -1,0 +1,12 @@
+make[1]: Entering directory '/home/csbuild/src/cs-creds/.check-work/sabotage-M3.2-inject-by-host-only'
+CHECK C3.2.1 PASS
+CHECK C3.2.2 PASS
+CHECK C3.2.3 FAIL — --- FAIL: TestC323Scope (0.37s)     check_m32_test.go:362: x-api-key on non-credentialed grant: "<secret:anthropic>"     harness_test.go:126: broker: tunnel 01M7N2QZM4004SMCQ5R2NX41WM inner serve: http: Server closed (conn err: read tcp 127.0.0.1:34473->127.0.0.1:49428: use of closed network connection) FAIL FAIL	github.com/countersign/countersign/internal/proxy	0.405s FAIL 
+CHECK C3.2.4 PASS
+CHECK C3.2.5 PASS
+CHECK C3.2.6 PASS
+CHECK canary.records PASS
+M3.2 suite: FAILURES
+check-M3.2: FAIL (exit 1, evidence: evidence/M3.2/20261117T154148Z)
+make[1]: *** [Makefile:37: check-M3.2] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-creds/.check-work/sabotage-M3.2-inject-by-host-only'

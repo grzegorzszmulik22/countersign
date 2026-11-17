@@ -1,0 +1,13 @@
+diff --git a/internal/proxy/limits.go b/internal/proxy/limits.go
+index 4b229ad..d21e5f6 100644
+--- a/internal/proxy/limits.go
++++ b/internal/proxy/limits.go
+@@ -30,7 +30,7 @@ func checkLimits(grant *policy.Grant, r *http.Request, tgt forwardTarget) string
+ 	}
+ 	lim := grant.Limits
+ 	if lim.MaxURLBytes != nil &&
+-		int64(len(tgt.path)+len(tgt.rawQuery)) > int64(*lim.MaxURLBytes) {
++		int64(len(tgt.path)) > int64(*lim.MaxURLBytes) {
+ 		return "LIMIT_URL"
+ 	}
+ 	if lim.MaxRequestBodyBytes != nil && r.ContentLength > int64(*lim.MaxRequestBodyBytes) {

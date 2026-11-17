@@ -55,27 +55,34 @@ type capBody struct {
 	r     io.Reader
 	count int64
 	max   int64
+	over  bool
 }
 
 func (c *capBody) Read(b []byte) (int, error) {
-	if c.count >= c.max {
+	if c.over {
 		return 0, errBodyLimit
+	}
+	if c.count >= c.max {
+		// Exactly at the cap: one more source byte means the body
+		// exceeds it; an end here is a legal at-limit body.
+		var one [1]byte
+		for {
+			n, err := c.r.Read(one[:])
+			if n > 0 {
+				c.over = true
+				return 0, errBodyLimit
+			}
+			if err != nil {
+				return 0, err
+			}
+		}
 	}
 	if int64(len(b)) > c.max-c.count {
 		b = b[:c.max-c.count]
 	}
 	n, err := c.r.Read(b)
 	c.count += int64(n)
-	if err == io.EOF {
-		return n, io.EOF
-	}
-	if err != nil {
-		return n, err
-	}
-	if c.count >= c.max {
-		return n, errBodyLimit
-	}
-	return n, nil
+	return n, err
 }
 
 // rateTable is the per-session bucket set: one token bucket per grant ID

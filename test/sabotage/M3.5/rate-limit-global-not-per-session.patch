@@ -1,0 +1,73 @@
+diff --git a/internal/proxy/limits.go b/internal/proxy/limits.go
+index 4b229ad..e3b316d 100644
+--- a/internal/proxy/limits.go
++++ b/internal/proxy/limits.go
+@@ -55,27 +55,34 @@ type capBody struct {
+ 	r     io.Reader
+ 	count int64
+ 	max   int64
++	over  bool
+ }
+ 
+ func (c *capBody) Read(b []byte) (int, error) {
+-	if c.count >= c.max {
++	if c.over {
+ 		return 0, errBodyLimit
+ 	}
++	if c.count >= c.max {
++		// Exactly at the cap: one more source byte means the body
++		// exceeds it; an end here is a legal at-limit body.
++		var one [1]byte
++		for {
++			n, err := c.r.Read(one[:])
++			if n > 0 {
++				c.over = true
++				return 0, errBodyLimit
++			}
++			if err != nil {
++				return 0, err
++			}
++		}
++	}
+ 	if int64(len(b)) > c.max-c.count {
+ 		b = b[:c.max-c.count]
+ 	}
+ 	n, err := c.r.Read(b)
+ 	c.count += int64(n)
+-	if err == io.EOF {
+-		return n, io.EOF
+-	}
+-	if err != nil {
+-		return n, err
+-	}
+-	if c.count >= c.max {
+-		return n, errBodyLimit
+-	}
+-	return n, nil
++	return n, err
+ }
+ 
+ // rateTable is the per-session bucket set: one token bucket per grant ID
+@@ -96,6 +103,9 @@ func newRateTable() *rateTable {
+ 	return &rateTable{buckets: map[string]*tokenBucket{}, now: time.Now}
+ }
+ 
++// globalRateTable is the shared bucket set for every session.
++var globalRateTable = newRateTable()
++
+ // take reports whether one request may proceed under grant's rpm. Buckets
+ // lazily fill to the burst cap (rpm/10, floor 1) and refill at rpm/60 per
+ // second; each admission costs one token.
+diff --git a/internal/proxy/session.go b/internal/proxy/session.go
+index aa921bf..2dec106 100644
+--- a/internal/proxy/session.go
++++ b/internal/proxy/session.go
+@@ -118,7 +118,7 @@ func loadSessions(path string, keys SessionKeyStore) (map[string]*Session, error
+ 			ClientIP:     pfx,
+ 			Policy:       pol,
+ 			placeholders: map[string]string{},
+-			rate:         newRateTable(),
++			rate:         globalRateTable,
+ 			leafCache:    map[string]*tls.Certificate{},
+ 		}
+ 		// Credential store + placeholders (04 §4, M3.2): a credentialed

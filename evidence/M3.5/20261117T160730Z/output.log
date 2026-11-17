@@ -1,0 +1,5 @@
+CHECK C3.5.1 FAIL —     harness_test.go:126: broker: tunnel 01M7N4714700Y77VH9PMDXE625 inner serve: listener closed (conn err: read tcp 127.0.0.1:40489->127.0.0.1:51412: use of closed network connection)     harness_test.go:126: broker: tunnel 01M7N4714C00HRSQB3WKXJKY6Z inner serve: listener closed (conn err: read tcp 127.0.0.1:40489->127.0.0.1:51420: use of closed network connection)     harness_test.go:126: broker: tunnel 01M7N4714J00J85FEJK5XC9WMY inner serve: http: Server closed (conn err: read tcp 127.0.0.1:40489->127.0.0.1:51434: use of closed network connection) FAIL FAIL	github.com/countersign/countersign/internal/proxy	0.439s FAIL 
+CHECK C3.5.2 PASS
+CHECK C3.5.3 PASS
+CHECK C3.5.4 PASS
+M3.5 suite: FAILURES

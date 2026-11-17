@@ -7,7 +7,9 @@ package proxy
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -18,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -88,6 +91,10 @@ type headerSink struct {
 }
 
 func (h *headerSink) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, "/scrub/") || r.URL.Path == "/redir" {
+		h.scrubEP(w, r)
+		return
+	}
 	body, _ := io.ReadAll(r.Body)
 	hdr := http.Header{}
 	for k, v := range r.Header {
@@ -105,6 +112,96 @@ func (h *headerSink) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		resp["leak"] = h.secretInResp
 	}
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// inboundKey returns the credential material this request carried — the
+// injected real value for a credentialed grant, or whatever the client
+// put in the header otherwise. Scrub endpoints reflect it in different
+// wire positions so the broker's response scrubber has something to find.
+func inboundKey(r *http.Request) string {
+	if v := r.Header.Get("X-Api-Key"); v != "" {
+		return v
+	}
+	return r.Header.Get("Authorization")
+}
+
+// scrubEP serves the M3.4 leak oracle endpoints (04 §4.5): every variant
+// places the inbound credential somewhere in the response.
+func (h *headerSink) scrubEP(w http.ResponseWriter, r *http.Request) {
+	k := inboundKey(r)
+	hdr := http.Header{}
+	for kk, v := range r.Header {
+		cp := make([]string, len(v))
+		copy(cp, v)
+		hdr[kk] = cp
+	}
+	h.mu.Lock()
+	h.seen = append(h.seen, hdr)
+	h.bodies += int64(len(k))
+	h.mu.Unlock()
+	switch {
+	case r.URL.Path == "/scrub/raw":
+		fmt.Fprintf(w, "start %s mid %s end", k, k)
+	case r.URL.Path == "/scrub/forms":
+		// All three §4.5 wire forms of an x-api-key-style secret.
+		fmt.Fprintf(w, "raw=%s b64=%s enc=%s", k,
+			base64.StdEncoding.EncodeToString([]byte(k)), url.QueryEscape(k))
+	case r.URL.Path == "/scrub/gzip":
+		gz := &bytes.Buffer{}
+		gw := gzip.NewWriter(gz)
+		fmt.Fprintf(gw, "zipped %s payload", k)
+		_ = gw.Close()
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Set("Content-Type", "application/octet-stream")
+		_, _ = w.Write(gz.Bytes())
+	case r.URL.Path == "/scrub/trailer":
+		w.Header().Set("Trailer", "X-Leak-Key")
+		fmt.Fprint(w, "trailer body")
+		w.Header().Set("X-Leak-Key", k)
+	case r.URL.Path == "/scrub/hdr":
+		w.Header().Set("X-Leak-Key", k)
+		fmt.Fprint(w, "header body")
+	case r.URL.Path == "/scrub/big":
+		n, _ := strconv.ParseInt(r.URL.Query().Get("n"), 10, 64)
+		if n <= 0 {
+			n = 1 << 20
+		}
+		w.Header().Set("Content-Type", "application/octet-stream")
+		zero := bytes.Repeat([]byte{'0'}, 64<<10)
+		var sent int64
+		insertAt := n - int64(len(k)) - 16
+		for sent < insertAt {
+			m := int64(len(zero))
+			if insertAt-sent < m {
+				m = insertAt - sent
+			}
+			_, _ = w.Write(zero[:m])
+			sent += m
+		}
+		_, _ = w.Write([]byte(k))
+		sent += int64(len(k))
+		for sent < n {
+			m := int64(len(zero))
+			if n-sent < m {
+				m = n - sent
+			}
+			_, _ = w.Write(zero[:m])
+			sent += m
+		}
+	case r.URL.Path == "/redir":
+		w.Header().Set("Location", r.URL.Query().Get("to"))
+		w.WriteHeader(http.StatusFound)
+		fmt.Fprint(w, "redirect")
+	case r.URL.Path == "/scrub/basic":
+		// The Basic wire form: Authorization arrives as
+		// "Basic base64(user:secret)" upstream-side; reflect it whole.
+		fmt.Fprintf(w, "auth=%s", k)
+	case r.URL.Path == "/scrub/badenc":
+		w.Header().Set("Content-Encoding", "br")
+		fmt.Fprintf(w, "unverifiable %s", k)
+	default:
+		http.Error(w, "unknown scrub endpoint", http.StatusNotFound)
+	}
 }
 
 func (h *headerSink) count() int {
@@ -139,6 +236,7 @@ type credEnv struct {
 	anthro *headerSink
 	pypi   *headerSink
 	files  *headerSink
+	h2     *headerSink
 }
 
 // startCredEnv builds the credentialed session rig. sinkFn, when non-nil,
@@ -157,15 +255,21 @@ func startCredEnv(t *testing.T, grants string, sinkFn func(dir string) RecordSin
 		sink = sinkFn(dir)
 	}
 
-	ce := &credEnv{anthro: &headerSink{}, pypi: &headerSink{}, files: &headerSink{}}
-	anthroAddr, _ := startTLSUpstream(t, ca, []string{"api.anthropic.com"}, nil, ce.anthro)
+	ce := &credEnv{anthro: &headerSink{}, pypi: &headerSink{}, files: &headerSink{}, h2: &headerSink{}}
+	// h1 for the Anthropic upstream: big streamed bodies stay off h2's
+	// flow-control edge cases (the h2 path is exercised on its own host).
+	anthroAddr, _ := startTLSUpstream(t, ca, []string{"api.anthropic.com"},
+		[]string{"http/1.1"}, ce.anthro)
 	pypiAddr, _ := startTLSUpstream(t, ca, []string{"pypi.org"}, nil, ce.pypi)
 	filesAddr, _ := startTLSUpstream(t, ca, []string{"files.pythonhosted.org"}, nil, ce.files)
+	h2Addr, _ := startTLSUpstream(t, ca, []string{"h2.anthropic.example"},
+		[]string{"h2"}, ce.h2)
 
 	routes := map[string]string{
 		"api.anthropic.com":      anthroAddr,
 		"pypi.org":               pypiAddr,
 		"files.pythonhosted.org": filesAddr,
+		"h2.anthropic.example":   h2Addr,
 	}
 	e := newTestEnvFull(t, dir, []SessionEntry{
 		sessionEntryCreds("s1", "tok-one", "127.0.0.1", pol, sec),
