@@ -1,0 +1,9 @@
+{
+  "chunk": "DUMMY2",
+  "command": "make sabotage-DUMMY2 (tools/sabotage.sh)",
+  "started_utc": "20261116T235918Z",
+  "duration_ms": 1095,
+  "exit_code": 1,
+  "git_commit": "c54a3d39ef9a91be12686b09607f153030ca639a",
+  "git_dirty": "yes"
+}
