@@ -1,0 +1,13 @@
+make[1]: Entering directory '/home/csbuild/src/cs-evidence-go/.check-work/sabotage-M1.4-unbounded-tar-alloc'
+CHECK C1.4.1 PASS
+CHECK C1.4.2 PASS
+CHECK C1.4.3 PASS
+CHECK C1.4.4 PASS
+CHECK C1.4.5 PASS
+CHECK C1.4.6 PASS
+CHECK C1.4.7 FAIL —     --- FAIL: TestC147_ReaderRejects/over_member_cap (0.57s)     --- PASS: TestC147_ReaderRejects/missing_required (0.00s)     --- PASS: TestC147_ReaderRejects/duplicate_member (0.00s)     --- PASS: TestC147_ReaderRejects/non_regular_member (0.00s)     --- PASS: TestC147_ReaderRejects/extra_member (0.00s) FAIL FAIL	github.com/countersign/countersign/internal/ledger	1.591s FAIL 
+CHECK C1.4.7 FAIL — --- FAIL: FuzzC147_BundleReader (182.83s)     fuzzing process hung or terminated unexpectedly while minimizing: EOF     Failing input written to testdata/fuzz/FuzzC147_BundleReader/74b08e6501b79843     To re-run:     go test -run=FuzzC147_BundleReader/74b08e6501b79843 FAIL exit status 1 FAIL	github.com/countersign/countersign/internal/ledger	182.900s 
+M1.4 suite: FAILURES
+check-M1.4: FAIL (exit 1, evidence: evidence/M1.4/20261115T172754Z)
+make[1]: *** [Makefile:35: check-M1.4] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-evidence-go/.check-work/sabotage-M1.4-unbounded-tar-alloc'

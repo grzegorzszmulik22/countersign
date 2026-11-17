@@ -1,0 +1,10 @@
+make[1]: Entering directory '/home/csbuild/src/cs-evidence-go/.check-work/sabotage-M1.2-skip-role-check'
+CHECK C1.2.1 FAIL — # github.com/countersign/countersign/internal/keys internal/keys/verify.go:31:2: declared and not used: role FAIL	github.com/countersign/countersign/internal/keys [build failed] FAIL 
+CHECK C1.2.2 FAIL — # github.com/countersign/countersign/internal/keys internal/keys/verify.go:31:2: declared and not used: role FAIL	github.com/countersign/countersign/internal/keys [build failed] FAIL 
+CHECK C1.2.3 FAIL — # github.com/countersign/countersign/internal/keys internal/keys/verify.go:31:2: declared and not used: role FAIL	github.com/countersign/countersign/internal/keys [build failed] FAIL 
+CHECK C1.2.4 FAIL — # github.com/countersign/countersign/internal/keys internal/keys/verify.go:31:2: declared and not used: role FAIL	github.com/countersign/countersign/internal/keys [build failed] FAIL 
+CHECK C1.2.5 FAIL — # github.com/countersign/countersign/internal/keys internal/keys/verify.go:31:2: declared and not used: role FAIL	github.com/countersign/countersign/internal/keys [build failed] FAIL 
+M1.2 suite: FAILURES
+check-M1.2: FAIL (exit 1, evidence: evidence/M1.2/20261117T021528Z)
+make[1]: *** [Makefile:37: check-M1.2] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-evidence-go/.check-work/sabotage-M1.2-skip-role-check'

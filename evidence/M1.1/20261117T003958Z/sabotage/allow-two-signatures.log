@@ -1,0 +1,10 @@
+make[1]: Entering directory '/home/csbuild/src/cs-evidence-go/.check-work/sabotage-M1.1-allow-two-signatures'
+CHECK C1.1.1 PASS
+CHECK C1.1.2 PASS
+CHECK C1.1.3 FAIL —     --- PASS: TestC113_DuplicateKeys/envelope_signatures_array (0.00s)     --- PASS: TestC113_DuplicateKeys/statement_subject_array (0.00s) FAIL FAIL	github.com/countersign/countersign/internal/evidence	0.013s FAIL 
+CHECK C1.1.4 PASS
+CHECK C1.1.5 PASS
+M1.1 suite: FAILURES
+check-M1.1: FAIL (exit 1, evidence: evidence/M1.1/20261117T005101Z)
+make[1]: *** [Makefile:37: check-M1.1] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-evidence-go/.check-work/sabotage-M1.1-allow-two-signatures'

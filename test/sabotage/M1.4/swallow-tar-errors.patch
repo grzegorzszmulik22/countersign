@@ -1,0 +1,33 @@
+diff --git a/internal/ledger/bundle.go b/internal/ledger/bundle.go
+index b80ec6e..a661305 100644
+--- a/internal/ledger/bundle.go
++++ b/internal/ledger/bundle.go
+@@ -264,11 +264,8 @@ func ReadBundle(data []byte) (map[string][]byte, error) {
+ 	var total int64
+ 	for {
+ 		hdr, err := tr.Next()
+-		if err == io.EOF {
+-			break
+-		}
+ 		if err != nil {
+-			return nil, &BundleError{fmt.Sprintf("malformed archive: %v", err)}
++			break
+ 		}
+ 		if len(order) >= MaxMembers {
+ 			return nil, &BundleError{fmt.Sprintf("more than %d members", MaxMembers)}
+@@ -299,15 +296,6 @@ func ReadBundle(data []byte) (map[string][]byte, error) {
+ 		members[hdr.Name] = buf
+ 		order = append(order, hdr.Name)
+ 	}
+-	// V1: nothing but zero padding may follow the end-of-archive marker;
+-	// the tar reader itself stops at the marker and would not see it.
+-	if tail := data[cr.n:]; len(tail) > 0 {
+-		for _, b := range tail {
+-			if b != 0 {
+-				return nil, &BundleError{"trailing garbage after end of archive"}
+-			}
+-		}
+-	}
+ 	for _, req := range requiredEntries {
+ 		if _, ok := members[req]; !ok {
+ 			return nil, &BundleError{fmt.Sprintf("missing required member %q", req)}

@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://countersign.dev/schema/records/effect.tunnel.json",
+  "title": "countersign record effect.tunnel (03 §4)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "id",
+    "session",
+    "emitter",
+    "eseq",
+    "eprev",
+    "ts",
+    "body"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "type": {
+      "const": "effect.tunnel"
+    },
+    "id": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "session": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "emitter": {
+      "$ref": "_common.json#/$defs/emitter"
+    },
+    "eseq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "eprev": {
+      "$ref": "_common.json#/$defs/hex64"
+    },
+    "ts": {
+      "$ref": "_common.json#/$defs/ts"
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "effect_id",
+        "authority",
+        "sni",
+        "kind",
+        "decision"
+      ],
+      "properties": {
+        "effect_id": {
+          "type": "string"
+        },
+        "authority": {
+          "type": "string"
+        },
+        "sni": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "passthrough",
+            "websocket"
+          ]
+        },
+        "decision": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "action",
+            "reason",
+            "requires",
+            "grant",
+            "credentials",
+            "would_deny"
+          ],
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": [
+                "allow",
+                "deny",
+                "hold",
+                "stage"
+              ]
+            },
+            "reason": {
+              "type": "string"
+            },
+            "requires": {
+              "type": "string",
+              "enum": [
+                "allow",
+                "intent",
+                "review",
+                "deny"
+              ]
+            },
+            "grant": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "credentials": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "would_deny": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

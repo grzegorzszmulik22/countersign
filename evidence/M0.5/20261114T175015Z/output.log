@@ -1,0 +1,5 @@
+CHECK C0.5.1 PASS
+CHECK C0.5.2 PASS
+CHECK C0.5.3 FAIL — regress still failing after restore: regress: FAIL make[2]: *** [Makefile:32: regress] Error 1 make[2]: Leaving directory '/home/csbuild/src/cs-evidence-go' 
+CHECK C0.5.4 PASS
+M0.5 suite: FAILURES

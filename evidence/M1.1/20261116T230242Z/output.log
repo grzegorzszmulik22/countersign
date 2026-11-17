@@ -1,0 +1,7 @@
+CHECK C1.1.1 PASS
+CHECK C1.1.2 PASS
+CHECK C1.1.3 PASS
+CHECK C1.1.4 PASS
+Terminated
+CHECK C1.1.5 FAIL — fuzz: elapsed: 3m43s, execs: 4250829 (17189/sec), new interesting: 1 (total: 929) fuzz: elapsed: 3m46s, execs: 4319042 (22707/sec), new interesting: 1 (total: 929) fuzz: elapsed: 3m49s, execs: 4416349 (32480/sec), new interesting: 1 (total: 929) fuzz: elapsed: 3m52s, execs: 4493684 (25778/sec), new interesting: 1 (total: 929) fuzz: elapsed: 3m55s, execs: 4560883 (22395/sec), new interesting: 1 (total: 929) 
+M1.1 suite: FAILURES

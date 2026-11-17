@@ -1,0 +1,108 @@
+{
+  "verdict": "INVALID",
+  "world": "committed",
+  "errors": [
+    {
+      "code": "E_CHAIN",
+      "index": 1,
+      "detail": "broker/YSBH42XK1Q51YD65RRFS6QXG60: first eseq is 1, want 0"
+    },
+    {
+      "code": "E_CHAIN",
+      "index": 2,
+      "detail": "broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 0 after 0"
+    },
+    {
+      "code": "E_CHAIN",
+      "index": 3,
+      "detail": "broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 2 after 0"
+    },
+    {
+      "code": "E_CHAIN",
+      "index": 4,
+      "detail": "broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 3 after 0"
+    },
+    {
+      "code": "E_CHAIN",
+      "index": 5,
+      "detail": "broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 4 after 0"
+    },
+    {
+      "code": "E_CHAIN",
+      "index": 6,
+      "detail": "broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 5 after 0"
+    },
+    {
+      "code": "E_CHAIN",
+      "index": 7,
+      "detail": "broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 6 after 0"
+    },
+    {
+      "code": "E_CHAIN",
+      "index": 8,
+      "detail": "broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 7 after 0"
+    },
+    {
+      "code": "E_CHAIN",
+      "index": 9,
+      "detail": "broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 8 after 0"
+    },
+    {
+      "code": "E_CHAIN",
+      "index": 11,
+      "detail": "broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 9 after 0"
+    },
+    {
+      "code": "E_CHAIN",
+      "index": 12,
+      "detail": "broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 10 after 0"
+    },
+    {
+      "code": "E_CHAIN",
+      "index": 16,
+      "detail": "broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 11 after 0"
+    },
+    {
+      "code": "E_CHAIN",
+      "index": 17,
+      "detail": "broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 12 after 0"
+    },
+    {
+      "code": "E_CHAIN",
+      "index": 28,
+      "detail": "broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 13 after 0"
+    },
+    {
+      "code": "E_CHAIN",
+      "index": 29,
+      "detail": "broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 14 after 0"
+    },
+    {
+      "code": "E_CHAIN",
+      "index": 32,
+      "detail": "broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 15 after 0"
+    },
+    {
+      "code": "E_INCLUSION",
+      "index": 2,
+      "detail": "log_index 1 not strictly increasing"
+    },
+    {
+      "code": "E_SEAL",
+      "detail": "seal head broker/YSBH42XK1Q51YD65RRFS6QXG60 eseq 15 hash f44251523ac9fc443153ab29c6b45028c17d567a313ced71377506c970d1ed12 ≠ chain 0 "
+    },
+    {
+      "code": "E_STRUCTURE",
+      "index": 1,
+      "detail": "intent i1 via unknown effect e1"
+    }
+  ],
+  "warnings": null,
+  "findings": [],
+  "stats": {
+    "emitters": 4,
+    "records": 36,
+    "session": "GKXRG2C2AM6NHG1FVRFS6QXG60",
+    "tree_size": 36
+  }
+}

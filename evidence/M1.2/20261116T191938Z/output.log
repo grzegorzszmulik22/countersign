@@ -1,0 +1,4 @@
+SABOTAGE eprev-uses-payload-only: caught (exit 2) by C1.2.2 C1.2.5 
+SABOTAGE eseq-reuse-after-error: caught (exit 2) by C1.2.2 C1.2.5 
+SABOTAGE skip-role-check: caught (exit 2) by C1.2.1 C1.2.2 C1.2.3 C1.2.4 C1.2.5 
+sabotage-M1.2: 3 caught, 0 uncaught (evidence: evidence/M1.2/20261116T191938Z/sabotage)

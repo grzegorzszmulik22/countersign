@@ -1,0 +1,12 @@
+diff --git a/internal/evidence/strict.go b/internal/evidence/strict.go
+index 894a0f7..2a4a621 100644
+--- a/internal/evidence/strict.go
++++ b/internal/evidence/strict.go
+@@ -296,7 +296,6 @@ func unmarshalStrict(data []byte, v any) error {
+ 		return err
+ 	}
+ 	dec := json.NewDecoder(bytes.NewReader(data))
+-	dec.DisallowUnknownFields()
+ 	if err := dec.Decode(v); err != nil {
+ 		return err
+ 	}

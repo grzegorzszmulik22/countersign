@@ -1,0 +1,12 @@
+make[1]: Entering directory '/home/csbuild/src/cs-evidence-go/.check-work/sabotage-M1.4-nondeterministic-tar'
+CHECK C1.4.1 PASS
+CHECK C1.4.2 PASS
+CHECK C1.4.3 PASS
+CHECK C1.4.4 PASS
+CHECK C1.4.5 PASS
+CHECK C1.4.6 PASS
+CHECK C1.4.7 PASS
+CHECK C1.4.7 PASS
+M1.4 suite: all checks passed
+check-M1.4: PASS (evidence: evidence/M1.4/20261115T192507Z)
+make[1]: Leaving directory '/home/csbuild/src/cs-evidence-go/.check-work/sabotage-M1.4-nondeterministic-tar'

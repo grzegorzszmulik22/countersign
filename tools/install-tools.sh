@@ -195,6 +195,12 @@ for b in npm npx corepack; do
 done
 
 # --- cryptography wheel (pinned file + sha256) -------------------------------
+# cffi is a runtime dep of cryptography; it was missing until M1.2.
+if ! [ "$("$PYBIN/python3" -c 'import cffi; print(cffi.__version__)' 2>/dev/null)" = "$CFFI_VERSION" ]; then
+    whl=$(fetch "$CFFI_WHEEL_URL" "$CFFI_SHA256" "$CFFI_WHEEL")
+    "$PYBIN/python3" -m pip install --quiet --no-index --no-deps "$whl"
+    echo "installed cffi $CFFI_VERSION"
+fi
 if ! [ "$("$PYBIN/python3" -c 'import cryptography,sys; print(cryptography.__version__)' 2>/dev/null)" = "$CRYPTOGRAPHY_VERSION" ]; then
     whl=$(fetch "$CRYPTOGRAPHY_WHEEL_URL" "$CRYPTOGRAPHY_SHA256" "$CRYPTOGRAPHY_WHEEL")
     "$PYBIN/python3" -m pip install --quiet --no-index --no-deps "$whl"

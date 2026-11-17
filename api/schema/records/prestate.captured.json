@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://countersign.dev/schema/records/prestate.captured.json",
+  "title": "countersign record prestate.captured (03 §4)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "type",
+    "id",
+    "session",
+    "emitter",
+    "eseq",
+    "eprev",
+    "ts",
+    "body"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "type": {
+      "const": "prestate.captured"
+    },
+    "id": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "session": {
+      "$ref": "_common.json#/$defs/ulid"
+    },
+    "emitter": {
+      "$ref": "_common.json#/$defs/emitter"
+    },
+    "eseq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "eprev": {
+      "$ref": "_common.json#/$defs/hex64"
+    },
+    "ts": {
+      "$ref": "_common.json#/$defs/ts"
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "for_effect",
+        "for_session",
+        "when",
+        "via_effect",
+        "status",
+        "state_sha256",
+        "len",
+        "etag"
+      ],
+      "properties": {
+        "for_effect": {
+          "type": "string"
+        },
+        "for_session": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "_common.json#/$defs/ulid"
+            }
+          ]
+        },
+        "when": {
+          "type": "string",
+          "enum": [
+            "before",
+            "after"
+          ]
+        },
+        "via_effect": {
+          "type": "string"
+        },
+        "status": {
+          "type": "integer"
+        },
+        "state_sha256": {
+          "$ref": "_common.json#/$defs/hex64"
+        },
+        "len": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "etag": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
