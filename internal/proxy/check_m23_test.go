@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -236,20 +237,15 @@ func TestC232SSEFlush(t *testing.T) {
 	e := newTestEnv(t, []SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)}, routes)
 
 	const N = 1000
-	sse := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.WriteHeader(200)
-		fl := w.(http.Flusher)
-		for i := 0; i < N; i++ {
-			// The payload carries the event index and the upstream flush
-			// instant so per-event delay is measurable end to end.
-			_, _ = fmt.Fprintf(w, "data: %d:%d\n\n", i, time.Now().UnixNano())
-			fl.Flush()
-			if i != N-1 {
-				time.Sleep(10 * time.Millisecond)
-			}
-		}
-	})
+	// One generator stamps each event once and broadcasts it to every
+	// connected subscriber, so the proxied and direct arms carry identical
+	// send timestamps. Per-connection senders would let two independent
+	// 10 ms sleep loops drift against each other under host load, and that
+	// send-side skew would count as broker-added delay. With a shared ts,
+	// e2e_proxied - e2e_direct for an event is exactly the delay the broker
+	// (and only the broker) added.
+	hub := &sseHub{n: N, want: 2}
+	sse := http.HandlerFunc(hub.serve)
 	addr, closeUp := startTLSUpstream(t, e.ca, []string{"sse.example"}, nil, sse)
 	defer closeUp()
 	routes["sse.example"] = addr
@@ -268,6 +264,9 @@ func TestC232SSEFlush(t *testing.T) {
 		},
 	}}
 	proxied := e.proxyClient(t, "tok-one", e.combinedPool(t, "s1"), "http/1.1")
+	// The hub starts only once both arms are subscribed; a client timeout
+	// turns a never-started or stalled stream into a failure, not a hang.
+	proxied.Timeout, direct.Timeout = 60*time.Second, 60*time.Second
 
 	readStream := func(cli *http.Client) ([]float64, int, int, int, error) {
 		res, err := cli.Get("https://sse.example/sse")
@@ -363,6 +362,62 @@ func TestC232SSEFlush(t *testing.T) {
 	}
 	t.Logf("SSE: %d events in %v (%d proxied reads), p99 added %.3f ms (proxied p99 %.3f, direct p99 %.3f), coalesced %d",
 		N, time.Since(start), p.reads, p99, ap99, dsrt[i99], p.coalesced)
+}
+
+// sseHub generates a paced SSE stream once and fans the identical frames
+// out to every subscriber, starting only when `want` subscribers arrived.
+// Each frame carries its index and the single generation timestamp.
+type sseHub struct {
+	n, want int
+	mu      sync.Mutex
+	subs    map[chan []byte]struct{}
+	started bool
+}
+
+func (h *sseHub) serve(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.WriteHeader(200)
+	fl := w.(http.Flusher)
+	ch := make(chan []byte, h.n+1)
+	h.mu.Lock()
+	if h.subs == nil {
+		h.subs = map[chan []byte]struct{}{}
+	}
+	h.subs[ch] = struct{}{}
+	goGen := len(h.subs) >= h.want && !h.started
+	h.started = h.started || goGen
+	h.mu.Unlock()
+	if goGen {
+		go h.generate()
+	}
+	for ev := range ch {
+		if _, err := w.Write(ev); err != nil {
+			return
+		}
+		fl.Flush()
+	}
+}
+
+func (h *sseHub) generate() {
+	for i := 0; i < h.n; i++ {
+		ev := []byte(fmt.Sprintf("data: %d:%d\n\n", i, time.Now().UnixNano()))
+		h.mu.Lock()
+		for ch := range h.subs {
+			select {
+			case ch <- ev:
+			default: // a subscriber that fell a whole window behind stalls nobody
+			}
+		}
+		h.mu.Unlock()
+		if i != h.n-1 {
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	h.mu.Lock()
+	for ch := range h.subs {
+		close(ch)
+	}
+	h.mu.Unlock()
 }
 
 func bytesIndex(b, needle []byte) int {
