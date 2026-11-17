@@ -45,10 +45,14 @@ else
     o=$("$MAKE" regress 2>&1); c=$?
     mv /tmp/c053.$$ "$f"
     if [ "$c" -ne 0 ] && echo "$o" | grep -qi 'frozen\|FROZEN'; then
-        if "$MAKE" regress >/tmp/c053r.$$ 2>&1; then
+        # Restored: the frozen hashes must match again. C0.5.3 asks only that
+        # tampering makes regress fail; a full second `make regress` here
+        # recursed (regress runs M0.2, whose C0.2.2 runs check-M0 and so this
+        # suite again) into seven nested regressions on one host.
+        if tools/verify-frozen.sh >/tmp/c053r.$$ 2>&1; then
             pass C0.5.3
         else
-            bad C0.5.3 "regress still failing after restore: $(tail -3 /tmp/c053r.$$ | tr '\n' ' ')"
+            bad C0.5.3 "frozen hashes still differ after restore: $(tail -3 /tmp/c053r.$$ | tr '\n' ' ')"
         fi
         rm -f /tmp/c053r.$$
     else
