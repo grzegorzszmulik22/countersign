@@ -10,3 +10,4 @@ C0.2.2  agent-vpc  no Docker on agent-vpc (host rule: no containers); passed on 
 C0.2.3  agent-vpc  no Docker on agent-vpc (host rule: no containers); passed on oci-free-a1: evidence/M0.2/20261116T003151Z
 C0.2.4  agent-vpc  no Docker on agent-vpc (host rule: no containers); passed on oci-free-a1: evidence/M0.2/20261116T003151Z
 C0.2.5  agent-vpc  no Docker on agent-vpc (host rule: no containers); passed on oci-free-a1: evidence/M0.2/20261116T003151Z
+C2.3.2  free-a1  2 ms p99 SSE delay is not measurable on the 2-core oci-free-a1 under lane load (read 35-70 ms); timing runs on agent-vpc only (supervisor, 2026-11-17); passed on agent-vpc: evidence/M2.3/20261117T032847Z (lane/broker c960e09)
