@@ -36,23 +36,13 @@ mkdir -p "$WORK/ca" "$WORK/obs" "$WORK/logs"
 IMG=cs-sandbox-m04:run-$$
 NET=cs-m04-net-$$
 VOL=cs-m04-work-$$
-# SNAP is an immutable snapshot of the commit under test: it is the docker
-# build context and the source tree the fixture binaries are built from. The
-# build context must never be the live working tree — under parallel regress
-# another suite writing a file mid-tar breaks `docker build`.
 SNAP="$WORK/snap"
-mkdir -p "$SNAP"
-git archive HEAD | tar -x -C "$SNAP" || {
-    for id in C0.4.1 C0.4.2 C0.4.3 C0.4.4 C0.4.image; do
-        bad "$id" "git archive HEAD failed"
-    done
-    exit "$fail"
-}
 BIN=$SNAP/bin
-mkdir -p "$BIN"
 CADIR=$WORK/ca
 SCEN=$ROOT/test/vectors/transcripts
 AGENT=cs-m04-agent-$$
+AGENT_SRC=$ROOT/test/fixtures/scriptagent
+WPROB="$ROOT/.m04-wprobe-$$"
 
 cleanup() {
     for c in cs-m04-mockllm-$$ cs-m04-fakehub-$$ cs-m04-echo-$$ cs-m04-mcpdemo-$$ "$AGENT"; do
@@ -61,8 +51,119 @@ cleanup() {
     docker network rm "$NET" >/dev/null 2>&1
     docker volume rm "$VOL" >/dev/null 2>&1
     docker image rm -f "$IMG" >/dev/null 2>&1
+    # Restore the live tree: the snapshot probes below edit tracked files
+    # and add untracked ones; none of that may outlive the suite.
+    [ -f "$WORK/agent.go.orig" ] && cp -f "$WORK/agent.go.orig" "$AGENT_SRC/agent.go"
+    [ -f "$WORK/Dockerfile.orig" ] && cp -f "$WORK/Dockerfile.orig" "$AGENT_SRC/Dockerfile"
+    rm -f "$AGENT_SRC/zz_m04snap_$$.go" "$AGENT_SRC/zz_m04snappost_$$.go"
+    rm -rf "$WPROB"
+    [ "${rmbin:-0}" -eq 1 ] && rm -rf "$ROOT/bin"
 }
 trap cleanup EXIT
+
+# ---------- snapshot probes ----------------------------------------------------
+# The suite verifies its own snapshot (the snap.* checks at the end). Marker
+# edits made in the live tree BEFORE the snapshot must reach the image under
+# test; markers made AFTER must not. Markers are PID-scoped and inert: init()
+# bodies fire only when their private env var is set, so the agent under test
+# is unaffected during C0.4.x. Everything written here is restored by the
+# cleanup trap.
+#
+# Pre-snapshot, tracked file: append an init() to agent.go (uncommitted edit)
+# and a RUN line to the sandbox Dockerfile.
+cp -f "$AGENT_SRC/agent.go" "$WORK/agent.go.orig"
+cp -f "$AGENT_SRC/Dockerfile" "$WORK/Dockerfile.orig"
+cat >>"$AGENT_SRC/agent.go" <<EOF
+
+// initM04SnapEdited is a check-M0.4 snapshot probe: an uncommitted edit to
+// tracked agent source that must reach the image under test.
+func init() {
+	if v := os.Getenv("M04SNAP_EDITED_$$"); v != "" {
+		_, _ = fmt.Fprintf(os.Stderr, "M04SNAP_EDITED_$$=%s %s\n", v, m04SnapNewfile())
+	}
+}
+EOF
+printf 'RUN echo %s > /home/agent/m04snap-uncomm\n' "'M04SNAP-UNCOMM-$$'" >>"$AGENT_SRC/Dockerfile"
+# Pre-snapshot, untracked file: a new source file the fixtures build needs —
+# agent.go's probe init calls m04SnapNewfile(), so dropping this file breaks
+# the build and its init() marker must run inside the image.
+cat >"$WORK/zz_m04snap_$$.go" <<EOF
+// Copyright 2026 The Countersign Authors
+// SPDX-License-Identifier: Apache-2.0
+
+//go:build fixtures
+
+package scriptagent
+
+import (
+	"fmt"
+	"os"
+)
+
+// m04SnapNewfile is a check-M0.4 snapshot probe defined in an untracked
+// worktree file; agent.go's probe init calls it.
+func m04SnapNewfile() string { return "m04snap-newfile-$$" }
+
+func init() {
+	if v := os.Getenv("M04SNAP_NEWFILE_$$"); v != "" {
+		_, _ = fmt.Fprintf(os.Stderr, "M04SNAP_NEWFILE_$$=%s\n", v)
+	}
+}
+EOF
+mv -f "$WORK/zz_m04snap_$$.go" "$AGENT_SRC/zz_m04snap_$$.go"
+
+# ---------- snapshot of the working tree under test ---------------------------
+# check-M0.4 tests exactly the working tree it is run in — uncommitted edits
+# and untracked, non-ignored files included; ignored files (.check-work,
+# .tools, bin/, __pycache__) and .check-work excluded. ONE immutable snapshot
+# is taken now: a temporary git index captures on-disk content into the object
+# store (git add -A honours .gitignore, records deletions, includes untracked
+# files), write-tree freezes it, and git archive extracts it. Nothing written
+# to the live tree afterwards can change the image or the fixture binaries,
+# and the docker build context is never the live tree — under parallel regress
+# another suite writing a file mid-tar breaks `docker build`.
+mkdir -p "$SNAP" "$BIN"
+SNAPIDX="$WORK/snap-index"
+snapfail() {
+    for id in C0.4.1 C0.4.2 C0.4.3 C0.4.4 C0.4.image; do
+        bad "$id" "$1"
+    done
+    exit "$fail"
+}
+if ! GIT_INDEX_FILE="$SNAPIDX" git add -A >"$WORK/logs/snapshot.log" 2>&1; then
+    snapfail "worktree snapshot (git add) failed: $(tail -3 "$WORK/logs/snapshot.log" | tr '\n' ' ')"
+fi
+if ! snaptree=$(GIT_INDEX_FILE="$SNAPIDX" git write-tree 2>>"$WORK/logs/snapshot.log"); then
+    snapfail "worktree snapshot (write-tree) failed: $(tail -3 "$WORK/logs/snapshot.log" | tr '\n' ' ')"
+fi
+if ! git archive "$snaptree" | tar -x -C "$SNAP" 2>>"$WORK/logs/snapshot.log"; then
+    snapfail "worktree snapshot (archive) failed: $(tail -3 "$WORK/logs/snapshot.log" | tr '\n' ' ')"
+fi
+rm -f "$SNAPIDX"
+
+# Post-snapshot probes: edits made from here on must NOT reach SNAP, the
+# image or the fixture binaries — the snapshot is already frozen above.
+printf 'RUN echo %s > /home/agent/m04snap-post\n' "'M04SNAP-POST-$$'" >>"$AGENT_SRC/Dockerfile"
+cat >"$WORK/zz_m04snappost_$$.go" <<EOF
+// Copyright 2026 The Countersign Authors
+// SPDX-License-Identifier: Apache-2.0
+
+//go:build fixtures
+
+package scriptagent
+
+import (
+	"fmt"
+	"os"
+)
+
+func init() {
+	if v := os.Getenv("M04SNAP_POSTFILE_$$"); v != "" {
+		_, _ = fmt.Fprintf(os.Stderr, "M04SNAP_POSTFILE_$$=%s\n", v)
+	}
+}
+EOF
+mv -f "$WORK/zz_m04snappost_$$.go" "$AGENT_SRC/zz_m04snappost_$$.go"
 
 # ---------- prerequisites ----------------------------------------------------
 if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
@@ -71,18 +172,51 @@ if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
     skipenv C0.4.3 "no working docker on this host"
     skipenv C0.4.4 "no working docker on this host"
     skipenv C0.4.image "no working docker on this host"
+    skipenv snap.uncommitted "no working docker on this host"
+    skipenv snap.untracked "no working docker on this host"
+    skipenv snap.post-snapshot "no working docker on this host"
+    skipenv snap.concurrent "no working docker on this host"
     exit 0  # nothing runnable; other checks below still apply
 fi
 
+# Concurrent writer: for the whole fixture+image build window a background
+# loop creates, appends to, renames, replaces and deletes non-ignored files
+# in the live tree — including bin/scriptagent, the exact file the sandbox
+# image COPYs. With a live-tree build context this is precisely what breaks
+# `docker build` mid-tar; against the immutable snapshot it must be harmless.
+rmbin=0
+[ -d "$ROOT/bin" ] || rmbin=1
+mkdir -p "$WPROB" "$ROOT/bin"
+: >"$WPROB/.run"
+(
+    i=0
+    while [ -f "$WPROB/.run" ]; do
+        i=$((i + 1))
+        f="$WPROB/f$((i % 7))"
+        printf 'w%s\n' "$i" >>"$f" 2>/dev/null
+        mv -f "$f" "$f.moving" 2>/dev/null
+        printf 'w%s\n' "$i" >"$WPROB/n$i" 2>/dev/null
+        rm -f "$f.moving" "$WPROB/n$((i - 4))" 2>/dev/null
+        head -c 65536 /dev/urandom >"$ROOT/bin/scriptagent" 2>/dev/null
+    done
+    printf '%s\n' "$i" >"$WPROB/.count"
+) &
+wprobpid=$!
+
 if ! ( cd "$SNAP" && "$GO" build -tags fixtures -o bin/ ./test/fixtures/cmd/... ) >"$WORK/logs/build.log" 2>&1; then
+    rm -f "$WPROB/.run"; wait "$wprobpid" 2>/dev/null
     for id in C0.4.1 C0.4.2 C0.4.3 C0.4.4 C0.4.image; do
         bad "$id" "fixture/agent build failed: $(tail -3 "$WORK/logs/build.log" | tr '\n' ' ')"
     done
     exit "$fail"
 fi
 
-if ! docker build -f "$SNAP/test/fixtures/scriptagent/Dockerfile" -t "$IMG" "$SNAP" >"$WORK/logs/docker-build.log" 2>&1; then
-    for id in C0.4.1 C0.4.2 C0.4.3 C0.4.4 C0.4.image; do
+docker build -f "$SNAP/test/fixtures/scriptagent/Dockerfile" -t "$IMG" "$SNAP" >"$WORK/logs/docker-build.log" 2>&1
+docker_build_rc=$?
+rm -f "$WPROB/.run"; wait "$wprobpid" 2>/dev/null
+wprob_writes=$(cat "$WPROB/.count" 2>/dev/null || echo 0)
+if [ "$docker_build_rc" -ne 0 ]; then
+    for id in C0.4.1 C0.4.2 C0.4.3 C0.4.4 C0.4.image snap.concurrent; do
         bad "$id" "sandbox image build failed: $(tail -5 "$WORK/logs/docker-build.log" | tr '\n' ' ')"
     done
     exit "$fail"
@@ -450,6 +584,76 @@ if out=$(lintfx); then
     pass lint.scriptagent
 else
     bad lint.scriptagent "$out"
+fi
+
+# ---------- snapshot-under-test ------------------------------------------------
+# The suite's own worktree snapshot, verified end to end: markers made in the
+# live tree before the snapshot must be in SNAP and inside the built image;
+# markers made after the snapshot must be in neither; and the concurrent
+# writer hammering the live tree through the build window must not have
+# broken `docker build`.
+csnap_uncommitted() {
+    grep -q "M04SNAP-UNCOMM-$$" "$SNAP/test/fixtures/scriptagent/Dockerfile" \
+        || { echo "Dockerfile edit missing from snapshot"; return 1; }
+    grep -q "M04SNAP_EDITED_$$" "$SNAP/test/fixtures/scriptagent/agent.go" \
+        || { echo "agent.go edit missing from snapshot"; return 1; }
+    docker run --rm --entrypoint /bin/cat "$IMG" /home/agent/m04snap-uncomm 2>/dev/null \
+        | grep -q "M04SNAP-UNCOMM-$$" \
+        || { echo "Dockerfile edit missing from image"; return 1; }
+    docker run --rm -e "M04SNAP_EDITED_$$=hit" \
+        --entrypoint /usr/local/bin/scriptagent "$IMG" 2>&1 \
+        | grep -q "M04SNAP_EDITED_$$=hit" \
+        || { echo "edited init() did not run inside image"; return 1; }
+}
+if out=$(csnap_uncommitted); then
+    pass snap.uncommitted
+else
+    bad snap.uncommitted "$out"
+fi
+
+csnap_untracked() {
+    [ -f "$SNAP/test/fixtures/scriptagent/zz_m04snap_$$.go" ] \
+        || { echo "untracked probe file missing from snapshot"; return 1; }
+    grep -aq "m04snap-newfile-$$" "$BIN/scriptagent" \
+        || { echo "untracked file marker missing from fixture binary"; return 1; }
+    docker run --rm -e "M04SNAP_NEWFILE_$$=hit" \
+        --entrypoint /usr/local/bin/scriptagent "$IMG" 2>&1 \
+        | grep -q "M04SNAP_NEWFILE_$$=hit" \
+        || { echo "untracked file init() did not run inside image"; return 1; }
+}
+if out=$(csnap_untracked); then
+    pass snap.untracked
+else
+    bad snap.untracked "$out"
+fi
+
+csnap_post() {
+    ! grep -q "M04SNAP-POST-$$" "$SNAP/test/fixtures/scriptagent/Dockerfile" \
+        || { echo "post-snapshot Dockerfile edit leaked into snapshot"; return 1; }
+    [ ! -e "$SNAP/test/fixtures/scriptagent/zz_m04snappost_$$.go" ] \
+        || { echo "post-snapshot file leaked into snapshot"; return 1; }
+    ! docker run --rm --entrypoint /bin/cat "$IMG" /home/agent/m04snap-post >/dev/null 2>&1 \
+        || { echo "post-snapshot Dockerfile edit reached image"; return 1; }
+    ! grep -aq "M04SNAP_POSTFILE_$$" "$BIN/scriptagent" \
+        || { echo "post-snapshot source reached fixture binary"; return 1; }
+}
+if out=$(csnap_post); then
+    pass snap.post-snapshot
+else
+    bad snap.post-snapshot "$out"
+fi
+
+csnap_concurrent() {
+    [ "$docker_build_rc" -eq 0 ] \
+        || { echo "docker build failed under concurrent writes"; return 1; }
+    [ "${wprob_writes:-0}" -gt 0 ] \
+        || { echo "background writer produced no writes"; return 1; }
+    printf 'concurrent writer active through build window (%s iterations)\n' "$wprob_writes"
+}
+if out=$(csnap_concurrent); then
+    pass snap.concurrent
+else
+    bad snap.concurrent "$out"
 fi
 
 [ "$fail" -eq 0 ] && echo "M0.4 suite: all checks passed" || echo "M0.4 suite: FAILURES" >&2
