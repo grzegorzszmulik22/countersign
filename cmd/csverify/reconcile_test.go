@@ -269,6 +269,47 @@ func TestDumpBundle(t *testing.T) {
 	}
 }
 
+// An input_preview whose canonical digest does not match input_sha256
+// must not be used as the intent's input: without it the expectation
+// list is empty and the effect cannot be EXACT.
+func TestC924_InputPreviewDigest(t *testing.T) {
+	bad := intentBody(t, "i1", "e0", "Bash",
+		map[string]any{"command": "curl https://api.example.com/x"})
+	bad["input_preview"] = `{"command":"curl https://api.example.com/different"}`
+	dir := t.TempDir()
+	s := ldtest.New(names.APIGroup + "/log/test")
+	s.Policy = reconPolicy
+	s.Contracts = map[string][]byte{}
+	l, err := ledger.Open(dir, names.APIGroup+"/log/test", s.LogSigner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Open(l, "enforce")
+	s.Emit(l, "broker", "effect.http", ldtest.Body("effect.http",
+		httpBody("e0", "GET", "cdn.example.com", "safe", allowDec("cdn"), attr("NONE", []string{}))))
+	s.Emit(l, "broker", "intent.declared", ldtest.Body("intent.declared", bad))
+	s.Emit(l, "broker", "effect.http", ldtest.Body("effect.http",
+		httpBody("e1", "GET", "api.example.com", "safe", intentDec("api"), attr("EXACT", []string{"i1"}))))
+	s.Emit(l, "observer", "observer.gap", ldtest.Body("observer.gap", nil))
+	s.Emit(l, "world", "world.closed", ldtest.Body("world.closed", map[string]any{"outcome": "closed"}))
+	s.EmitterSeal(l, "broker")
+	s.EmitterSeal(l, "world")
+	s.EmitterSeal(l, "observer")
+	s.Seal(l)
+	b, err := l.ExportBundle(s.ID, s.Manifest, s.Extras())
+	if err != nil {
+		t.Fatalf("export: %v", err)
+	}
+	_ = l.Close()
+	res, rc := reconVerify(t, b, s.Manifest)
+	if !hasFinding(rc.Findings, "F_ATTRIBUTION_MISMATCH") {
+		t.Fatalf("tampered preview must not satisfy the intent, got %v", rc.Findings)
+	}
+	if res.Verdict != "VIOLATIONS" {
+		t.Fatalf("verdict %s", res.Verdict)
+	}
+}
+
 // C9.2.5 — the verdict lattice of 03 §10 must hold on constructed cases.
 func TestC925_VerdictLattice(t *testing.T) {
 	t.Run("clean", func(t *testing.T) {
@@ -317,6 +358,28 @@ func TestC925_VerdictLattice(t *testing.T) {
 	})
 	t.Run("unsealed", func(t *testing.T) {
 		b, m := reconBundle(t, "enforce", honestEffects, false, nil)
+		res, _ := reconVerify(t, b, m)
+		if res.Verdict != "UNSEALED" {
+			t.Fatalf("verdict %s, want UNSEALED", res.Verdict)
+		}
+	})
+	// Lattice ordering: findings cannot pull a LEARN or UNSEALED session
+	// down to VIOLATIONS.
+	t.Run("learn-with-findings", func(t *testing.T) {
+		effs := []map[string]any{
+			httpBody("e1", "GET", "api.example.com", "safe", intentDec("api"), attr("NONE", []string{})),
+		}
+		b, m := reconBundle(t, "learn", effs, true, nil)
+		res, _ := reconVerify(t, b, m)
+		if res.Verdict != "LEARN" {
+			t.Fatalf("verdict %s, want LEARN", res.Verdict)
+		}
+	})
+	t.Run("unsealed-with-findings", func(t *testing.T) {
+		effs := []map[string]any{
+			httpBody("e1", "GET", "api.example.com", "safe", intentDec("api"), attr("NONE", []string{})),
+		}
+		b, m := reconBundle(t, "enforce", effs, false, nil)
 		res, _ := reconVerify(t, b, m)
 		if res.Verdict != "UNSEALED" {
 			t.Fatalf("verdict %s, want UNSEALED", res.Verdict)

@@ -60,13 +60,14 @@ else
 fi
 
 # --- C9.2.2: MM9.1 differential, 10,000 seeded traces ---------------------
-gout=$("$PY" test/gen/recongen.py mm91 --count 10000 --seed 91009 \
+# The MM9.1/MM9.2 differentials run at nice 15 per the lane note (shared host).
+gout=$(nice -n 15 "$PY" test/gen/recongen.py mm91 --count 10000 --seed 91009 \
     --work "$WORK/mm91" 2>&1); grc=$?
 echo "$gout"
 if [ "$grc" -ne 0 ]; then
     bad C9.2.2 "generator failed: $(echo "$gout" | tail -1)"
 else
-    "$BIN" reconcile-batch "$WORK/mm91/traces.jsonl" > "$WORK/mm91/got.jsonl" 2>&1
+    nice -n 15 "$BIN" reconcile-batch "$WORK/mm91/traces.jsonl" > "$WORK/mm91/got.jsonl" 2>&1
     rrc=$?
     cout2=$("$PY" test/gen/reconcmp.py mm91 "$WORK/mm91/expected.jsonl" \
         "$WORK/mm91/got.jsonl" 2>&1); ccrc=$?
@@ -87,7 +88,7 @@ echo "$gout"
 if [ "$grc" -ne 0 ]; then
     bad C9.2.3 "generator failed: $(echo "$gout" | tail -1)"
 else
-    "$BIN" reconcile-batch "$WORK/mm92/traces.jsonl" > "$WORK/mm92/got.jsonl" 2>&1
+    nice -n 15 "$BIN" reconcile-batch "$WORK/mm92/traces.jsonl" > "$WORK/mm92/got.jsonl" 2>&1
     cout3=$("$PY" test/gen/reconcmp.py mm92 "$WORK/mm92/planted.json" \
         "$WORK/mm92/got.jsonl" 2>&1); ccrc=$?
     echo "$cout3"
