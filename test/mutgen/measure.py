@@ -136,15 +136,40 @@ def main() -> int:
             status += " (unstable cv=%.2f)" % res["cv"]
         print(f"{metric}: median {res['median']:.1f} target {target} "
               f"{status} samples={[round(v,1) for v in res['samples']]}")
+        if not res["pass"]:
+            fails.append(f"{metric}: median {res['median']:.1f} missed "
+                         f"target {target}")
 
     run("MM1.1", [bench, "verify", bp, kp, str(args.runs)],
         "records_per_s", TARGETS["MM1.1"])
     run("MM1.2", [bench, "append", os.path.join(WORK, "ledger-a"),
                   rp, "40000", "32", str(args.runs)],
         "records_per_s", TARGETS["MM1.2"])
-    run("MM1.3", [bench, "latency", os.path.join(WORK, "ledger-b"),
-                  rp, "1000", "20000", "8"],
-        "p99_ms", TARGETS["MM1.3"], lower=True)
+    # csbench latency emits one sample per invocation; spec requires >=5.
+    ss = []
+    for i in range(args.runs):
+        r = sh([bench, "latency", os.path.join(WORK, "ledger-b"),
+                rp, "1000", "20000", "8"])
+        if r.returncode != 0:
+            fails.append(f"MM1.3 run {i}: bench failed: {r.stderr[-200:]}")
+            break
+        ss += samples_from(r.stdout)
+    if ss:
+        res = summarize(ss, "p99_ms", TARGETS["MM1.3"], lower_better=True)
+        res["command"] = (f"{bench} latency {WORK}/ledger-b {rp} "
+                          "1000 20000 8  (x%d)" % len(ss))
+        res["all_fields"] = [
+            {"p50_ms": s["p50_ms"], "p99_ms": s["p99_ms"],
+             "max_ms": s["max_ms"]} for s in ss]
+        results["metrics"]["MM1.3"] = res
+        status = "PASS" if res["pass"] else "FAIL"
+        if res["unstable"]:
+            status += " (unstable cv=%.2f)" % res["cv"]
+        print(f"MM1.3: median {res['median']:.1f} target {TARGETS['MM1.3']} "
+              f"{status} samples={[round(v,1) for v in res['samples']]}")
+        if not res["pass"]:
+            fails.append(f"MM1.3: median {res['median']:.1f} missed "
+                         f"target {TARGETS['MM1.3']}")
 
     if args.mutations and os.path.isfile(args.mutations):
         m = json.load(open(args.mutations))

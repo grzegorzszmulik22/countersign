@@ -114,7 +114,7 @@ func benchAppend(dir, linesPath string, n, workers, runs int) {
 		}
 		emit(map[string]any{
 			"metric": "MM1.2", "run": r, "records": n,
-			"workers": workers,
+			"workers":       workers,
 			"records_per_s": float64(n) / el,
 		})
 	}

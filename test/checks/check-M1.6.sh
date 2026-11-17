@@ -26,15 +26,14 @@ mkdir -p "$WORK/suite"
 fail=0
 
 # C1.6.1 + C1.6.2: one suite run produces both (plus MM1.4/MM1.5 inputs).
-if "$PY" test/mutgen/run_suite.py --seed "${M16_SEED:-1}" --bundles 200 \
-        --per-class 112 --pool 48 --out "$WORK/suite"; then
-    s161=$("$PY" -c 'import json,sys;print(json.load(open(sys.argv[1]))["C1.6.1"])' \
-        "$WORK/suite/status.json" 2>/dev/null || echo False)
-    s162=$("$PY" -c 'import json,sys;print(json.load(open(sys.argv[1]))["C1.6.2"])' \
-        "$WORK/suite/status.json" 2>/dev/null || echo False)
-else
-    s161=False; s162=False
-fi
+# status.json is written even when the suite exits non-zero, so each
+# check is attributed independently of the run's exit code.
+"$PY" test/mutgen/run_suite.py --seed "${M16_SEED:-1}" --bundles 200 \
+    --per-class 112 --workers "${M16_WORKERS:-48}" --out "$WORK/suite" || true
+s161=$("$PY" -c 'import json,sys;print(json.load(open(sys.argv[1]))["C1.6.1"])' \
+    "$WORK/suite/status.json" 2>/dev/null || echo False)
+s162=$("$PY" -c 'import json,sys;print(json.load(open(sys.argv[1]))["C1.6.2"])' \
+    "$WORK/suite/status.json" 2>/dev/null || echo False)
 if [ "$s161" = "True" ]; then
     echo "CHECK C1.6.1 PASS  200 seeded bundles CLEAN-class in both verifiers"
 else

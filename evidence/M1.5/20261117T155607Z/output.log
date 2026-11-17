@@ -1,0 +1,6 @@
+SABOTAGE go-skip-seal-check: caught (exit 2) by C1.5.2 
+SABOTAGE py-skip-chain-check: patch does not apply
+error: patch failed: ref/python/refverify/verify.py:1
+error: ref/python/refverify/verify.py: patch does not apply
+sabotage-M1.5: 1 caught, 1 uncaught (evidence: evidence/M1.5/20261117T155607Z/sabotage)
+UNCAUGHT sabotage: py-skip-chain-check (patch does not apply)

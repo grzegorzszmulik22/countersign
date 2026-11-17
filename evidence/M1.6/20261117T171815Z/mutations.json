@@ -1,0 +1,33 @@
+{
+  "seed": 1,
+  "clean": 200,
+  "bundles": 200,
+  "mutants": 1008,
+  "detected": 1008,
+  "agreed": 1008,
+  "per_class": {
+    "1": 112,
+    "2": 112,
+    "3": 112,
+    "4": 112,
+    "5": 112,
+    "6": 112,
+    "7": 112,
+    "8": 112,
+    "9": 112
+  },
+  "elapsed_s": 416.0,
+  "measurements": {
+    "MM1.4": {
+      "mutants_detected": 1008,
+      "mutants_generated": 1008,
+      "agreement": 1008,
+      "detected_ratio": 1.0,
+      "agreement_ratio": 1.0
+    },
+    "MM1.5": {
+      "median_record_size_bytes": 1416,
+      "samples": 51904
+    }
+  }
+}

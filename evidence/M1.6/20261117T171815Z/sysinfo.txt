@@ -1,0 +1,13 @@
+kernel: 6.12.0-204.92.4.4.3.el9uek.aarch64
+arch: aarch64
+cpu_model: Neoverse-N1
+cores: 4
+memory: 22945 MB
+docker: unavailable
+kernel: 6.12.0-204.92.4.4.3.el9uek.aarch64
+arch: aarch64
+cpu_model: Neoverse-N1
+cores: 4
+memory: 22945 MB
+docker: unavailable
+loadavg_during_runs: 30.02 35.16 35.11 25/1285 567220
