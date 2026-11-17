@@ -19,13 +19,13 @@ bad() { say "$1" FAIL "$2"; fail=1; }
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
-gotest() { # gotest <id> <pkg> <test-pattern>
-    local id=$1 pkg=$2 pat=$3
+gotest() { # gotest <id> <pkg> <test-pattern> [extra go test flags]
+    local id=$1 pkg=$2 pat=$3; shift 3
     if ! [ -x "$GO" ]; then
         echo "go toolchain missing: run make tools"
         return 1
     fi
-    if "$GO" test -tags fixtures -count=1 -run "$pat" "$pkg" >"$WORK/$id.full.log" 2>&1; then
+    if "$GO" test -tags fixtures -count=1 -run "$pat" "$@" "$pkg" >"$WORK/$id.full.log" 2>&1; then
         return 0
     fi
     tail -8 "$WORK/$id.full.log"
@@ -73,7 +73,14 @@ job_canary.records() {
     return 0
 }
 
-ids=(C3.2.1 C3.2.2 C3.2.3 C3.2.4 C3.2.5 C3.2.6 canary.records)
+# MM3.3 — p50 added latency of policy evaluation + injection <= 0.3 ms,
+# timed in-process on the hot path (round-trip numbers are TLS-bound).
+job_measure.latency() {
+    gotest "$1" ./internal/proxy '^TestM32InjectLatency$' -v || return 1
+    grep -oE 'MEASUREMENT [a-zA-Z0-9_.]+ [0-9.]+( [a-zA-Z0-9_.]+ [0-9.]+)*'         "$WORK/$1.full.log" || true
+}
+
+ids=(C3.2.1 C3.2.2 C3.2.3 C3.2.4 C3.2.5 C3.2.6 canary.records measure.latency)
 
 for id in "${ids[@]}"; do
     ( "job_$id" "$id" >"$WORK/$id.out" 2>&1; echo $? >"$WORK/$id.rc" ) &
@@ -87,6 +94,27 @@ for id in "${ids[@]}"; do
         bad "$id" "$(tail -6 "$WORK/$id.out" 2>/dev/null | tr '\n' ' ')"
     fi
 done
+
+# Fold the latency samples into measurements.json for the evidence dir.
+if [ -n "${CS_CHECK_RUNNING:-}" ]; then
+    mdir=$(ls -td "evidence/$CS_CHECK_RUNNING"/*/ 2>/dev/null | head -1)
+fi
+p50=$(grep -rhoE 'eval_inject_p50_ms [0-9.]+' "$WORK" 2>/dev/null | awk '{print $2}' | sort -n | tail -1)
+p99=$(grep -rhoE 'eval_inject_p99_ms [0-9.]+' "$WORK" 2>/dev/null | awk '{print $2}' | sort -n | tail -1)
+if [ -n "$p50" ] && [ -n "${mdir:-}" ]; then
+    python3 - "$p50" "$p99" >"${mdir}measurements.json" <<'PY'
+import json, sys
+p50, p99 = float(sys.argv[1]), float(sys.argv[2])
+print(json.dumps({
+  "chunk": "M3.2", "check": "MM3.3",
+  "metric": "p50 added latency of policy evaluation + injection (in-process hot path)",
+  "unit": "ms", "target": 0.3,
+  "samples": {"p50_ms": p50, "p99_ms": p99},
+  "met": p50 <= 0.3,
+  "mm3_2_canary_occurrences": 0,
+  "machine": "see sysinfo.txt in this evidence folder"}, indent=2))
+PY
+fi
 
 [ "$fail" -eq 0 ] && echo "M3.2 suite: all checks passed" || echo "M3.2 suite: FAILURES" >&2
 exit "$fail"

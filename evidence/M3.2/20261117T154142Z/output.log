@@ -1,4 +1,0 @@
-SABOTAGE inject-before-ack: caught (exit 2) by C3.2.6 
-SABOTAGE inject-by-host-only: caught (exit 2) by C3.2.3 
-SABOTAGE log-secret-value-in-record: caught (exit 2) by C3.2.1 
-sabotage-M3.2: 3 caught, 0 uncaught (evidence: evidence/M3.2/20261117T154142Z/sabotage)

@@ -21,11 +21,12 @@ import (
 // in an upstream response: raw, base64 (the Basic credential form), and
 // URL-escaped. All three are replaced by the session placeholder.
 type Scrubber struct {
-	pats   [][]byte // search patterns, all three encodings
-	repl   []byte   // replacement (the placeholder)
-	max    int      // longest pattern length
-	carry  []byte   // held-back tail (len <= max-1)
-	Count  int      // replacements performed
+	pats    [][]byte // search patterns, all three encodings
+	keys    [][]byte // per-pattern short prefixes for the SIMD Index path
+	repl    []byte   // replacement (the placeholder)
+	max     int      // longest pattern length
+	carry   []byte   // held-back tail (len <= max-1)
+	Count   int      // replacements performed
 	flushed bool
 }
 
@@ -74,6 +75,16 @@ func NewScrubber(pats [][]byte, repl []byte) *Scrubber {
 		}
 	}
 	s.pats = out
+	// A 24-byte search key keeps bytes.Index on the fast short-separator
+	// path (longer separators fall back to Rabin-Karp); a key hit is
+	// verified against the full pattern in find.
+	for _, p := range s.pats {
+		k := p
+		if len(k) > 24 {
+			k = k[:24]
+		}
+		s.keys = append(s.keys, k)
+	}
 	return s
 }
 
@@ -85,10 +96,14 @@ func (s *Scrubber) Write(chunk []byte) []byte {
 		// them as a new tail rather than dropping data.
 		s.flushed = false
 	}
-	buf := append(s.carry, chunk...)
+	buf := chunk
+	if len(s.carry) > 0 {
+		buf = make([]byte, 0, len(s.carry)+len(chunk))
+		buf = append(buf, s.carry...)
+		buf = append(buf, chunk...)
+	}
 	s.carry = nil
-	out := s.scan(buf, false)
-	return out
+	return s.scan(buf, false)
 }
 
 // Flush ends the stream and returns the held-back tail.
@@ -100,23 +115,37 @@ func (s *Scrubber) Flush() []byte {
 }
 
 // scan emits buf with all complete matches replaced. When !last, the
-// final max-1 bytes are retained as carry instead.
+// final max-1 bytes are retained as carry instead. Match starts are only
+// considered below limit so a longest-pattern match can never be cut off
+// by the hold-back boundary.
 func (s *Scrubber) scan(buf []byte, last bool) []byte {
+	limit := len(buf)
+	if !last {
+		limit = len(buf) - (s.max - 1)
+		if limit < 0 {
+			limit = 0
+		}
+	}
 	var out []byte
 	i := 0
-	for i < len(buf) {
-		if !last && i+s.max > len(buf) {
-			break // tail cannot yet be proven safe — hold it
+	for i < limit {
+		next, plen := s.find(buf, i, limit)
+		if next < 0 {
+			if out == nil {
+				out = buf[i:limit] // clean span: emit without copying
+			} else {
+				out = append(out, buf[i:limit]...)
+			}
+			i = limit
+			break
 		}
-		plen := s.matchAt(buf, i)
-		if plen == 0 {
-			out = append(out, buf[i])
-			i++
-			continue
+		if out == nil {
+			out = make([]byte, 0, len(buf))
 		}
+		out = append(out, buf[i:i+next]...)
 		out = append(out, s.repl...)
 		s.Count++
-		i += plen
+		i += next + plen
 	}
 	if !last {
 		s.carry = append(s.carry, buf[i:]...)
@@ -124,20 +153,36 @@ func (s *Scrubber) scan(buf []byte, last bool) []byte {
 	return out
 }
 
-// matchAt returns the length of the longest pattern matching at buf[i],
-// or 0. Longest-first so a pattern that is a prefix of another wins the
-// longer replacement.
-func (s *Scrubber) matchAt(buf []byte, i int) int {
-	best := 0
-	for _, p := range s.pats {
-		if len(p) <= best || len(buf)-i < len(p) {
-			continue
+// find returns the offset (relative to i) and length of the earliest
+// match whose start position is below limit, or -1. At a shared start
+// position the longest pattern wins.
+func (s *Scrubber) find(buf []byte, i, limit int) (int, int) {
+	next, plen := -1, 0
+	for j, p := range s.pats {
+		end := limit + len(p) - 1
+		if end > len(buf) {
+			end = len(buf)
 		}
-		if bytes.Equal(buf[i:i+len(p)], p) {
-			best = len(p)
+		off := i
+		for {
+			idx := bytes.Index(buf[off:end], s.keys[j])
+			if idx < 0 {
+				break
+			}
+			at := off + idx
+			if at >= limit {
+				break // starts at/after the hold-back boundary — carry it
+			}
+			if at+len(p) <= len(buf) && bytes.Equal(buf[at:at+len(p)], p) {
+				if next < 0 || at-i < next || (at-i == next && len(p) > plen) {
+					next, plen = at-i, len(p)
+				}
+				break // only this pattern's earliest match matters
+			}
+			off = at + 1 // prefix collision — keep looking
 		}
 	}
-	return best
+	return next, plen
 }
 
 // Scrub replaces all pattern occurrences in a complete string (headers,

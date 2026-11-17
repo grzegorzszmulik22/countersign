@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -869,3 +870,55 @@ func TestC326InjectAfterAck(t *testing.T) {
 }
 
 
+
+// --- MM3.3 ----------------------------------------------------------------
+// Added p50 latency of policy evaluation + injection over M2's pipeline:
+// the grant match, the §4.3–4.4 credential rules, and the header write —
+// timed in-process on the same session/policy the wire tests use. The
+// round-trip number is dominated by CONNECT/TLS/records and cannot see
+// the added cost; this measures exactly the hot path M3 adds.
+func TestM32InjectLatency(t *testing.T) {
+	ce := startCredEnv(t, m3Grants, nil)
+	e := ce.env
+	sess := e.broker.Session("s1")
+	if sess == nil {
+		t.Fatal("no session s1")
+	}
+	grant := grantByID(sess.Policy, "anthropic")
+	if grant == nil {
+		t.Fatal("no grant")
+	}
+	p := ph(t, e, "s1", "anthropic")
+	mk := func() (*http.Request, http.Header, forwardTarget, []byte) {
+		r, _ := http.NewRequest("POST", "https://api.anthropic.com/v1/messages", nil)
+		h := http.Header{"X-Api-Key": {p}, "Content-Type": {"application/json"}}
+		tgt := forwardTarget{scheme: "https", host: "api.anthropic.com",
+			port: 443, authority: "api.anthropic.com:443", path: "/v1/messages"}
+		return r, h, tgt, []byte("{}")
+	}
+
+	const N = 4000
+	durs := make([]float64, 0, N)
+	for i := 0; i < N; i++ {
+		r, h, tgt, body := mk()
+		st := time.Now()
+		res := sess.Policy.Match(&policy.Request{
+			Method: r.Method, Scheme: tgt.scheme, Host: tgt.host,
+			Port: tgt.port, Path: tgt.path, Query: tgt.rawQuery,
+			Connect: "", SNI: tgt.host,
+		})
+		plan, reason := evalCreds(sess, grant, r, h, tgt, body)
+		if reason != "" || plan == nil || plan.spec == nil || res.Grant != "anthropic" {
+			t.Fatalf("eval failed: res=%+v reason=%q", res, reason)
+		}
+		plan.spec.Apply(h)
+		durs = append(durs, float64(time.Since(st).Nanoseconds())/1e6)
+	}
+	sort.Float64s(durs)
+	p50 := durs[len(durs)/2]
+	p99 := durs[len(durs)*99/100]
+	fmt.Printf("MEASUREMENT eval_inject_p50_ms %.4f eval_inject_p99_ms %.4f\n", p50, p99)
+	if p50 > 0.3 {
+		t.Fatalf("policy eval + credential rules + inject p50 %.4f ms > 0.3 ms", p50)
+	}
+}

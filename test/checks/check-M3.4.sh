@@ -19,13 +19,13 @@ bad() { say "$1" FAIL "$2"; fail=1; }
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
-gotest() { # gotest <id> <pkg> <test-pattern>
-    local id=$1 pkg=$2 pat=$3
+gotest() { # gotest <id> <pkg> <test-pattern> [extra go test flags]
+    local id=$1 pkg=$2 pat=$3; shift 3
     if ! [ -x "$GO" ]; then
         echo "go toolchain missing: run make tools"
         return 1
     fi
-    if "$GO" test -tags fixtures -count=1 -run "$pat" "$pkg" >"$WORK/$id.full.log" 2>&1; then
+    if "$GO" test -tags fixtures -count=1 -run "$pat" "$@" "$pkg" >"$WORK/$id.full.log" 2>&1; then
         return 0
     fi
     tail -8 "$WORK/$id.full.log"
@@ -60,17 +60,21 @@ job_C3.4.5() { gotest "$1" ./internal/proxy '^TestC345NonCredentialedPassthrough
 # C3.4.6 — MM3.4: scrubbing penalty on a 100 MiB credentialed download
 # <= 25%; MM3.2: no canary in records/logs (also asserted suite-wide).
 job_C3.4.6() {
-    gotest "$1" ./internal/proxy '^TestC346ScrubThroughput$' || return 1
+    gotest "$1" ./internal/proxy '^TestC346ScrubThroughput$' -v || return 1
     grep -oE 'MEASUREMENT [a-zA-Z0-9_.]+ [0-9.]+( [a-zA-Z0-9_.]+ [0-9.]+)*' \
         "$WORK/$1.full.log" || true
 }
 
 ids=(C3.4.1 C3.4.2 C3.4.3 C3.4.4 C3.4.5 C3.4.6)
 
-for id in "${ids[@]}"; do
+# C3.4.6 measures a throughput penalty — run it alone, after the
+# parallel batch, so concurrent fixture load cannot skew the ratio.
+par_ids=(C3.4.1 C3.4.2 C3.4.3 C3.4.4 C3.4.5)
+for id in "${par_ids[@]}"; do
     ( "job_$id" "$id" >"$WORK/$id.out" 2>&1; echo $? >"$WORK/$id.rc" ) &
 done
 wait
+( job_C3.4.6 C3.4.6 >"$WORK/C3.4.6.out" 2>&1; echo $? >"$WORK/C3.4.6.rc" )
 
 for id in "${ids[@]}"; do
     if [ "$(cat "$WORK/$id.rc" 2>/dev/null)" = "0" ]; then
@@ -84,9 +88,9 @@ done
 if [ -n "${CS_CHECK_RUNNING:-}" ] && [ -d "evidence/$CS_CHECK_RUNNING" ]; then
     mdir=$(ls -td "evidence/$CS_CHECK_RUNNING"/*/ 2>/dev/null | head -1)
 fi
-vals=$(grep -rhoE 'scrub_penalty_pct [0-9.]+' "$WORK" 2>/dev/null | awk '{print $2}' | sort -n)
-if [ -n "$vals" ] && [ -n "${mdir:-}" ]; then
-    python3 - "$vals" >"${mdir}measurements.json" <<'PY'
+vals=$(grep -hoE 'scrub_penalty_pct [0-9.]+' "$WORK"/*.full.log 2>/dev/null | awk '{print $2}' | sort -n | tr '\n' ' ')
+if [ -n "${vals// /}" ] && [ -n "${mdir:-}" ]; then
+    python3 - $vals >"${mdir}measurements.json" <<'PY'
 import json, statistics, sys
 s = [float(v) for v in sys.argv[1:]]
 print(json.dumps({
