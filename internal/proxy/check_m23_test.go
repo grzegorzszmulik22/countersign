@@ -1009,3 +1009,73 @@ func TestC235MemoryBound(t *testing.T) {
 		t.Errorf("download RSS growth %d MiB > 64 MiB", d>>20)
 	}
 }
+
+// C2.3.3 (write-ahead completeness) across shutdown: a request in flight
+// when the broker closes still gets its result record, and Close returns
+// only after it is written. An HTTP/2 or HTTP/1.1 handler outlives its
+// tunnel's Serve; without waiting for it, the record is appended after the
+// sink closed and is lost (seen as a panic: Log after the test completed).
+// The loss is a race between Close returning and the handler's append, so
+// the scenario runs 20 times: one missed record fails the test.
+func TestC233CloseWaitsForInFlightRecords(t *testing.T) {
+	for i := 0; i < 20; i++ {
+		t.Run(fmt.Sprintf("run%02d", i), closeWaitsOnce)
+	}
+}
+
+func closeWaitsOnce(t *testing.T) {
+	dir := t.TempDir()
+	pol := writePolicy(t, dir, "p", m23Grants)
+	routes := map[string]string{}
+	e := newTestEnv(t, []SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)}, routes)
+
+	started := make(chan struct{}, 1)
+	slow := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		_, _ = w.Write(make([]byte, 4096))
+		w.(http.Flusher).Flush()
+		started <- struct{}{}
+		select {
+		case <-r.Context().Done():
+		case <-time.After(30 * time.Second):
+		}
+	})
+	addr, closeUp := startTLSUpstream(t, e.ca, []string{"slow.example"}, nil, slow)
+	defer closeUp()
+	routes["slow.example"] = addr
+
+	tc, _ := e.tunnelTLS(t, "tok-one", "slow.example:443", &tls.Config{RootCAs: e.combinedPool(t, "s1")})
+	if err := tc.Handshake(); err != nil {
+		t.Fatal(err)
+	}
+	defer tc.Close()
+	if _, err := tc.Write([]byte("GET /hold HTTP/1.1\r\nHost: slow.example\r\n\r\n")); err != nil {
+		t.Fatal(err)
+	}
+	res, err := http.ReadResponse(bufio.NewReader(tc), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.CopyN(io.Discard, res.Body, 1024)
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("upstream never started the response")
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- e.broker.Close() }()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("Close did not return within 10s")
+	}
+
+	// Close has returned: the in-flight request's result record is already
+	// on disk. No polling: a record that appears later was written after
+	// the sink closed.
+	rs := recordsOfType[ResultBody](t, e.readSessionRecords(t, "s1"), "effect.http.result")
+	if len(rs) == 0 {
+		t.Fatal("no effect.http.result for the request in flight at Close: evidence lost on shutdown")
+	}
+}

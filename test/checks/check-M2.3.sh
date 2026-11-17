@@ -50,7 +50,7 @@ job_C2.3.2() {
     gotest "$1" '^TestC232SSEFlush$' -timeout 120s || \
         gotest "$1" '^TestC232SSEFlush$' -timeout 120s
 }
-job_C2.3.3() { gotest "$1" '^TestC233WriteAheadDigest$' -timeout 120s; }
+job_C2.3.3() { gotest "$1" '^TestC233(WriteAheadDigest|CloseWaitsForInFlightRecords)$' -timeout 120s; }
 job_C2.3.4() { gotest "$1" '^TestC234ClientAbort$' -timeout 120s; }
 job_C2.3.5() { gotest "$1" '^TestC235MemoryBound$' -timeout 300s; }
 
