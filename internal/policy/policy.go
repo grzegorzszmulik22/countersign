@@ -25,7 +25,14 @@ func Digest(data []byte) string {
 // rejected: fields defined by 05 (autonomy, world, commit, budgets, tape,
 // attest at spec level; class, stager, compensate, tools, egress on grants)
 // are out of scope until their milestones and must fail here.
-func Load(data []byte) (*SessionPolicy, error) {
+func Load(data []byte) (_ *SessionPolicy, err error) {
+	// yaml.v3 can panic on malformed input (e.g. merge keys); the loader must
+	// never panic, so decode failures surface as errors.
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("policy: %v", r)
+		}
+	}()
 	var p SessionPolicy
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
