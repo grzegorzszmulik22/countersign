@@ -41,10 +41,11 @@ BIN=$SNAP/bin
 CADIR=$WORK/ca
 SCEN=$SNAP/test/vectors/transcripts
 AGENT=cs-m04-agent-$$
-AGENT_SRC=$ROOT/test/fixtures/scriptagent
 WPROB="$WORK/wprobe"
 SCR="$WORK/scrrepo"
 SCRO="$WORK/scrsnap"
+SCR2="$WORK/postrepo"
+SCRO2="$WORK/postsnap"
 
 # ---------- pre-run worktree state ------------------------------------------
 # tree.restored (emitted by the EXIT trap, before this script's exit status is
@@ -106,12 +107,10 @@ cleanup() {
     docker network rm "$NET" >/dev/null 2>&1
     docker volume rm "$VOL" >/dev/null 2>&1
     docker image rm -f "$IMG" >/dev/null 2>&1
-    # Restore the live tree: the snapshot probes below edit tracked files
-    # and add untracked ones; none of that may outlive the suite. treecheck
-    # verifies all of it (and the work-dir removal) and reports tree.restored.
-    [ -f "$WORK/agent.go.orig" ] && cp -f "$WORK/agent.go.orig" "$AGENT_SRC/agent.go"
-    [ -f "$WORK/Dockerfile.orig" ] && cp -f "$WORK/Dockerfile.orig" "$AGENT_SRC/Dockerfile"
-    rm -f "$AGENT_SRC/zz_m04snap_$$.go" "$AGENT_SRC/zz_m04snappost_$$.go"
+    # The suite never writes to the live tree: every probe goes into the
+    # snapshot (post-capture) or a scratch copy under $WORK. treecheck still
+    # proves it — against bugs here, against sabotage that adds a live-tree
+    # write, and against the per-run work dir surviving.
     rm -rf "$WPROB"
     treecheck
     local trc=$?
@@ -122,58 +121,20 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-# ---------- snapshot probes ----------------------------------------------------
-# The suite verifies its own snapshot (the snap.* checks at the end). Marker
-# edits made in the live tree BEFORE the snapshot must reach the image under
-# test; markers made AFTER must not. Markers are PID-scoped and inert: init()
-# bodies fire only when their private env var is set, so the agent under test
-# is unaffected during C0.4.x. Everything written here is restored by the
-# cleanup trap.
-#
-# Pre-snapshot, tracked file: append an init() to agent.go (uncommitted edit)
-# and a RUN line to the sandbox Dockerfile.
-cp -f "$AGENT_SRC/agent.go" "$WORK/agent.go.orig"
-cp -f "$AGENT_SRC/Dockerfile" "$WORK/Dockerfile.orig"
-cat >>"$AGENT_SRC/agent.go" <<EOF
-
-// initM04SnapEdited is a check-M0.4 snapshot probe: an uncommitted edit to
-// tracked agent source that must reach the image under test.
-func init() {
-	if v := os.Getenv("M04SNAP_EDITED_$$"); v != "" {
-		_, _ = fmt.Fprintf(os.Stderr, "M04SNAP_EDITED_$$=%s %s\n", v, m04SnapNewfile())
-	}
-}
-EOF
-printf 'RUN echo %s > /home/agent/m04snap-uncomm\n' "'M04SNAP-UNCOMM-$$'" >>"$AGENT_SRC/Dockerfile"
-# Pre-snapshot, untracked file: a new source file the fixtures build needs —
-# agent.go's probe init calls m04SnapNewfile(), so dropping this file breaks
-# the build and its init() marker must run inside the image.
-cat >"$WORK/zz_m04snap_$$.go" <<EOF
-// Copyright 2026 The Countersign Authors
-// SPDX-License-Identifier: Apache-2.0
-
-//go:build fixtures
-
-package scriptagent
-
-import (
-	"fmt"
-	"os"
-)
-
-// m04SnapNewfile is a check-M0.4 snapshot probe defined in an untracked
-// worktree file; agent.go's probe init calls it.
-func m04SnapNewfile() string { return "m04snap-newfile-$$" }
-
-func init() {
-	if v := os.Getenv("M04SNAP_NEWFILE_$$"); v != "" {
-		_, _ = fmt.Fprintf(os.Stderr, "M04SNAP_NEWFILE_$$=%s\n", v)
-	}
-}
-EOF
-mv -f "$WORK/zz_m04snap_$$.go" "$AGENT_SRC/zz_m04snap_$$.go"
-
 # ---------- snapshot of the working tree under test ---------------------------
+# Round-4 property: this suite never writes to the live tree — not its probes,
+# not debris. A parallel suite (or an inner offline loop under make regress)
+# that reads the live tree while this suite runs must see exactly what it saw
+# before; tree.restored proves the invariant at exit.
+#
+# The live->snap->image chain is therefore verified in two halves: snap.capture
+# (below) and snap.fidelity prove that mksnap captures the tree exactly as it
+# stands — committed content, uncommitted edits, untracked files, ignored
+# files excluded — and the snap.uncommitted/snap.untracked checks then prove
+# that marker content injected into the immutable snapshot after it is taken
+# reaches the image and the fixture binaries. Marker edits and the
+# post-snapshot probe run against the snapshot or a scratch copy under $WORK,
+# never the live tree.
 # check-M0.4 tests exactly the working tree it is run in — uncommitted edits
 # and untracked, non-ignored files included; ignored files (.check-work,
 # .tools, bin/, __pycache__) excluded. ONE immutable snapshot is taken now:
@@ -290,10 +251,32 @@ else
     bad snap.fidelity "$out"
 fi
 
-# Post-snapshot probes: edits made from here on must NOT reach SNAP, the
-# image or the fixture binaries — the snapshot is already frozen above.
-printf 'RUN echo %s > /home/agent/m04snap-post\n' "'M04SNAP-POST-$$'" >>"$AGENT_SRC/Dockerfile"
-cat >"$WORK/zz_m04snappost_$$.go" <<EOF
+# ---------- marker injection into the immutable snapshot ----------------------
+# snap.fidelity just proved SNAP == the live tree byte-for-byte at snapshot
+# time. Marker content written into SNAP now therefore exercises the same
+# build path an uncommitted live-tree edit would have taken (snap.capture +
+# snap.fidelity cover the live->snap half), while the live tree stays
+# untouched. Markers are PID-scoped and inert: init() bodies fire only when
+# their private env var is set, so the agent under test is unaffected during
+# C0.4.x.
+#
+# Injected "uncommitted" edits: append an init() to the snapshot's agent.go
+# and a RUN line to the snapshot's sandbox Dockerfile.
+cat >>"$SNAP/test/fixtures/scriptagent/agent.go" <<EOF
+
+// initM04SnapEdited is a check-M0.4 snapshot probe: marker content that
+// reached the image under test only because it was in the snapshot.
+func init() {
+	if v := os.Getenv("M04SNAP_EDITED_$$"); v != "" {
+		_, _ = fmt.Fprintf(os.Stderr, "M04SNAP_EDITED_$$=%s %s\n", v, m04SnapNewfile())
+	}
+}
+EOF
+printf 'RUN echo %s > /home/agent/m04snap-uncomm\n' "'M04SNAP-UNCOMM-$$'" >>"$SNAP/test/fixtures/scriptagent/Dockerfile"
+# Injected "untracked" file: a new source file the fixtures build needs —
+# the probe init calls m04SnapNewfile(), so dropping this file breaks the
+# build, and its init() marker must run inside the image.
+cat >"$SNAP/test/fixtures/scriptagent/zz_m04snap_$$.go" <<EOF
 // Copyright 2026 The Countersign Authors
 // SPDX-License-Identifier: Apache-2.0
 
@@ -306,13 +289,16 @@ import (
 	"os"
 )
 
+// m04SnapNewfile is a check-M0.4 snapshot probe defined in a file that
+// exists only in the snapshot; agent.go's probe init calls it.
+func m04SnapNewfile() string { return "m04snap-newfile-$$" }
+
 func init() {
-	if v := os.Getenv("M04SNAP_POSTFILE_$$"); v != "" {
-		_, _ = fmt.Fprintf(os.Stderr, "M04SNAP_POSTFILE_$$=%s\n", v)
+	if v := os.Getenv("M04SNAP_NEWFILE_$$"); v != "" {
+		_, _ = fmt.Fprintf(os.Stderr, "M04SNAP_NEWFILE_$$=%s\n", v)
 	}
 }
 EOF
-mv -f "$WORK/zz_m04snappost_$$.go" "$AGENT_SRC/zz_m04snappost_$$.go"
 
 # ---------- prerequisites ----------------------------------------------------
 if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
@@ -735,11 +721,11 @@ else
 fi
 
 # ---------- snapshot-under-test ------------------------------------------------
-# The suite's own worktree snapshot, verified end to end: markers made in the
-# live tree before the snapshot must be in SNAP and inside the built image;
-# markers made after the snapshot must be in neither; and the concurrent
-# writer hammering the live tree through the build window must not have
-# broken `docker build`.
+# The suite's own worktree snapshot, verified end to end: marker content
+# injected into the snapshot must be in SNAP and inside the built image; a
+# write made to a scratch worktree after ITS snapshot must reach neither the
+# snapshot nor a binary built from it; and the concurrent writer churning the
+# filesystem through the real build window must not have broken docker build.
 csnap_uncommitted() {
     grep -q "M04SNAP-UNCOMM-$$" "$SNAP/test/fixtures/scriptagent/Dockerfile" \
         || { echo "Dockerfile edit missing from snapshot"; return 1; }
@@ -775,15 +761,52 @@ else
     bad snap.untracked "$out"
 fi
 
+# snap.post-snapshot, run against a scratch copy: SCR2 is a scratch repo
+# (under $WORK, never the live tree). SCRO2 is its mksnap snapshot. Writes
+# made to the scratch worktree AFTER the snapshot must appear in neither the
+# snapshot nor a binary built from it, even while a churn loop hammers the
+# scratch tree through the build window.
 csnap_post() {
-    ! grep -q "M04SNAP-POST-$$" "$SNAP/test/fixtures/scriptagent/Dockerfile" \
-        || { echo "post-snapshot Dockerfile edit leaked into snapshot"; return 1; }
-    [ ! -e "$SNAP/test/fixtures/scriptagent/zz_m04snappost_$$.go" ] \
-        || { echo "post-snapshot file leaked into snapshot"; return 1; }
-    ! docker run --rm --entrypoint /bin/cat "$IMG" /home/agent/m04snap-post >/dev/null 2>&1 \
-        || { echo "post-snapshot Dockerfile edit reached image"; return 1; }
-    ! grep -aq "M04SNAP_POSTFILE_$$" "$BIN/scriptagent" \
-        || { echo "post-snapshot source reached fixture binary"; return 1; }
+    rm -rf "$SCR2" "$SCRO2"; mkdir -p "$SCR2"
+    git init -q "$SCR2" || { echo "scratch git init failed"; return 1; }
+    printf 'module m04post\n\ngo 1.27.4\n' >"$SCR2/go.mod"
+    cat >"$SCR2/main.go" <<'EOF'
+package main
+
+func main() { println("M04SNAP_PRE") }
+EOF
+    mksnap "$SCR2" "$WORK/post-index" "$SCRO2" || { echo "scratch snapshot failed"; return 1; }
+    # Post-snapshot writes into the scratch live tree:
+    cat >>"$SCR2/main.go" <<EOF
+func postMarker() string { return "M04SNAP-POST-$$" }
+EOF
+    printf 'post\n' >"$SCR2/late.txt"
+    # Churn the scratch tree while building strictly from its snapshot — the
+    # threat a live-tree build context cannot survive.
+    : >"$WORK/.postrun"
+    (
+        i=0
+        while [ -f "$WORK/.postrun" ]; do
+            i=$((i + 1))
+            printf 'c%s\n' "$i" >>"$SCR2/churn$((i % 5))"
+            mv -f "$SCR2/churn$((i % 5))" "$SCR2/churn$((i % 5)).mv" 2>/dev/null
+            rm -f "$SCR2/churn$((i % 5)).mv" "$SCR2/new$((i - 3))" 2>/dev/null
+            printf 'n%s\n' "$i" >"$SCR2/new$i" 2>/dev/null
+        done
+    ) &
+    local churnpid=$!
+    ( cd "$SCRO2" && "$GO" build -o postbin . ) >"$WORK/logs/postbuild.log" 2>&1
+    local brc=$?
+    rm -f "$WORK/.postrun"; wait "$churnpid" 2>/dev/null
+    [ "$brc" -eq 0 ] || { echo "scratch build failed: $(tail -3 "$WORK/logs/postbuild.log" | tr '\n' ' ')"; return 1; }
+    ! grep -q "M04SNAP-POST-$$" "$SCRO2/main.go" \
+        || { echo "post-snapshot edit leaked into scratch snapshot"; return 1; }
+    [ ! -e "$SCRO2/late.txt" ] \
+        || { echo "post-snapshot file leaked into scratch snapshot"; return 1; }
+    ! grep -aq "M04SNAP-POST-$$" "$SCRO2/postbin" \
+        || { echo "post-snapshot source reached scratch binary"; return 1; }
+    grep -aq "M04SNAP_PRE" "$SCRO2/postbin" \
+        || { echo "scratch binary missing snapshot content"; return 1; }
 }
 if out=$(csnap_post); then
     pass snap.post-snapshot
