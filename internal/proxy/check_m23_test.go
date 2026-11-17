@@ -70,6 +70,58 @@ func patternSHAHex(n int64) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// stallWatchdog returns a context that is canceled when no byte moves for
+// the stall window, and a progress channel to ping on every read. The
+// byte-equality and memory-bound checks assert correctness — equal
+// digests, bounded RSS — never speed (throughput is MM2.5's measured
+// number, reported rather than asserted through a request timeout), so
+// the only deadline they carry is this one derived from bytes moved: a
+// slow or contended host cannot trip it; only a hung relay can.
+func stallWatchdog(stall time.Duration) (context.Context, chan<- struct{}, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(context.Background())
+	ping := make(chan struct{}, 256)
+	go func() {
+		tm := time.NewTimer(stall)
+		defer tm.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ping:
+				if !tm.Stop() {
+					select {
+					case <-tm.C:
+					default:
+					}
+				}
+				tm.Reset(stall)
+			case <-tm.C:
+				cancel()
+				return
+			}
+		}
+	}()
+	return ctx, ping, cancel
+}
+
+// beatReader pings the stall watchdog for every byte read — progress is
+// what resets the hang deadline.
+type beatReader struct {
+	r    io.Reader
+	ping chan<- struct{}
+}
+
+func (b *beatReader) Read(p []byte) (int, error) {
+	n, err := b.r.Read(p)
+	if n > 0 {
+		select {
+		case b.ping <- struct{}{}:
+		default:
+		}
+	}
+	return n, err
+}
+
 // hashSink reads the whole request body and reports its digest — the
 // "digest seen by upstream" arm of C2.3.1.
 type hashSink struct{}
@@ -116,26 +168,35 @@ func TestC231ByteEquality(t *testing.T) {
 
 	sizes := []int64{0, 1, 1 << 10, 1 << 20, (1 << 20) + 1, 1 << 30}
 	cli := e.proxyClient(t, "tok-one", e.combinedPool(t, "s1"), "http/1.1")
+	// Byte equality has no wall-clock budget: the only deadline is the
+	// stall watchdog's, derived from bytes moved — it catches a hung
+	// relay, never a slow host.
+	cli.Timeout = 0
 	for _, n := range sizes {
-		body := &patternReader{n: n}
-		req, err := http.NewRequest("POST", "https://sink.example/up", body)
+		ctx, ping, cancel := stallWatchdog(2 * time.Minute)
+		req, err := http.NewRequestWithContext(ctx, "POST", "https://sink.example/up",
+			&beatReader{r: &patternReader{n: n}, ping: ping})
 		if err != nil {
+			cancel()
 			t.Fatal(err)
 		}
 		req.ContentLength = n
 		req.Header.Set("Content-Type", "application/octet-stream")
 		res, err := cli.Do(req)
 		if err != nil {
+			cancel()
 			t.Fatalf("upload %d: %v", n, err)
 		}
 		var doc struct {
 			SHA string `json:"body_sha256"`
 			Len int64  `json:"body_len"`
 		}
-		if err := json.NewDecoder(res.Body).Decode(&doc); err != nil {
-			t.Fatalf("upload %d decode: %v", n, err)
-		}
+		derr := json.NewDecoder(res.Body).Decode(&doc)
 		_ = res.Body.Close()
+		cancel()
+		if derr != nil {
+			t.Fatalf("upload %d decode: %v", n, derr)
+		}
 		want := patternSHAHex(n)
 		if doc.SHA != want {
 			t.Errorf("upload %d: upstream saw %s, want %s", n, doc.SHA, want)
@@ -160,13 +221,22 @@ func TestC231ByteEquality(t *testing.T) {
 	defer closeDL()
 	routes["dl.example"] = dlAddr
 	for _, n := range sizes {
-		res, err := cli.Get(fmt.Sprintf("https://dl.example/dl/%d", n))
+		ctx, ping, cancel := stallWatchdog(2 * time.Minute)
+		req, err := http.NewRequestWithContext(ctx, "GET",
+			fmt.Sprintf("https://dl.example/dl/%d", n), nil)
 		if err != nil {
+			cancel()
+			t.Fatal(err)
+		}
+		res, err := cli.Do(req)
+		if err != nil {
+			cancel()
 			t.Fatalf("download %d: %v", n, err)
 		}
 		got := sha256.New()
-		m, err := io.Copy(got, res.Body)
+		m, err := io.Copy(got, &beatReader{r: res.Body, ping: ping})
 		_ = res.Body.Close()
+		cancel()
 		if err != nil {
 			t.Fatalf("download %d read: %v", n, err)
 		}
@@ -432,14 +502,30 @@ func bytesIndex(b, needle []byte) int {
 // --- C2.3.3 ---------------------------------------------------------------
 // Request body <= bufferLimit: body_sha256 and request_digest in the
 // write-ahead effect.http. Larger: body_deferred, digest in the result.
+// The second half perturbs every request_digest input of 04 §3 through
+// the live pipeline: changing exactly one input must change the digest,
+// and the two normalizations (authority case fold, default-port drop)
+// must hold.
+const m233Grants = `  grants:
+    - id: any
+      match: {hosts: ["*"]}
+    - id: h1http
+      match: {hosts: [h1.example], scheme: http}
+`
+
 func TestC233WriteAheadDigest(t *testing.T) {
 	dir := t.TempDir()
-	pol := writePolicy(t, dir, "p", m23Grants)
+	pol := writePolicy(t, dir, "p", m233Grants)
 	routes := map[string]string{}
 	e := newTestEnv(t, []SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)}, routes)
-	sinkAddr, closeSink := startTLSUpstream(t, e.ca, []string{"sink.example"}, nil, &hashSink{})
+	sinkAddr, closeSink := startTLSUpstream(t, e.ca, []string{"sink.example", "sink2.example", "SINK3.EXAMPLE"}, nil, &hashSink{})
 	defer closeSink()
 	routes["sink.example"] = sinkAddr
+	routes["sink2.example"] = sinkAddr
+	routes["sink3.example"] = sinkAddr
+	plainAddr, closePlain := startUpstream(t, &hashSink{})
+	defer closePlain()
+	routes["h1.example"] = plainAddr
 
 	cli := e.proxyClient(t, "tok-one", e.combinedPool(t, "s1"), "http/1.1")
 	for _, n := range []int64{1 << 10, (1 << 20) + 1} {
@@ -508,6 +594,235 @@ func TestC233WriteAheadDigest(t *testing.T) {
 	}
 	if bigRes.ReqDigest != wantDigest("POST", "https", "sink.example", "/up", "", patternSHA((1<<20)+1), "application/octet-stream") {
 		t.Errorf("big: result request_digest %q", bigRes.ReqDigest)
+	}
+
+	// ---- request_digest input coverage (04 §3) -------------------------
+	// The baseline request; every sibling below changes exactly one
+	// digest input and must produce a different digest — and equal the
+	// independently recomputed one.
+	bodySHA := sha256.Sum256([]byte("abc"))
+	abcSHA := hex.EncodeToString(bodySHA[:])
+	mk := func(method, url, body string, hdr map[string]string) *http.Request {
+		req, err := http.NewRequest(method, url, strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for k, v := range hdr {
+			req.Header.Set(k, v)
+		}
+		return req
+	}
+	octet := map[string]string{"Content-Type": "application/octet-stream"}
+	base := wantDigest("POST", "https", "sink.example", "/up", "q=1", bodySHA, "application/octet-stream")
+	d := map[string]string{}
+	d["base"] = sendAndDigest(t, cli, e, "s1", mk("POST", "https://sink.example/up?q=1", "abc", octet), bodySHA)
+	if d["base"] != base {
+		t.Fatalf("baseline digest %s, want %s", d["base"], base)
+	}
+
+	siblings := []struct {
+		name string
+		req  *http.Request
+		want string // independently recomputed digest
+		diff bool   // must differ from baseline (false = must equal it)
+	}{
+		{"query", mk("POST", "https://sink.example/up?q=2", "abc", octet),
+			wantDigest("POST", "https", "sink.example", "/up", "q=2", bodySHA, "application/octet-stream"), true},
+		{"path", mk("POST", "https://sink.example/up2?q=1", "abc", octet),
+			wantDigest("POST", "https", "sink.example", "/up2", "q=1", bodySHA, "application/octet-stream"), true},
+		{"method", mk("PUT", "https://sink.example/up?q=1", "abc", octet),
+			wantDigest("PUT", "https", "sink.example", "/up", "q=1", bodySHA, "application/octet-stream"), true},
+		{"authority", mk("POST", "https://sink2.example/up?q=1", "abc", octet),
+			wantDigest("POST", "https", "sink2.example", "/up", "q=1", bodySHA, "application/octet-stream"), true},
+		{"content-type", mk("POST", "https://sink.example/up?q=1", "abc", map[string]string{"Content-Type": "text/plain"}),
+			wantDigest("POST", "https", "sink.example", "/up", "q=1", bodySHA, "text/plain"), true},
+		{"ct-absent", mk("POST", "https://sink.example/up?q=1", "abc", nil),
+			wantDigest("POST", "https", "sink.example", "/up", "q=1", bodySHA, ""), true},
+		{"ct-whitespace", mk("POST", "https://sink.example/up?q=1", "abc", map[string]string{"Content-Type": "  application/octet-stream "}),
+			base, false},
+		{"credential-header", mk("POST", "https://sink.example/up?q=1", "abc", map[string]string{
+			"Content-Type": "application/octet-stream", "Authorization": "Bearer secret"}),
+			base, false},
+		{"authority-case", mk("POST", "https://SINK3.EXAMPLE/up?q=1", "abc", octet),
+			wantDigest("POST", "https", "sink3.example", "/up", "q=1", bodySHA, "application/octet-stream"), false},
+	}
+	for _, s := range siblings {
+		d[s.name] = sendAndDigest(t, cli, e, "s1", s.req, bodySHA)
+		if s.diff {
+			if d[s.name] == base {
+				t.Errorf("digest input %s changed nothing (digest ignores it)", s.name)
+			} else if d[s.name] != s.want {
+				t.Errorf("digest input %s: digest %s, want %s", s.name, d[s.name], s.want)
+			}
+		} else if d[s.name] != s.want {
+			t.Errorf("digest normalization %s: digest %s, want %s (=baseline)", s.name, d[s.name], s.want)
+		}
+	}
+
+	// Body input: same request, different body bytes.
+	otherSHA := sha256.Sum256([]byte("abd"))
+	d["body"] = sendAndDigest(t, cli, e, "s1", mk("POST", "https://sink.example/up?q=1", "abd", octet), otherSHA)
+	if d["body"] == base {
+		t.Error("digest ignores request body")
+	} else if want := wantDigest("POST", "https", "sink.example", "/up", "q=1", otherSHA, "application/octet-stream"); d["body"] != want {
+		t.Errorf("body digest %s, want %s", d["body"], want)
+	}
+
+	// Same query, different body-less GETs: the query must change the
+	// digest even with an empty body.
+	get1 := func(q string) *http.Request {
+		req, err := http.NewRequest("GET", "https://sink.example/x?"+q, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return req
+	}
+	emptySHA := sha256.Sum256(nil)
+	d["get-q1"] = sendAndDigest(t, cli, e, "s1", get1("a=1"), emptySHA)
+	d["get-q2"] = sendAndDigest(t, cli, e, "s1", get1("a=2"), emptySHA)
+	if d["get-q1"] == d["get-q2"] {
+		t.Error("digest ignores the raw query")
+	} else if want := wantDigest("GET", "https", "sink.example", "/x", "a=1", emptySHA, ""); d["get-q1"] != want {
+		t.Errorf("get digest %s, want %s", d["get-q1"], want)
+	}
+
+	// Default-port normalization: http://h1.example:80 and http://h1.example
+	// are the same authority in the digest (plain listener, scheme http).
+	hreq := func(url string) *http.Request {
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return req
+	}
+	d["http-port"] = sendAndDigest(t, cli, e, "s1", hreq("http://h1.example:80/x?q=1"), emptySHA)
+	d["http-noport"] = sendAndDigest(t, cli, e, "s1", hreq("http://h1.example/x?q=1"), emptySHA)
+	if d["http-port"] != d["http-noport"] {
+		t.Error("default :80 not normalized away: digests differ")
+	} else if want := wantDigest("GET", "http", "h1.example", "/x", "q=1", emptySHA, ""); d["http-port"] != want {
+		t.Errorf("http digest %s, want %s", d["http-port"], want)
+	}
+
+	// Every recorded digest so far came through the write-ahead record;
+	// spot-check the query made it into the record fields too.
+	recs := recordsOfType[EffectHTTPBody](t, e.readSessionRecords(t, "s1"), "effect.http")
+	found := false
+	for _, ef := range recs {
+		if ef.Request.Authority == "sink.example" && ef.Request.Path == "/up" &&
+			ef.Request.QuerySHA256 == querySHA("q=1") && ef.Request.BodySHA256 == abcSHA {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("no effect.http record carries the baseline request fields")
+	}
+}
+
+// effectForRequest returns the first allow-effect at index >= before
+// whose recorded request fields match what the client sent.
+func effectForRequest(effects []EffectHTTPBody, before int, method, authority, path, rawQuery string, bodyLen int64) *EffectHTTPBody {
+	for i := before; i < len(effects); i++ {
+		ef := &effects[i]
+		if ef.Decision.Action != "allow" {
+			continue
+		}
+		r := ef.Request
+		if r.Method == method && r.Authority == authority && r.Path == path &&
+			r.QuerySHA256 == querySHA(rawQuery) && r.BodyLen == bodyLen {
+			return ef
+		}
+	}
+	return nil
+}
+
+// sendAndDigest issues req through the proxied client and returns the
+// request_digest of the write-ahead effect.http it produced.
+func sendAndDigest(t *testing.T, cli *http.Client, e *testEnv, sessionID string, req *http.Request, wantBodySHA [32]byte) string {
+	t.Helper()
+	before := len(recordsOfType[EffectHTTPBody](t, e.readSessionRecords(t, sessionID), "effect.http"))
+	res, err := cli.Do(req)
+	if err != nil {
+		t.Fatalf("%s %s: %v", req.Method, req.URL, err)
+	}
+	_, _ = io.Copy(io.Discard, res.Body)
+	_ = res.Body.Close()
+	if res.StatusCode != 200 {
+		t.Fatalf("%s %s: status %d", req.Method, req.URL, res.StatusCode)
+	}
+	path := req.URL.EscapedPath()
+	if path == "" {
+		path = "/"
+	}
+	authority := req.URL.Host
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		effects := recordsOfType[EffectHTTPBody](t, e.readSessionRecords(t, sessionID), "effect.http")
+		if ef := effectForRequest(effects, before, req.Method, authority, path, req.URL.RawQuery, req.ContentLength); ef != nil {
+			if ef.RequestDigest == "" {
+				t.Fatalf("%s %s: write-ahead record has no request_digest", req.Method, req.URL)
+			}
+			if ef.Request.BodySHA256 != hex.EncodeToString(wantBodySHA[:]) {
+				t.Fatalf("%s %s: body_sha256 %q, want %q", req.Method, req.URL, ef.Request.BodySHA256, hex.EncodeToString(wantBodySHA[:]))
+			}
+			return ef.RequestDigest
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no write-ahead effect.http for %s %s", req.Method, req.URL)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// TestRequestDigestInputs pins the 04 §3 request_digest formula at the
+// unit level: each input perturbed changes the digest; each required
+// normalization holds.
+func TestRequestDigestInputs(t *testing.T) {
+	bodyA := sha256.Sum256([]byte("a"))
+	bodyB := sha256.Sum256([]byte("b"))
+	hdr := func(ct string) http.Header {
+		h := http.Header{}
+		if ct != "" {
+			h.Set("Content-Type", ct)
+		}
+		return h
+	}
+	base := requestDigest("POST", "https", "example.com", "/p", "q=1", bodyA, hdr("text/plain"))
+	for name, got := range map[string]string{
+		"method":       requestDigest("PUT", "https", "example.com", "/p", "q=1", bodyA, hdr("text/plain")),
+		"scheme":       requestDigest("POST", "http", "example.com", "/p", "q=1", bodyA, hdr("text/plain")),
+		"authority":    requestDigest("POST", "https", "other.com", "/p", "q=1", bodyA, hdr("text/plain")),
+		"raw path":     requestDigest("POST", "https", "example.com", "/q", "q=1", bodyA, hdr("text/plain")),
+		"raw query":    requestDigest("POST", "https", "example.com", "/p", "q=2", bodyA, hdr("text/plain")),
+		"body":         requestDigest("POST", "https", "example.com", "/p", "q=1", bodyB, hdr("text/plain")),
+		"content-type": requestDigest("POST", "https", "example.com", "/p", "q=1", bodyA, hdr("text/html")),
+		"ct absent":    requestDigest("POST", "https", "example.com", "/p", "q=1", bodyA, nil),
+	} {
+		if got == base {
+			t.Errorf("request_digest ignores %s", name)
+		}
+	}
+	// The content-type line hashes the trimmed value only when present.
+	if got := requestDigest("POST", "https", "example.com", "/p", "q=1", bodyA, hdr("  text/plain  ")); got != base {
+		t.Error("content-type value not trimmed")
+	}
+	// Authority normalization: case folded, default ports dropped,
+	// non-default ports kept.
+	for _, c := range []struct {
+		host   string
+		port   int
+		scheme string
+		want   string
+	}{
+		{"EXAMPLE.com", 443, "https", "example.com"},
+		{"example.com", 443, "https", "example.com"},
+		{"example.com", 80, "http", "example.com"},
+		{"example.com", 8443, "https", "example.com:8443"},
+		{"example.com", 8080, "http", "example.com:8080"},
+		{"example.com", 0, "https", "example.com"},
+	} {
+		if got := digestAuthority(c.host, c.port, c.scheme); got != c.want {
+			t.Errorf("digestAuthority(%q,%d,%q) = %q, want %q", c.host, c.port, c.scheme, got, c.want)
+		}
 	}
 }
 
@@ -651,26 +966,45 @@ func TestC235MemoryBound(t *testing.T) {
 		return 0
 	}
 
+	// The memory bound has no wall-clock budget either: transfers report
+	// progress to the stall watchdog, which only fires on a true hang.
+	cli.Timeout = 0
 	const limit = 64 << 20
 	before := rss()
-	req, _ := http.NewRequest("POST", "https://sink.example/up", &patternReader{n: 1 << 30})
+	ctx, ping, cancel := stallWatchdog(2 * time.Minute)
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://sink.example/up",
+		&beatReader{r: &patternReader{n: 1 << 30}, ping: ping})
+	if err != nil {
+		cancel()
+		t.Fatal(err)
+	}
 	req.ContentLength = 1 << 30
 	res, err := cli.Do(req)
 	if err != nil {
+		cancel()
 		t.Fatalf("upload: %v", err)
 	}
 	_ = res.Body.Close()
+	cancel()
 	if d := rss() - before; d > limit {
 		t.Errorf("upload RSS growth %d MiB > 64 MiB", d>>20)
 	}
 
 	before = rss()
-	res, err = cli.Get("https://src.example/big")
+	ctx, ping, cancel = stallWatchdog(2 * time.Minute)
+	req, err = http.NewRequestWithContext(ctx, "GET", "https://src.example/big", nil)
 	if err != nil {
+		cancel()
+		t.Fatal(err)
+	}
+	res, err = cli.Do(req)
+	if err != nil {
+		cancel()
 		t.Fatalf("download: %v", err)
 	}
-	_, _ = io.Copy(io.Discard, res.Body)
+	_, _ = io.Copy(io.Discard, &beatReader{r: res.Body, ping: ping})
 	_ = res.Body.Close()
+	cancel()
 	if d := rss() - before; d > limit {
 		t.Errorf("download RSS growth %d MiB > 64 MiB", d>>20)
 	}

@@ -1,15 +1,14 @@
 diff --git a/internal/proxy/pipeline.go b/internal/proxy/pipeline.go
-index e6188c3..d5d694a 100644
 --- a/internal/proxy/pipeline.go
 +++ b/internal/proxy/pipeline.go
-@@ -363,7 +363,9 @@ func relayStream(w http.ResponseWriter, src io.Reader, dst *hashCounter) error {
+@@ -375,8 +375,8 @@
  		m, rerr := src.Read(buf)
  		if m > 0 {
  			wm, werr := w.Write(buf[:m])
--			_, _ = dst.Write(buf[:wm])
+-			if _, derr := dst.Write(buf[:wm]); derr != nil {
+-				return derr
 +			if dst.n < 64*1024 {
 +				_, _ = dst.Write(buf[:wm])
-+			}
+ 			}
  			if fl != nil {
  				fl.Flush()
- 			}

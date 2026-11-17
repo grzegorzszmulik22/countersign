@@ -86,6 +86,8 @@ func (s *Server) upstreamTransport() *http.Transport {
 			}
 			tc := tls.Client(raw, cfg)
 			if err := tc.HandshakeContext(ctx); err != nil {
+				// Best effort: the handshake already failed; the close
+				// error cannot make upstream verification any safer.
 				_ = raw.Close()
 				return nil, &upstreamTLSError{err: err}
 			}

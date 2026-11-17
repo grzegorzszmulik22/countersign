@@ -15,6 +15,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -25,6 +26,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -65,11 +67,18 @@ func newTestEnv(t *testing.T, entries []SessionEntry, routes map[string]string) 
 // broker otherwise trusts).
 func newTestEnvRoots(t *testing.T, entries []SessionEntry, routes map[string]string, extraCA *miniCA) *testEnv {
 	t.Helper()
+	return newTestEnvFull(t, t.TempDir(), entries, routes, extraCA, nil)
+}
+
+// newTestEnvFull is the shared builder: dir holds the CA/session/records
+// state and, when sink is non-nil, it is injected as the broker's record
+// sink (a failableSink wraps the FileRecordSink the caller opened on
+// dir/records).
+func newTestEnvFull(t *testing.T, dir string, entries []SessionEntry, routes map[string]string, extraCA *miniCA, sink RecordSink) *testEnv {
+	t.Helper()
 	testSeq.mu.Lock()
 	testSeq.n++
 	testSeq.mu.Unlock()
-
-	dir := t.TempDir()
 	ca, err := fxlib.EnsureCA(dir)
 	if err != nil {
 		t.Fatalf("EnsureCA: %v", err)
@@ -95,6 +104,7 @@ func newTestEnvRoots(t *testing.T, entries []SessionEntry, routes map[string]str
 		SessionsFile: sessFile,
 		RecordsDir:   records,
 		RootCAs:      roots,
+		Sink:         sink,
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			host := addr
 			if h, _, err := net.SplitHostPort(addr); err == nil {
@@ -482,3 +492,24 @@ func (e *testEnv) brokerLogText(t *testing.T) string {
 	}
 	return string(data)
 }
+
+// failableSink wraps a RecordSink and fails appends while fail is set;
+// checks that a failed evidence write surfaces as a broker error. rejected
+// carries each refused record's type so a test can wait until the append
+// it wants to break has actually been attempted — clearing fail without
+// that synchronization would race the server-side append.
+type failableSink struct {
+	inner    RecordSink
+	fail     atomic.Bool
+	rejected chan string
+}
+
+func (s *failableSink) Append(session string, rec *Record) error {
+	if s.fail.Load() {
+		s.rejected <- rec.Type
+		return errors.New("record sink unavailable")
+	}
+	return s.inner.Append(session, rec)
+}
+
+func (s *failableSink) Close() error { return s.inner.Close() }

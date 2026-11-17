@@ -214,57 +214,262 @@ func TestC223UpstreamVerify(t *testing.T) {
 }
 
 // --- C2.2.4 ---------------------------------------------------------------
-// SNI ≠ CONNECT authority, or Host ≠ authority → SMUGGLING_SUSPECT.
+// SNI, Host and :authority must EQUAL the CONNECT authority (04 §2 step
+// 1): identical after lowercasing, with one trailing root dot folding in.
+// Every other deviation — a suffix, a prefix, a superstring, another
+// name, a wrong port, a name sent for an IP-literal authority, or an
+// absent SNI — is SMUGGLING_SUSPECT, is recorded, and never reaches the
+// upstream.
+const m224Grants = `  grants:
+    - id: any
+      match: {hosts: ["*"]}
+    - id: ip-literal
+      match: {hosts: ["127.0.0.1"]}
+`
+
 func TestC224SNICrossCheck(t *testing.T) {
 	dir := t.TempDir()
-	pol := writePolicy(t, dir, "p", m22Grants)
-	e := newTestEnv(t, []SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)}, nil)
-	e.startEcho(t)
+	pol := writePolicy(t, dir, "p", m224Grants)
+	hit := &countHandler{}
+	routes := map[string]string{}
+	e := newTestEnv(t, []SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)}, routes)
+	addr, closeUp := startTLSUpstream(t, e.ca, []string{"echo.example.com"}, nil, hit)
+	defer closeUp()
+	routes["echo.example.com"] = addr
 	pool := e.combinedPool(t, "s1")
+	const authority = "echo.example.com:443"
+	accepts := 0 // requests that legitimately reach upstream
 
-	// SNI ≠ CONNECT authority: the handshake is refused and recorded.
-	tc, _ := e.tunnelTLS(t, "tok-one", "echo.example.com:443",
-		&tls.Config{RootCAs: pool, ServerName: "different.example"})
-	err := tc.Handshake()
-	_ = tc.Close()
-	if err == nil {
-		t.Fatal("handshake with mismatched SNI succeeded")
+	// ---- SNI vs CONNECT authority -------------------------------------
+	sniCases := []struct {
+		name      string
+		sni       string
+		authority string
+		accept    bool
+	}{
+		{"exact", "echo.example.com", authority, true},
+		{"case-folded", "ECHO.EXAMPLE.COM", authority, true},
+		{"trailing-dot", "echo.example.com.", authority, true},
+		{"case-and-dot", "Echo.Example.Com.", authority, true},
+		{"authority-as-suffix", "evil.echo.example.com", authority, false},
+		{"authority-as-prefix", "echo.example.com.evil.net", authority, false},
+		{"superstring", "echo.example.comm", authority, false},
+		{"wildcard-name", "*.example.com", authority, false},
+		{"other-name", "other.example", authority, false},
+		{"parent-domain", "example.com", authority, false},
+		{"sni-with-port", "echo.example.com:443", authority, false},
+		{"empty-sni", "", authority, false},
+		{"ip-authority-with-name", "evil.example", "127.0.0.1:443", false},
+		{"ip-authority-empty-sni", "", "127.0.0.1:443", false},
+	}
+	wantSNIDenials := 0
+	for _, c := range sniCases {
+		ccfg := &tls.Config{ServerName: c.sni}
+		if c.accept {
+			ccfg.RootCAs = pool
+		} else {
+			// The broker's refusal is under test; keep the client from
+			// rejecting the leaf itself first.
+			ccfg.InsecureSkipVerify = true
+		}
+		st, conn := e.rawConnect(t, "tok-one", c.authority)
+		if st != 200 {
+			t.Fatalf("CONNECT %s: status %d", c.authority, st)
+		}
+		tc := tls.Client(conn, ccfg)
+		err := tc.Handshake()
+		if !c.accept {
+			wantSNIDenials++
+			_ = tc.Close()
+			if err == nil {
+				t.Errorf("%s: SNI %q for CONNECT %s accepted, want refused", c.name, c.sni, c.authority)
+			}
+			continue
+		}
+		if err != nil {
+			_ = tc.Close()
+			t.Errorf("%s: SNI %q for CONNECT %s refused an equal name: %v", c.name, c.sni, c.authority, err)
+			continue
+		}
+		st, head := innerRequest(t, tc, "GET /x HTTP/1.1\r\nHost: echo.example.com\r\n\r\n")
+		_ = tc.Close()
+		if st != 200 {
+			t.Errorf("%s: inner request status %d, want 200 (head: %s)", c.name, st, head)
+			continue
+		}
+		accepts++
 	}
 
-	// Host ≠ authority inside an honest tunnel.
-	tc, _ = e.tunnelTLS(t, "tok-one", "echo.example.com:443", &tls.Config{RootCAs: pool})
-	if err := tc.Handshake(); err != nil {
-		t.Fatalf("tunnel handshake: %v", err)
+	// ---- Host and :authority vs CONNECT authority ---------------------
+	hostCases := []struct {
+		name   string
+		host   string // Host header / :authority value; "" = header omitted
+		accept bool
+	}{
+		{"exact", "echo.example.com", true},
+		{"explicit-port", "echo.example.com:443", true},
+		{"case-folded", "ECHO.EXAMPLE.COM", true},
+		{"trailing-dot", "echo.example.com.", true},
+		{"dot-and-port", "echo.example.com.:443", true},
+		{"authority-as-suffix", "evil.echo.example.com", false},
+		{"authority-as-prefix", "echo.example.com.evil.net", false},
+		{"superstring", "echo.example.comm", false},
+		{"other-name", "other.example", false},
+		{"wrong-port", "echo.example.com:444", false},
+		{"empty", "", false},
 	}
-	st, head := innerRequest(t, tc, "GET /x HTTP/1.1\r\nHost: other.example\r\n\r\n")
-	_ = tc.Close()
-	if st != 403 {
-		t.Fatalf("Host-mismatch status %d, want 403", st)
-	}
-	if !strings.Contains(head, "SMUGGLING_SUSPECT") {
-		t.Errorf("want SMUGGLING_SUSPECT, head:\n%s", head)
-	}
-
-	denied := recordsOfType[DeniedBody](t, e.readSessionRecords(t, "s1"), "effect.denied")
-	var sniDenied bool
-	for _, d := range denied {
-		if d.Reason == "SMUGGLING_SUSPECT" {
-			sniDenied = true
+	h1Denies, h2Denies := 0, 0
+	for _, c := range hostCases {
+		tc, st := e.tunnelTLS(t, "tok-one", authority, &tls.Config{RootCAs: pool})
+		if st != 200 || tc == nil {
+			t.Fatalf("CONNECT %s: status %d", authority, st)
+		}
+		if err := tc.Handshake(); err != nil {
+			_ = tc.Close()
+			t.Fatalf("honest tunnel handshake: %v", err)
+		}
+		req := "GET /x HTTP/1.1\r\n\r\n" // Host header omitted entirely
+		if c.host != "" {
+			req = "GET /x HTTP/1.1\r\nHost: " + c.host + "\r\n\r\n"
+		}
+		st, head := innerRequest(t, tc, req)
+		_ = tc.Close()
+		if c.accept {
+			if st != 200 {
+				t.Errorf("h1 Host %q: status %d, want 200 (head: %s)", c.host, st, head)
+			} else {
+				accepts++
+			}
+			continue
+		}
+		if c.host == "" {
+			// An absent Host is rejected by net/http before the broker's
+			// own check (400); either way it must never be forwarded.
+			if st == 200 {
+				t.Errorf("h1 empty Host: request forwarded (status 200)")
+			}
+			continue
+		}
+		h1Denies++
+		if st != 403 || !strings.Contains(head, "SMUGGLING_SUSPECT") {
+			t.Errorf("h1 Host %q: status %d, want 403 SMUGGLING_SUSPECT (head: %s)", c.host, st, head)
 		}
 	}
-	if !sniDenied {
-		t.Errorf("no SMUGGLING_SUSPECT effect.denied for SNI mismatch: %+v", denied)
-	}
-	effects := recordsOfType[EffectHTTPBody](t, e.readSessionRecords(t, "s1"), "effect.http")
-	var hostDenied bool
-	for _, ef := range effects {
-		if ef.Decision.Action == "deny" && ef.Decision.Reason == "SMUGGLING_SUSPECT" {
-			hostDenied = true
+
+	h2cli := e.proxyClient(t, "tok-one", pool, "h2")
+	for _, c := range hostCases {
+		if c.host == "" {
+			continue // a conforming h2 client cannot send an empty :authority
+		}
+		req, err := http.NewRequest("GET", "https://echo.example.com/x", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Host = c.host // becomes :authority on h2, Host on h1
+		res, err := h2cli.Do(req)
+		if err != nil {
+			t.Fatalf(":authority %q: %v", c.host, err)
+		}
+		_, _ = io.Copy(io.Discard, res.Body)
+		_ = res.Body.Close()
+		if c.accept {
+			if res.StatusCode != 200 {
+				t.Errorf("h2 :authority %q: status %d, want 200", c.host, res.StatusCode)
+			} else {
+				accepts++
+			}
+			continue
+		}
+		h2Denies++
+		if res.StatusCode != 403 || res.Header.Get("X-Countersign-Reason") != "SMUGGLING_SUSPECT" {
+			t.Errorf("h2 :authority %q: status %d reason %q, want 403 SMUGGLING_SUSPECT",
+				c.host, res.StatusCode, res.Header.Get("X-Countersign-Reason"))
 		}
 	}
-	if !hostDenied {
-		t.Errorf("no SMUGGLING_SUSPECT effect.http for Host mismatch")
+
+	// Upstream saw exactly the accepted requests — every inequality was
+	// stopped before forwarding.
+	if got := int(hit.n.Load()); got != accepts {
+		t.Errorf("upstream hit %d times, want %d (accepted requests only)", got, accepts)
 	}
+
+	// Denials are recorded: SNI refusals as effect.denied, Host refusals
+	// as effect.http{deny, SMUGGLING_SUSPECT}. Host denials are durable
+	// before the response; handshake refusals append as the tunnel dies,
+	// so poll for the full count.
+	wantDenyEffects := h1Denies + h2Denies
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		recs := e.readSessionRecords(t, "s1")
+		sniDenied := 0
+		for _, d := range recordsOfType[DeniedBody](t, recs, "effect.denied") {
+			if d.Reason == "SMUGGLING_SUSPECT" {
+				sniDenied++
+			}
+		}
+		hostDenied := 0
+		for _, ef := range recordsOfType[EffectHTTPBody](t, recs, "effect.http") {
+			if ef.Decision.Action == "deny" && ef.Decision.Reason == "SMUGGLING_SUSPECT" {
+				hostDenied++
+			}
+		}
+		if sniDenied >= wantSNIDenials && hostDenied >= wantDenyEffects {
+			if sniDenied != wantSNIDenials || hostDenied != wantDenyEffects {
+				t.Fatalf("denial records: effect.denied=%d (want %d), effect.http deny=%d (want %d)",
+					sniDenied, wantSNIDenials, hostDenied, wantDenyEffects)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("denial records: effect.denied=%d (want %d), effect.http deny=%d (want %d)",
+				sniDenied, wantSNIDenials, hostDenied, wantDenyEffects)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	// A denial whose record append fails must surface as a broker error:
+	// a denial that is not recorded breaks the evidence record.
+	dir2 := t.TempDir()
+	inner, err := NewFileRecordSink(filepath.Join(dir2, "records"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs := &failableSink{inner: inner, rejected: make(chan string, 16)}
+	e2 := newTestEnvFull(t, dir2,
+		[]SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)}, map[string]string{}, nil, fs)
+	fs.fail.Store(true)
+	st2, conn2 := e2.rawConnect(t, "tok-one", authority)
+	if st2 != 200 {
+		t.Fatalf("CONNECT %s: status %d", authority, st2)
+	}
+	tc2 := tls.Client(conn2, &tls.Config{ServerName: "evil.example", InsecureSkipVerify: true})
+	_ = tc2.Handshake()
+	_ = tc2.Close()
+	// The client handshake returns when the alert leaves the broker, which
+	// is before the denial append is attempted. Hold fail until the sink
+	// has rejected the effect.denied append itself — otherwise a slow
+	// intercept goroutine could append after fail clears and the denial
+	// would record, leaving nothing to surface.
+	deadline = time.Now().Add(10 * time.Second)
+	for {
+		select {
+		case rt := <-fs.rejected:
+			if rt == "effect.denied" {
+				goto denied
+			}
+		case <-time.After(time.Until(deadline)):
+			t.Fatal("denial append never reached the record sink")
+		}
+	}
+denied:
+	fs.fail.Store(false)
+	for !time.Now().After(deadline) {
+		if strings.Contains(e2.brokerLogText(t), "record append failed") {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Error("failed denial record append left no broker error")
 }
 
 // --- C2.2.5 ---------------------------------------------------------------

@@ -24,6 +24,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -44,6 +45,9 @@ type Config struct {
 	RootCAs *x509.CertPool
 	// Keys stores session CA keys; nil uses a MemoryKeyStore.
 	Keys SessionKeyStore
+	// Sink appends records; nil uses a FileRecordSink under RecordsDir.
+	// Tests inject failing sinks to prove append failures surface.
+	Sink RecordSink
 	// Logf receives broker log lines (also mirrored to broker.log).
 	// nil logs to stderr.
 	Logf func(format string, args ...any)
@@ -88,9 +92,13 @@ func NewServer(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	sink, err := NewFileRecordSink(cfg.RecordsDir)
-	if err != nil {
-		return nil, err
+	sink := cfg.Sink
+	if sink == nil {
+		var err error
+		sink, err = NewFileRecordSink(cfg.RecordsDir)
+		if err != nil {
+			return nil, err
+		}
 	}
 	s := &Server{
 		cfg:      cfg,
@@ -109,6 +117,8 @@ func NewServer(cfg Config) (*Server, error) {
 	blog, err := os.OpenFile(filepath.Join(cfg.RecordsDir, "broker.log"),
 		os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o644)
 	if err != nil {
+		// Best effort: construction failed; the close error cannot beat
+		// the broker-log error we are already returning.
 		_ = sink.Close()
 		return nil, fmt.Errorf("broker log: %w", err)
 	}
@@ -138,7 +148,9 @@ func (s *Server) Logf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	s.logf("%s", msg)
 	if s.brokerLog != nil {
-		_, _ = fmt.Fprintf(s.brokerLog, "%s %s\n", time.Now().UTC().Format(time.RFC3339Nano), msg)
+		if _, err := fmt.Fprintf(s.brokerLog, "%s %s\n", time.Now().UTC().Format(time.RFC3339Nano), msg); err != nil {
+			s.logf("broker.log write failed: %v", err)
+		}
 	}
 }
 
@@ -199,6 +211,8 @@ func (s *Server) shutdown() {
 			conns = append(conns, c)
 		}
 		s.mu.Unlock()
+		// Best effort: teardown force-closes each listener and conn; a
+		// close error only repeats an already-dead transport.
 		_ = s.http.Close()
 		for _, c := range conns {
 			_ = c.Close()
@@ -237,6 +251,8 @@ func (s *Server) Close() error {
 	s.shutdown()
 	s.wg.Wait()
 	if s.brokerLog != nil {
+		// Best effort: the log is being abandoned either way; only the
+		// record sink's close error reaches the caller.
 		_ = s.brokerLog.Close()
 	}
 	return s.sink.Close()
@@ -303,7 +319,9 @@ func (s *Server) denyNoSession(w http.ResponseWriter, r *http.Request, sess *Ses
 func clientAddr(r *http.Request) ClientAddr {
 	host, port, _ := net.SplitHostPort(r.RemoteAddr)
 	p := 0
-	_, _ = fmt.Sscanf(port, "%d", &p)
+	if v, err := strconv.Atoi(port); err == nil {
+		p = v
+	}
 	return ClientAddr{IP: host, Port: p}
 }
 
@@ -316,7 +334,9 @@ func (s *Server) recordDenied(sess *Session, r *http.Request, authority, reason,
 		Reason:    reason,
 		Detail:    detail,
 	}
-	_ = s.appendRecord(sess, "effect.denied", body)
+	if err := s.appendRecord(sess, "effect.denied", body); err != nil {
+		s.Logf("record append failed for %s denial (authority %s): %v", reason, authority, err)
+	}
 }
 
 // appendRecord serializes and durably appends one record on the session chain.
@@ -347,6 +367,8 @@ func splitHostPort(addr string) (string, int) {
 		return addr, 0
 	}
 	p := 0
-	_, _ = fmt.Sscanf(port, "%d", &p)
+	if v, err := strconv.Atoi(port); err == nil {
+		p = v
+	}
 	return host, p
 }

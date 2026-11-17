@@ -1,0 +1,13 @@
+make[1]: Entering directory '/home/csbuild/src/cs-broker/.check-work/sabotage-M2.2-shared-ca-across-sessions'
+CHECK C2.2.1 PASS
+CHECK C2.2.2 FAIL — --- FAIL: TestC222PerSessionCA (0.00s)     check_m22_test.go:131: sessions share one CA cert — leaves are not per-session FAIL FAIL	github.com/countersign/countersign/internal/proxy	0.023s FAIL 
+CHECK C2.2.3 PASS
+CHECK C2.2.4 PASS
+CHECK C2.2.5 PASS
+CHECK C2.2.6 PASS
+CHECK C2.2.7 PASS
+CHECK lint.proxy PASS
+M2.2 suite: FAILURES
+check-M2.2: FAIL (exit 1, evidence: evidence/M2.2/20261117T031214Z)
+make[1]: *** [Makefile:37: check-M2.2] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-broker/.check-work/sabotage-M2.2-shared-ca-across-sessions'

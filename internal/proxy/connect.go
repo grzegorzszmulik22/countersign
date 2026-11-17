@@ -51,8 +51,13 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	_, _ = buf.WriteString("HTTP/1.1 200 Connection Established\r\n\r\n")
+	if _, err := buf.WriteString("HTTP/1.1 200 Connection Established\r\n\r\n"); err != nil {
+		// Best effort: the write failed, so the tunnel conn is already dead.
+		_ = cli.Close()
+		return
+	}
 	if err := buf.Flush(); err != nil {
+		// Best effort: the flush failed, so the tunnel conn is already dead.
 		_ = cli.Close()
 		return
 	}
@@ -134,6 +139,14 @@ func grantHostMatch(patterns []string, host string) bool {
 // disagrees with the CONNECT authority (04 §2 step 1, C2.2.4).
 var errSNIMismatch = errors.New("proxy: SNI does not match CONNECT authority")
 
+// normName folds an authority host name for the 04 §2 step 1 identity
+// cross-checks ("must be identical after lowercasing", with the trailing
+// root dot treated as the same name — the conventional equivalence every
+// TLS stack already applies).
+func normName(host string) string {
+	return strings.ToLower(strings.TrimSuffix(host, "."))
+}
+
 // intercept runs the M2.2 pipeline on an accepted CONNECT tunnel: the
 // client handshake is terminated under the session CA (leaf minted per
 // SNI host, verified there equal to the CONNECT authority), then the
@@ -145,24 +158,28 @@ var errSNIMismatch = errors.New("proxy: SNI does not match CONNECT authority")
 // tracked so shutdown closes it too. Intercept returns when the conn dies.
 func (s *Server) intercept(cli net.Conn, sess *Session, cID string, client ClientAddr, authority, host string, port int) {
 	if !s.trackTunnel(cli) {
+		// Best effort: the server is shutting down; nothing reads this conn.
 		_ = cli.Close()
 		return
 	}
 	defer s.untrackTunnel(cli)
+	// Best effort: intercept always owns this conn to its end; a close
+	// error here can only repeat an already-known teardown.
 	defer func() { _ = cli.Close() }()
 
 	var (
 		sni         string
 		sniMismatch bool
 	)
+	wantName := normName(host)
 	tcfg := &tls.Config{
 		MinVersion: tls.VersionTLS12,
 		// ALPN offer to the client is fixed: h2 and http/1.1 (M2.2). The
 		// upstream side negotiates independently on its own TLS conn.
 		NextProtos: []string{"h2", "http/1.1"},
 		GetCertificate: func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
-			sni = strings.ToLower(strings.TrimSuffix(hello.ServerName, "."))
-			if sni != strings.ToLower(host) {
+			sni = normName(hello.ServerName)
+			if sni != wantName {
 				sniMismatch = true
 				return nil, errSNIMismatch
 			}
@@ -172,13 +189,18 @@ func (s *Server) intercept(cli net.Conn, sess *Session, cID string, client Clien
 	tc := tls.Server(cli, tcfg)
 	if err := tc.Handshake(); err != nil {
 		if sniMismatch {
-			_ = s.appendRecord(sess, "effect.denied", DeniedBody{
+			// A denial that fails to record breaks write-ahead
+			// completeness: surface the append failure as a broker
+			// error rather than dropping it.
+			if aerr := s.appendRecord(sess, "effect.denied", DeniedBody{
 				ConnID:    cID,
 				Client:    client,
 				Authority: authority,
 				Reason:    "SMUGGLING_SUSPECT",
 				Detail:    "TLS SNI " + sni + " != CONNECT authority " + authority,
-			})
+			}); aerr != nil {
+				s.Logf("record append failed for SMUGGLING_SUSPECT denial (authority %s): %v", authority, aerr)
+			}
 		}
 		return
 	}
@@ -201,6 +223,7 @@ func (s *Server) intercept(cli net.Conn, sess *Session, cID string, client Clien
 	s.mu.Lock()
 	if s.isClosed {
 		s.mu.Unlock()
+		// Best effort: shutdown already began; the close error adds nothing.
 		_ = tc.Close()
 		return
 	}
@@ -218,6 +241,8 @@ func (s *Server) intercept(cli net.Conn, sess *Session, cID string, client Clien
 	if derr := dc.(*deadConn).err; derr != nil || serr != nil {
 		s.Logf("tunnel %s inner serve: %v (conn err: %v)", cID, serr, derr)
 	}
+	// Best effort: Serve already returned; Close can only fail on work
+	// that is already torn down.
 	_ = inner.Close()
 }
 
@@ -236,7 +261,11 @@ func (s *Server) handleInner(w http.ResponseWriter, r *http.Request, sess *Sessi
 	if hport == 0 {
 		hport = connectPort
 	}
-	if hport != connectPort || !strings.EqualFold(hhost, connectHost) || !strings.EqualFold(hhost, sni) {
+	// 04 §2 step 1: Host/:authority, the CONNECT authority and the SNI
+	// must be identical (after case/dot folding). Anything less — a
+	// different name, a different port, an absent Host — is a smuggling
+	// suspect. sni arrived normalized from the handshake check.
+	if hport != connectPort || normName(hhost) != normName(connectHost) || normName(hhost) != sni {
 		s.denyRequest(w, r, env, "SMUGGLING_SUSPECT", "https", r.Host, path, rawQuery, "")
 		return
 	}

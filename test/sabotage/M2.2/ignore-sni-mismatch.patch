@@ -1,12 +1,19 @@
 diff --git a/internal/proxy/connect.go b/internal/proxy/connect.go
-index 4535888..44b52b1 100644
 --- a/internal/proxy/connect.go
 +++ b/internal/proxy/connect.go
-@@ -162,10 +162,6 @@ func (s *Server) intercept(cli net.Conn, sess *Session, cID string, client Clien
+@@ -171,7 +171,6 @@
+ 		sni         string
+ 		sniMismatch bool
+ 	)
+-	wantName := normName(host)
+ 	tcfg := &tls.Config{
+ 		MinVersion: tls.VersionTLS12,
+ 		// ALPN offer to the client is fixed: h2 and http/1.1 (M2.2). The
+@@ -179,10 +178,6 @@
  		NextProtos: []string{"h2", "http/1.1"},
  		GetCertificate: func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
- 			sni = strings.ToLower(strings.TrimSuffix(hello.ServerName, "."))
--			if sni != strings.ToLower(host) {
+ 			sni = normName(hello.ServerName)
+-			if sni != wantName {
 -				sniMismatch = true
 -				return nil, errSNIMismatch
 -			}

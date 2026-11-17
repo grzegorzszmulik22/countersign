@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/countersign/countersign/internal/policy"
@@ -168,7 +169,11 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
 			s.denyRequest(w, r, env, "LIMIT_BODY", tgt.scheme, tgt.authority, tgt.path, tgt.rawQuery, mres.Grant)
 			return
 		}
-		_, _ = reqBody.Write(buf.Bytes())
+		if _, err := reqBody.Write(buf.Bytes()); err != nil {
+			s.Logf("request body hashing failed: %v", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
 		if n <= limit {
 			bodySHA = sha256.Sum256(buf.Bytes())
 			bodyLen = n
@@ -244,8 +249,12 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
 		}
 	}()
 
-	// Build the upstream request.
-	upURL := &url.URL{Scheme: tgt.scheme, Host: tgt.authority, Path: tgt.path, RawPath: tgt.path, RawQuery: tgt.rawQuery}
+	// Build the upstream request. Dial the identity the checks verified,
+	// folded the same way (case, trailing root dot) so an authority
+	// accepted as equal cannot fail resolution on the cosmetic
+	// difference; the client's Host header still crosses verbatim.
+	dialAuthority := net.JoinHostPort(normName(tgt.host), strconv.Itoa(tgt.port))
+	upURL := &url.URL{Scheme: tgt.scheme, Host: dialAuthority, Path: tgt.path, RawPath: tgt.path, RawQuery: tgt.rawQuery}
 	upReq, err := http.NewRequestWithContext(r.Context(), r.Method, upURL.String(), bodyReader)
 	if err != nil {
 		result.Error = "request-build"
@@ -253,6 +262,7 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
 		http.Error(w, "bad request", http.StatusBadGateway)
 		return
 	}
+	upReq.Host = tgt.authority
 	upReq.Header = outHdr
 	if bodyLen >= 0 {
 		upReq.ContentLength = bodyLen
@@ -280,6 +290,8 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
 		http.Error(w, "upstream failed", http.StatusBadGateway)
 		return
 	}
+	// Best effort: the upstream body is drained or abandoned; a close
+	// error only repeats an already-recorded failure mode.
 	defer func() { _ = res.Body.Close() }()
 	select {
 	case <-gotFirstByte:
@@ -363,7 +375,9 @@ func relayStream(w http.ResponseWriter, src io.Reader, dst *hashCounter) error {
 		m, rerr := src.Read(buf)
 		if m > 0 {
 			wm, werr := w.Write(buf[:m])
-			_, _ = dst.Write(buf[:wm])
+			if _, derr := dst.Write(buf[:wm]); derr != nil {
+				return derr
+			}
 			if fl != nil {
 				fl.Flush()
 			}
