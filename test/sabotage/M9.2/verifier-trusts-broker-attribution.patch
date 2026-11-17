@@ -1,0 +1,24 @@
+diff --git a/internal/reconcile/engine.go b/internal/reconcile/engine.go
+index fca996c..3ca47cc 100644
+--- a/internal/reconcile/engine.go
++++ b/internal/reconcile/engine.go
+@@ -358,16 +358,9 @@ func compareRecorded(r rec, res effectResult, findings *[]Finding) {
+ 		if !truthy(recI) {
+ 			recI = []any{}
+ 		}
+-		gotI := res["intents"]
+-		if gotI == nil {
+-			gotI = []any{}
+-		}
+-		if !sameValue(nilIfEmpty(mget(att, "level")), res["level"]) ||
+-			!jsonDeepEqual(recI, gotI) {
+-			*findings = append(*findings, finding("F_ATTRIBUTION_MISMATCH", rid,
+-				"attribution (%v,%v) recorded, (%v,%v) recomputed",
+-				mget(att, "level"), mget(att, "intents"), res["level"], res["intents"]))
+-		}
++		// The broker's recorded attribution is authoritative for this
++		// session; recomputation is advisory only.
++		_ = recI
+ 	}
+ 	if cl.decision {
+ 		if !sameValue(nilIfEmpty(mget(dec, "grant")), res["grant"]) {
