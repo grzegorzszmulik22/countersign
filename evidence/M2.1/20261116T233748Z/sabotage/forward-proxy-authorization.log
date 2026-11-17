@@ -1,0 +1,11 @@
+make[1]: Entering directory '/home/csbuild/src/cs-broker/.check-work/sabotage-M2.1-forward-proxy-authorization'
+CHECK C2.1.1 PASS
+CHECK C2.1.2 PASS
+CHECK C2.1.3 FAIL — --- FAIL: TestC213HopByHop (0.05s)     check_m21_test.go:244: hop-by-hop header Proxy-Authorization reached upstream: [Basic Y3M6dG9rLW9uZQ==]     harness_test.go:112: broker: tunnel 01M7KBJT1T00EP2PCS44D7SFS8 inner serve: http: Server closed (conn err: read tcp 127.0.0.1:42859->127.0.0.1:55450: use of closed network connection) FAIL FAIL	github.com/countersign/countersign/internal/proxy	0.069s FAIL 
+CHECK C2.1.4 PASS
+CHECK C2.1.5 PASS
+CHECK lint.proxy FAIL — internal/proxy/headers.go:19:1: File is not properly formatted (gofmt) 	"Connection":          true, ^ 1 issues: * gofmt: 1 
+M2.1 suite: FAILURES
+check-M2.1: FAIL (exit 1, evidence: evidence/M2.1/20261116T233749Z)
+make[1]: *** [Makefile:37: check-M2.1] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-broker/.check-work/sabotage-M2.1-forward-proxy-authorization'

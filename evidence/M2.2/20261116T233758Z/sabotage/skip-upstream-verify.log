@@ -1,0 +1,13 @@
+make[1]: Entering directory '/home/csbuild/src/cs-broker/.check-work/sabotage-M2.2-skip-upstream-verify'
+CHECK C2.2.1 PASS
+CHECK C2.2.2 PASS
+CHECK C2.2.3 FAIL —     harness_test.go:112: broker: tunnel 01M7KBKQTW00QBCA7VJHBA9AVE inner serve: listener closed (conn err: read tcp 127.0.0.1:40203->127.0.0.1:58770: use of closed network connection)     harness_test.go:112: broker: tunnel 01M7KBKQSK00V2GCHGY1EGSEZF inner serve: listener closed (conn err: read tcp 127.0.0.1:40203->127.0.0.1:58750: use of closed network connection)     harness_test.go:112: broker: tunnel 01M7KBKQTD0028ZS9TZN6Q827T inner serve: http: Server closed (conn err: read tcp 127.0.0.1:40203->127.0.0.1:58760: use of closed network connection) FAIL FAIL	github.com/countersign/countersign/internal/proxy	0.087s FAIL 
+CHECK C2.2.4 PASS
+CHECK C2.2.5 PASS
+CHECK C2.2.6 PASS
+CHECK C2.2.7 PASS
+CHECK lint.proxy PASS
+M2.2 suite: FAILURES
+check-M2.2: FAIL (exit 1, evidence: evidence/M2.2/20261116T233819Z)
+make[1]: *** [Makefile:37: check-M2.2] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-broker/.check-work/sabotage-M2.2-skip-upstream-verify'
