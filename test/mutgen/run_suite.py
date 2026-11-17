@@ -374,7 +374,9 @@ def main() -> int:
             for k in range(GAP_TRIES)]
     for r in run_jobs(gobin, jobs, job_extra, args.workers):
         gv, pv = r["gv"], r["pv"]
-        if norm(gv) != norm(pv):
+        if not r["changed"]:
+            fails.append("extra keys-json-differs: no-op mutant")
+        elif norm(gv) != norm(pv):
             fails.append("extra keys-json-differs: verifiers disagree")
     print(f"directed extras: agreement {extras_report} (+keys-json gap)",
           flush=True)

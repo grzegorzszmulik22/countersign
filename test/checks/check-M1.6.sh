@@ -27,7 +27,10 @@ fail=0
 
 # C1.6.1 + C1.6.2: one suite run produces both (plus MM1.4/MM1.5 inputs).
 # status.json is written even when the suite exits non-zero, so each
-# check is attributed independently of the run's exit code.
+# check is attributed independently of the run's exit code. Remove any
+# stale status first: a suite that crashes before writing must not
+# inherit a previous run's PASS.
+rm -f "$WORK/suite/status.json" "$WORK/suite/mutations.json"
 "$PY" test/mutgen/run_suite.py --seed "${M16_SEED:-1}" --bundles 200 \
     --per-class 112 --workers "${M16_WORKERS:-48}" --out "$WORK/suite" || true
 s161=$("$PY" -c 'import json,sys;print(json.load(open(sys.argv[1]))["C1.6.1"])' \
