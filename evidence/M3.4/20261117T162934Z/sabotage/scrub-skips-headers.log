@@ -1,9 +1,0 @@
-CHECK C3.4.1 PASS
-CHECK C3.4.2 PASS
-CHECK C3.4.3 FAIL — --- FAIL: TestC343GzipScrubbed (0.46s)     check_m34_test.go:164: placeholder missing in decoded body:      harness_test.go:126: broker: tunnel 01M7N5FJNF00PMYVB0E0VCK49P inner serve: http: Server closed (conn err: read tcp 127.0.0.1:34207->127.0.0.1:40136: use of closed network connection) FAIL FAIL	github.com/countersign/countersign/internal/proxy	0.474s FAIL 
-CHECK C3.4.4 FAIL — --- FAIL: TestC344HeaderTrailerBig (0.33s)     check_m34_test.go:189: X-Leak-Key = "REDACTED", want the session placeholder     harness_test.go:126: broker: tunnel 01M7N5FJPN002WC2VDVEEPSYMN inner serve: http: Server closed (conn err: read tcp 127.0.0.1:35689->127.0.0.1:53228: use of closed network connection) FAIL FAIL	github.com/countersign/countersign/internal/proxy	0.375s FAIL 
-CHECK C3.4.5 PASS
-CHECK C3.4.6 PASS
-M3.4 suite: FAILURES
-check-M3.4: FAIL (exit 1, evidence: evidence/M3.4/20261117T162939Z)
-make: *** [Makefile:37: check-M3.4] Error 1

@@ -1,7 +1,0 @@
-CHECK C3.4.1 PASS
-CHECK C3.4.2 PASS
-CHECK C3.4.3 PASS
-CHECK C3.4.4 PASS
-CHECK C3.4.5 PASS
-CHECK C3.4.6 FAIL —     harness_test.go:126: broker: tunnel 01M7N78NH500R34NTT3TAY62BH inner serve: listener closed (conn err: read tcp 127.0.0.1:37779->127.0.0.1:39080: use of closed network connection)     harness_test.go:126: broker: tunnel 01M7N78RZ900MYSESNQ7J0MZFR inner serve: http: Server closed (conn err: read tcp 127.0.0.1:37779->127.0.0.1:39100: use of closed network connection) --- FAIL: TestC346ScrubThroughput (48.69s) FAIL FAIL	github.com/countersign/countersign/internal/proxy	48.863s FAIL 
-M3.4 suite: FAILURES
