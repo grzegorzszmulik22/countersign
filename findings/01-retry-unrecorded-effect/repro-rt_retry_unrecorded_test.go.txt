@@ -1,0 +1,151 @@
+// Copyright 2026 The Countersign Authors
+// SPDX-License-Identifier: Apache-2.0
+
+//go:build fixtures
+
+// Red-team reproduction: the broker re-sends an upstream request after a
+// connection error. M2 milestone-wide denied: "Any retry of upstream
+// requests by the broker." 03 §4.5 write-ahead completeness / M2.4 C2.4.5
+// require one effect record per upstream request. A POST carrying the
+// Idempotency-Key header is replayed by net/http's transport after the
+// upstream has read the request and dropped the connection before the
+// response: the upstream applies the effect twice, the broker records it
+// once, and the client sees a single 200.
+//
+// Run: go test -tags fixtures ./internal/proxy -run TestRTRetryUnrecorded -count=1 -v
+
+package proxy
+
+import (
+	"io"
+	"net/http"
+	"strings"
+	"sync"
+	"testing"
+)
+
+// rtDroppingUpstream records each request; for the first POST to a given
+// path it reads the whole body, then closes the connection without a
+// response byte (a connection failure after the effect was received).
+type rtDroppingUpstream struct {
+	mu      sync.Mutex
+	requests []string
+	dropped map[string]bool
+}
+
+func (u *rtDroppingUpstream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	_, _ = io.ReadAll(r.Body)
+	u.mu.Lock()
+	u.requests = append(u.requests, r.Method+" "+r.RequestURI)
+	drop := r.Method == "POST" && !u.dropped[r.RequestURI]
+	if drop {
+		u.dropped[r.RequestURI] = true
+	}
+	u.mu.Unlock()
+	if drop {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			panic("upstream: no hijacker")
+		}
+		c, _, err := hj.Hijack()
+		if err == nil {
+			_ = c.Close()
+		}
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("applied"))
+}
+
+func (u *rtDroppingUpstream) snapshot() []string {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	out := make([]string, len(u.requests))
+	copy(out, u.requests)
+	return out
+}
+
+func TestRTRetryUnrecorded(t *testing.T) {
+	dir := t.TempDir()
+	pol := writePolicy(t, dir, "p", `  grants:
+    - id: allowed
+      match: {hosts: [allowed.example.com]}
+`)
+	routes := map[string]string{}
+	e := newTestEnv(t, []SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)}, routes)
+
+	up := &rtDroppingUpstream{dropped: map[string]bool{}}
+	addr, closeUp := startTLSUpstream(t, e.ca, []string{"allowed.example.com"}, []string{"http/1.1"}, up)
+	defer closeUp()
+	routes["allowed.example.com"] = addr
+	pool := e.combinedPool(t, "s1")
+	cli := e.proxyClient(t, "tok-one", pool, "http/1.1")
+
+	// Warm one keep-alive upstream connection; only a reused connection is
+	// eligible for net/http's invisible retry.
+	res, err := cli.Get("https://allowed.example.com/warm")
+	if err != nil {
+		t.Fatalf("warm-up: %v", err)
+	}
+	_, _ = io.Copy(io.Discard, res.Body)
+	_ = res.Body.Close()
+
+	const iterations = 3
+	type outcome struct {
+		path     string
+		status   int
+		clientOK bool
+	}
+	var got []outcome
+	for i := 0; i < iterations; i++ {
+		path := "/paid-" + itoa(i)
+		req, err := http.NewRequest("POST", "https://allowed.example.com"+path,
+			strings.NewReader("CANARY-RT-RETRY"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Idempotency-Key", "key-"+itoa(i))
+		r, err := cli.Do(req)
+		if err != nil {
+			t.Logf("POST %s: client error: %v (no retry observed for this one)", path, err)
+			got = append(got, outcome{path: path})
+			continue
+		}
+		_, _ = io.Copy(io.Discard, r.Body)
+		_ = r.Body.Close()
+		got = append(got, outcome{path: path, status: r.StatusCode, clientOK: r.StatusCode == 200})
+	}
+
+	// Broker-side count of effect.http records for each POST path.
+	recs := e.readSessionRecords(t, "s1")
+	recorded := map[string]int{}
+	for _, ef := range recordsOfType[EffectHTTPBody](t, recs, "effect.http") {
+		if ef.Request.Method == "POST" {
+			recorded[ef.Request.Path]++
+		}
+	}
+
+	upstream := up.snapshot()
+	saw := map[string]int{}
+	for _, line := range upstream {
+		if strings.HasPrefix(line, "POST ") {
+			saw[strings.TrimPrefix(line, "POST ")]++
+		}
+	}
+
+	for _, o := range got {
+		if saw[o.path] > 1 {
+			t.Logf("VULNERABLE: %s: client status=%d, upstream saw %d POSTs, broker recorded %d effect.http",
+				o.path, o.status, saw[o.path], recorded[o.path])
+			if recorded[o.path] != 1 {
+				t.Errorf("%s: expected the duplicate to be unrecorded, but broker recorded %d effects", o.path, recorded[o.path])
+			}
+		}
+	}
+	for _, o := range got {
+		if saw[o.path] > 1 {
+			t.Fatalf("broker retried an upstream POST: upstream requests=%v, broker POST records=%v; "+
+				"M2 denies any retry of upstream requests and 03 §4.5 requires one record per request", upstream, recorded)
+		}
+	}
+}
