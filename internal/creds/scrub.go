@@ -20,12 +20,17 @@ import (
 // The scrubbed pattern set covers the three wire forms a secret can take
 // in an upstream response: raw, base64 (the Basic credential form), and
 // URL-escaped. All three are replaced by the session placeholder.
+//
+// Write scans each chunk in place: only the small boundary window
+// (carry + the first maxPatternLen-1 chunk bytes) is ever copied, so a
+// clean body costs the pattern Index passes and nothing else.
 type Scrubber struct {
 	pats    [][]byte // search patterns, all three encodings
 	keys    [][]byte // per-pattern short prefixes for the SIMD Index path
 	repl    []byte   // replacement (the placeholder)
 	max     int      // longest pattern length
 	carry   []byte   // held-back tail (len <= max-1)
+	seg     []byte   // reusable boundary-window scratch (len <= 2*(max-1))
 	Count   int      // replacements performed
 	flushed bool
 }
@@ -88,69 +93,121 @@ func NewScrubber(pats [][]byte, repl []byte) *Scrubber {
 	return s
 }
 
-// Write consumes one stream chunk and returns the bytes safe to emit now.
-// Held-back bytes (up to max-1) come out of the next Write or Flush.
-func (s *Scrubber) Write(chunk []byte) []byte {
+// Write consumes one stream chunk and calls emit for each span of
+// scrubbed output in order. Held-back bytes (up to max-1) come out of the
+// next Write or Flush. Emitted spans alias chunk, the replacement and
+// small internal buffers: emit must consume them before returning and
+// must not retain them. Zero-length spans are never emitted.
+func (s *Scrubber) Write(chunk []byte, emit func([]byte)) {
 	if s.flushed {
 		// writes after Flush cannot happen for a well-formed stream; treat
 		// them as a new tail rather than dropping data.
 		s.flushed = false
 	}
-	buf := chunk
-	if len(s.carry) > 0 {
-		buf = make([]byte, 0, len(s.carry)+len(chunk))
-		buf = append(buf, s.carry...)
-		buf = append(buf, chunk...)
-	}
-	s.carry = nil
-	return s.scan(buf, false)
+	s.feed(chunk, false, emit)
 }
 
-// Flush ends the stream and returns the held-back tail.
-func (s *Scrubber) Flush() []byte {
+// Flush ends the stream and emits the held-back tail through emit.
+func (s *Scrubber) Flush(emit func([]byte)) {
 	s.flushed = true
-	out := s.scan(s.carry, true)
+	s.feed(nil, true, emit)
 	s.carry = nil
-	return out
 }
 
-// scan emits buf with all complete matches replaced. When !last, the
-// final max-1 bytes are retained as carry instead. Match starts are only
-// considered below limit so a longest-pattern match can never be cut off
-// by the hold-back boundary.
-func (s *Scrubber) scan(buf []byte, last bool) []byte {
-	limit := len(buf)
+// feed emits the scrubbed prefix of the virtual stream s.carry ++ chunk
+// that is safe to release now, and retains the rest as the next carry.
+// When last is set the whole stream tail is emitted (an incomplete
+// pattern at end of stream is not an occurrence).
+func (s *Scrubber) feed(chunk []byte, last bool, emit func([]byte)) {
+	c, x := s.carry, chunk
+	s.carry = nil
+	nc, nx := len(c), len(x)
+	total := nc + nx
+	limit := total
 	if !last {
-		limit = len(buf) - (s.max - 1)
+		limit = total - (s.max - 1)
 		if limit < 0 {
 			limit = 0
 		}
 	}
-	var out []byte
-	i := 0
-	for i < limit {
-		next, plen := s.find(buf, i, limit)
-		if next < 0 {
-			if out == nil {
-				out = buf[i:limit] // clean span: emit without copying
-			} else {
-				out = append(out, buf[i:limit]...)
+	pos := 0 // absolute position of the next unemitted stream byte
+	// Matches starting inside the carry can run into the chunk: the
+	// boundary window of carry + the first max-1 chunk bytes is the only
+	// copy, never the chunk itself.
+	if nc > 0 && limit > 0 {
+		k := s.max - 1
+		if k > nx {
+			k = nx
+		}
+		seg := append(s.seg[:0], c...)
+		seg = append(seg, x[:k]...)
+		s.seg = seg
+		l1 := nc
+		if l1 > limit {
+			l1 = limit
+		}
+		for pos < l1 {
+			next, plen := s.find(seg, pos, l1)
+			if next < 0 {
+				break
 			}
-			i = limit
+			if next > 0 {
+				emit(seg[pos : pos+next])
+			}
+			emit(s.repl)
+			s.Count++
+			pos += next + plen
+		}
+		if pos < nc && pos < limit {
+			end := nc
+			if end > limit {
+				end = limit
+			}
+			emit(c[pos:end])
+			pos = end
+		}
+	}
+	// Matches starting inside the chunk lie wholly within it: scan the
+	// chunk in place with no copy. Starts consumed by a boundary match
+	// that ran into the chunk are skipped via xo.
+	xo := pos - nc
+	if xo < 0 {
+		xo = 0
+	}
+	xlim := limit - nc
+	if xlim < xo {
+		xlim = xo
+	}
+	for xo < xlim {
+		next, plen := s.find(x, xo, xlim)
+		if next < 0 {
 			break
 		}
-		if out == nil {
-			out = make([]byte, 0, len(buf))
+		if next > 0 {
+			emit(x[xo : xo+next])
 		}
-		out = append(out, buf[i:i+next]...)
-		out = append(out, s.repl...)
+		emit(s.repl)
 		s.Count++
-		i += next + plen
+		xo += next + plen
 	}
+	if xo < xlim {
+		emit(x[xo:xlim])
+		xo = xlim
+	}
+	if pos >= nc {
+		pos = nc + xo
+	}
+	// The unemitted tail becomes the next carry; bytes consumed by a
+	// match that crossed the hold-back boundary leave with it, exactly
+	// as a single-buffer scan would emit them.
 	if !last {
-		s.carry = append(s.carry, buf[i:]...)
+		if pos >= nc {
+			s.carry = append(s.carry[:0], x[pos-nc:]...)
+		} else {
+			s.carry = append(s.carry[:0], c[pos:]...)
+			s.carry = append(s.carry, x...)
+		}
 	}
-	return out
 }
 
 // find returns the offset (relative to i) and length of the earliest

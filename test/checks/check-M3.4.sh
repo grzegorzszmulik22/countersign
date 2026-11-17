@@ -61,7 +61,7 @@ job_C3.4.5() { gotest "$1" ./internal/proxy '^TestC345NonCredentialedPassthrough
 # <= 25%; MM3.2: no canary in records/logs (also asserted suite-wide).
 job_C3.4.6() {
     gotest "$1" ./internal/proxy '^TestC346ScrubThroughput$' -v || return 1
-    grep -oE 'MEASUREMENT [a-zA-Z0-9_.]+ [0-9.]+( [a-zA-Z0-9_.]+ [0-9.]+)*' \
+    grep -oE 'MEASUREMENT [a-zA-Z0-9_.]+ -?[0-9.]+( [a-zA-Z0-9_.]+ -?[0-9.]+)*' \
         "$WORK/$1.full.log" || true
 }
 
@@ -88,7 +88,7 @@ done
 if [ -n "${CS_CHECK_RUNNING:-}" ] && [ -d "evidence/$CS_CHECK_RUNNING" ]; then
     mdir=$(ls -td "evidence/$CS_CHECK_RUNNING"/*/ 2>/dev/null | head -1)
 fi
-vals=$(grep -hoE 'scrub_penalty_pct [0-9.]+' "$WORK"/*.full.log 2>/dev/null | awk '{print $2}' | sort -n | tr '\n' ' ')
+vals=$(grep -hoE 'scrub_penalty_pct -?[0-9.]+' "$WORK"/*.full.log 2>/dev/null | awk '{print $2}' | sort -n | tr '\n' ' ')
 if [ -n "${vals// /}" ] && [ -n "${mdir:-}" ]; then
     python3 - $vals >"${mdir}measurements.json" <<'PY'
 import json, statistics, sys

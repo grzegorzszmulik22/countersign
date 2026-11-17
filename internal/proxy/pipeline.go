@@ -454,7 +454,7 @@ func (e *writeErr) Error() string { return e.err.Error() }
 func (e *writeErr) Unwrap() error { return e.err }
 
 // relayResponse copies src to w in bounded chunks, flushing after every
-// write so streamed responses (SSE, chunked, h2 frames) are never
+// chunk so streamed responses (SSE, chunked, h2 frames) are never
 // coalesced or held back (M2.3). When scr is non-nil each chunk passes
 // the scrubber first (M3.4); its carry window holds back at most
 // maxPattern-1 bytes at a time, so streaming semantics are preserved.
@@ -462,28 +462,38 @@ func (e *writeErr) Unwrap() error { return e.err }
 func relayResponse(w http.ResponseWriter, src io.Reader, scr *creds.Scrubber, dst *hashCounter) error {
 	buf := make([]byte, 32*1024)
 	fl, _ := w.(http.Flusher)
+	var werr error
+	wrote := false
+	emit := func(b []byte) {
+		if werr != nil || len(b) == 0 {
+			return
+		}
+		wm, err := w.Write(b)
+		if _, derr := dst.Write(b[:wm]); derr != nil {
+			werr = derr
+			return
+		}
+		wrote = true
+		if err != nil {
+			werr = &writeErr{err}
+		}
+	}
 	for {
 		m, rerr := src.Read(buf)
-		var emit []byte
+		wrote = false
 		if scr != nil {
-			emit = scr.Write(buf[:m])
+			scr.Write(buf[:m], emit)
 			if rerr == io.EOF {
-				emit = append(emit, scr.Flush()...)
+				scr.Flush(emit)
 			}
 		} else {
-			emit = buf[:m]
+			emit(buf[:m])
 		}
-		if len(emit) > 0 {
-			wm, werr := w.Write(emit)
-			if _, derr := dst.Write(emit[:wm]); derr != nil {
-				return derr
-			}
-			if fl != nil {
-				fl.Flush()
-			}
-			if werr != nil {
-				return &writeErr{werr}
-			}
+		if wrote && fl != nil {
+			fl.Flush()
+		}
+		if werr != nil {
+			return werr
 		}
 		if rerr != nil {
 			if rerr == io.EOF {

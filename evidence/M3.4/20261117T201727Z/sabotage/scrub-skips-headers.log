@@ -1,0 +1,11 @@
+make[1]: Entering directory '/home/csbuild/src/cs-creds/.check-work/sabotage-M3.4-scrub-skips-headers'
+CHECK C3.4.1 PASS
+CHECK C3.4.2 PASS
+CHECK C3.4.3 FAIL — --- FAIL: TestC343GzipScrubbed (0.30s)     check_m34_test.go:176: placeholder missing in decoded body:      harness_test.go:126: broker: tunnel 01M7NJGVJ80040PTTMB437YXK1 inner serve: http: Server closed (conn err: read tcp 127.0.0.1:37985->127.0.0.1:38246: use of closed network connection) FAIL FAIL	github.com/countersign/countersign/internal/proxy	0.328s FAIL 
+CHECK C3.4.4 FAIL — --- FAIL: TestC344HeaderTrailerBig (0.44s)     check_m34_test.go:201: X-Leak-Key = "REDACTED", want the session placeholder     harness_test.go:126: broker: tunnel 01M7NJGV36007YEB802Y7DA4E3 inner serve: listener closed (conn err: read tcp 127.0.0.1:38293->127.0.0.1:54234: use of closed network connection) FAIL FAIL	github.com/countersign/countersign/internal/proxy	0.477s FAIL 
+CHECK C3.4.5 PASS
+CHECK C3.4.6 PASS
+M3.4 suite: FAILURES
+check-M3.4: FAIL (exit 1, evidence: evidence/M3.4/20261117T201732Z)
+make[1]: *** [Makefile:37: check-M3.4] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-creds/.check-work/sabotage-M3.4-scrub-skips-headers'

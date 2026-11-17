@@ -1,12 +1,12 @@
 diff --git a/internal/creds/scrub.go b/internal/creds/scrub.go
-index 8d89005..62c77df 100644
+index 1111111..2222222 100644
 --- a/internal/creds/scrub.go
 +++ b/internal/creds/scrub.go
-@@ -125,6 +125,7 @@ func (s *Scrubber) scan(buf []byte, last bool) []byte {
+@@ -129,6 +129,7 @@
  		if limit < 0 {
  			limit = 0
  		}
-+		limit = len(buf)
++		limit = total
  	}
- 	var out []byte
- 	i := 0
+ 	pos := 0 // absolute position of the next unemitted stream byte
+ 	// Matches starting inside the carry can run into the chunk: the

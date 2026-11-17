@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -105,12 +106,19 @@ func TestC342SplitPoints(t *testing.T) {
 	repl := []byte("csph_deadbeef_grant_0000000000000000000000")
 	pats := creds.Patterns(string(secret))
 
+	collect := func() (func([]byte), *bytes.Buffer) {
+		b := &bytes.Buffer{}
+		return func(p []byte) { b.Write(p) }, b
+	}
 	for split := 1; split < len(secret); split++ {
 		body := append(append(append([]byte("pre "), secret[:split]...), secret[split:]...), []byte(" post")...)
 		s := creds.NewScrubber(pats, repl)
+		emit, buf := collect()
 		cut := 4 + split // inside the secret
-		out := append(s.Write(body[:cut]), s.Write(body[cut:])...)
-		out = append(out, s.Flush()...)
+		s.Write(body[:cut], emit)
+		s.Write(body[cut:], emit)
+		s.Flush(emit)
+		out := buf.Bytes()
 		if bytes.Contains(out, secret) || !bytes.Contains(out, repl) {
 			t.Fatalf("split %d: secret survived or placeholder missing", split)
 		}
@@ -124,16 +132,17 @@ func TestC342SplitPoints(t *testing.T) {
 	raw := append(append([]byte("x "), secret...), []byte(" y "+b64s)...)
 	s := creds.NewScrubber(pats, repl)
 	rng := rand.New(rand.NewSource(7))
-	var out []byte
+	emit, ebuf := collect()
 	for len(raw) > 0 {
 		n := 1 + rng.Intn(7)
 		if n > len(raw) {
 			n = len(raw)
 		}
-		out = append(out, s.Write(raw[:n])...)
+		s.Write(raw[:n], emit)
 		raw = raw[n:]
 	}
-	out = append(out, s.Flush()...)
+	s.Flush(emit)
+	out := ebuf.Bytes()
 	if bytes.Contains(out, secret) || bytes.Contains(out, []byte(b64s)) {
 		t.Fatalf("byte-at-a-time stream leaked: %q", out)
 	}
@@ -141,7 +150,9 @@ func TestC342SplitPoints(t *testing.T) {
 		t.Fatalf("count %d, want 2", s.Count)
 	}
 	// Memory stays bounded by the carry window no matter the stream size.
-	if len(s.Flush()) != 0 {
+	var tail bytes.Buffer
+	s.Flush(func(p []byte) { tail.Write(p) })
+	if tail.Len() != 0 {
 		t.Fatal("flush after clean stream")
 	}
 }
@@ -307,9 +318,11 @@ func TestC346ScrubThroughput(t *testing.T) {
 
 	// Stream-and-discard: buffering 100 MiB per call would put GC churn
 	// inside the measured window. Transient resets (contended loopback)
-	// retry once and are not timed samples.
-	dl := func(rawURL string) (int64, time.Duration) {
-		client := e.proxyClient(t, "tok-one", e.combinedPool(t, "s1"))
+	// retry and are not timed samples. dl runs inside the concurrent
+	// pair goroutines, so it reports errors instead of calling t.Fatal.
+	pool := e.combinedPool(t, "s1")
+	dl := func(rawURL string) (int64, time.Duration, error) {
+		client := e.proxyClient(t, "tok-one", pool)
 		var lastErr error
 		for tries := 0; tries < 3; tries++ {
 			st := time.Now()
@@ -324,25 +337,46 @@ func TestC346ScrubThroughput(t *testing.T) {
 			// A clean copy means the declared stream arrived intact;
 			// truncation surfaces as an error.
 			if res.StatusCode == 200 && cerr == nil && n > 0 {
-				return n, d
+				return n, d, nil
 			}
 			lastErr = fmt.Errorf("status %d n %d err %v", res.StatusCode, n, cerr)
 		}
-		t.Fatalf("%s: %v", rawURL, lastErr)
-		return 0, 0
+		return 0, 0, fmt.Errorf("%s: %w", rawURL, lastErr)
+	}
+	dlMust := func(rawURL string) {
+		if _, _, err := dl(rawURL); err != nil {
+			t.Fatal(err)
+		}
 	}
 
-	// Warm both paths, then take 5 adjacent (plain, cred) pairs. The
-	// per-pair penalty cancels machine-wide load drift; the best pair is
-	// the least-contended sample of the real scrub cost. Both legs run
-	// the same h1 upstream: the plain baseline is the non-credentialed
-	// anthro-plain grant on a sibling path of the same host.
-	dl("https://api.anthropic.com/scrub/bigplain?n=1048576")
-	dl("https://api.anthropic.com/scrub/big?n=1048576")
+	// Warm both paths, then take 5 pairs whose two legs run CONCURRENTLY:
+	// the credentialed and plain downloads share the same load window, so
+	// scheduler noise and load spikes hit both legs equally and cancel
+	// out of the ratio (the pattern M2.3 uses for added-delay). The best
+	// pair is the least-contended sample of the real scrub cost. Both
+	// legs run the same h1 upstream: the plain baseline is the
+	// non-credentialed anthro-plain grant on a sibling path of the same
+	// host.
+	dlMust("https://api.anthropic.com/scrub/bigplain?n=1048576")
+	dlMust("https://api.anthropic.com/scrub/big?n=1048576")
+	plainURL := "https://api.anthropic.com/scrub/bigplain?n=" + itoaMib(mib)
+	credURL := "https://api.anthropic.com/scrub/big?n=" + itoaMib(mib)
 	var best, bCred, bPlain float64 = 1e18, 0, 0
 	for i := 0; i < 5; i++ {
-		pb, pt := dl("https://api.anthropic.com/scrub/bigplain?n=" + itoaMib(mib))
-		cb, ct := dl("https://api.anthropic.com/scrub/big?n=" + itoaMib(mib))
+		var pb, cb int64
+		var pt, ct time.Duration
+		var perr, cerr error
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() { defer wg.Done(); pb, pt, perr = dl(plainURL) }()
+		go func() { defer wg.Done(); cb, ct, cerr = dl(credURL) }()
+		wg.Wait()
+		if perr != nil {
+			t.Fatalf("plain leg: %v", perr)
+		}
+		if cerr != nil {
+			t.Fatalf("credentialed leg: %v", cerr)
+		}
 		perByte := (float64(ct) / float64(cb)) / (float64(pt) / float64(pb))
 		if p := (perByte - 1) * 100; p < best {
 			best, bCred, bPlain = p, float64(ct.Milliseconds()), float64(pt.Milliseconds())

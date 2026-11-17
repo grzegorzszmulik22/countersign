@@ -1,0 +1,11 @@
+make[1]: Entering directory '/home/csbuild/src/cs-creds/.check-work/sabotage-M3.4-scrub-skips-gzip'
+CHECK C3.4.1 FAIL — # github.com/countersign/countersign/internal/proxy [github.com/countersign/countersign/internal/proxy.test] internal/proxy/scrub.go:7:2: "compress/gzip" imported and not used FAIL	github.com/countersign/countersign/internal/proxy [build failed] FAIL 
+CHECK C3.4.2 FAIL — # github.com/countersign/countersign/internal/proxy [github.com/countersign/countersign/internal/proxy.test] internal/proxy/scrub.go:7:2: "compress/gzip" imported and not used FAIL	github.com/countersign/countersign/internal/proxy [build failed] FAIL 
+CHECK C3.4.3 FAIL — # github.com/countersign/countersign/internal/proxy [github.com/countersign/countersign/internal/proxy.test] internal/proxy/scrub.go:7:2: "compress/gzip" imported and not used FAIL	github.com/countersign/countersign/internal/proxy [build failed] FAIL 
+CHECK C3.4.4 FAIL — # github.com/countersign/countersign/internal/proxy [github.com/countersign/countersign/internal/proxy.test] internal/proxy/scrub.go:7:2: "compress/gzip" imported and not used FAIL	github.com/countersign/countersign/internal/proxy [build failed] FAIL 
+CHECK C3.4.5 FAIL — # github.com/countersign/countersign/internal/proxy [github.com/countersign/countersign/internal/proxy.test] internal/proxy/scrub.go:7:2: "compress/gzip" imported and not used FAIL	github.com/countersign/countersign/internal/proxy [build failed] FAIL 
+CHECK C3.4.6 FAIL — # github.com/countersign/countersign/internal/proxy [github.com/countersign/countersign/internal/proxy.test] internal/proxy/scrub.go:7:2: "compress/gzip" imported and not used FAIL	github.com/countersign/countersign/internal/proxy [build failed] FAIL 
+M3.4 suite: FAILURES
+check-M3.4: FAIL (exit 1, evidence: evidence/M3.4/20261117T201729Z)
+make[1]: *** [Makefile:37: check-M3.4] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-creds/.check-work/sabotage-M3.4-scrub-skips-gzip'
