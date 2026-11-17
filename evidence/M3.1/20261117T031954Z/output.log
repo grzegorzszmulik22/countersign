@@ -1,0 +1,73 @@
+=== RUN   TestDecisionTable
+--- PASS: TestDecisionTable (0.25s)
+=== RUN   TestSchemaConformance
+--- PASS: TestSchemaConformance (0.29s)
+=== RUN   TestPropertyVsPython
+--- PASS: TestPropertyVsPython (16.16s)
+=== RUN   TestInvalidPolicies
+--- PASS: TestInvalidPolicies (0.05s)
+=== RUN   TestPolicyDigest
+--- PASS: TestPolicyDigest (0.05s)
+PASS
+ok  	github.com/countersign/countersign/internal/policy	17.062s
+CHECK C3.1.1 PASS
+CHECK C3.1.2 PASS
+CHECK C3.1.3 PASS
+CHECK C3.1.4 PASS
+CHECK C3.1.6 PASS
+fuzz: elapsed: 0s, gathering baseline coverage: 0/2017 completed
+fuzz: elapsed: 3s, gathering baseline coverage: 545/2017 completed
+fuzz: minimizing 37-byte failing input file
+fuzz: elapsed: 6s, gathering baseline coverage: 973/2017 completed
+--- FAIL: FuzzLoadPolicy (5.50s)
+    --- FAIL: FuzzLoadPolicy (0.00s)
+        testing.go:2078: panic: runtime error: hash of unhashable type map[interface {}]interface {}
+            goroutine 1217 [running]:
+            runtime/debug.Stack()
+            	/home/csbuild/src/cs-evidence-go/.tools/go/src/runtime/debug/stack.go:26 +0xc4
+            testing.tRunner.func1()
+            	/home/csbuild/src/cs-evidence-go/.tools/go/src/testing/testing.go:2078 +0x1c8
+            panic({0x700a28?, 0x45409ab9b210?})
+            	/home/csbuild/src/cs-evidence-go/.tools/go/src/runtime/panic.go:859 +0x120
+            gopkg.in/yaml%2ev3.handleErr(0x45409ab4f618)
+            	/home/csbuild/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1/yaml.go:294 +0x15c
+            panic({0x700a28?, 0x45409ab9b210?})
+            	/home/csbuild/src/cs-evidence-go/.tools/go/src/runtime/panic.go:859 +0x120
+            gopkg.in/yaml%2ev3.(*decoder).merge(0x45409af575e0, 0x45409afabae0, 0x45409afabc20, {0x721c30?, 0x45409af5f380?, 0x0?})
+            	/home/csbuild/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1/decode.go:966 +0x258
+            gopkg.in/yaml%2ev3.(*decoder).mappingStruct(0x45409af575e0, 0x45409afabae0, {0x721c30?, 0x45409af5f380?, 0x45409ab4f2b8?})
+            	/home/csbuild/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1/decode.go:950 +0x1d60
+            gopkg.in/yaml%2ev3.(*decoder).mapping(0x45409af575e0, 0x45409afabae0, {0x721c30?, 0x45409af5f380?, 0x40045409ab4f4a8?})
+            	/home/csbuild/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1/decode.go:786 +0x9e0
+            gopkg.in/yaml%2ev3.(*decoder).unmarshal(0x45409af575e0, 0x45409afabae0, {0x721c30?, 0x45409af5f380?, 0x45409ab4f588?})
+            	/home/csbuild/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1/decode.go:510 +0xfa8
+            gopkg.in/yaml%2ev3.(*decoder).document(...)
+            	/home/csbuild/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1/decode.go:527
+            gopkg.in/yaml%2ev3.(*decoder).unmarshal(0x45409af575e0, 0x45409afaba40, {0x721c30?, 0x45409af5f380?, 0xd0000100000040?})
+            	/home/csbuild/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1/decode.go:498 +0x78c
+            gopkg.in/yaml%2ev3.(*Decoder).Decode(0x45409abbc6d0, {0x6c81d8, 0x45409af5f380})
+            	/home/csbuild/go/pkg/mod/gopkg.in/yaml.v3@v3.0.1/yaml.go:131 +0x560
+            github.com/countersign/countersign/internal/policy.Load({0x45409ad8a460, 0x7, 0x10})
+            	/home/csbuild/src/cs-evidence-go/internal/policy/policy.go:32 +0x25c
+            github.com/countersign/countersign/internal/policy_test.FuzzLoadPolicy.func1(0x45409abbc7a8?, {0x45409ad8a460?, 0x7, 0x0?})
+            	/home/csbuild/src/cs-evidence-go/internal/policy/property_test.go:120 +0x30
+            reflect.Value.call({0x6ddac8?, 0x738850?, 0x13?}, {0x4304a8, 0x4}, {0x45409abf3230, 0x2, 0x2?})
+            	/home/csbuild/src/cs-evidence-go/.tools/go/src/reflect/value.go:586 +0xa88
+            reflect.Value.Call({0x6ddac8?, 0x738850?, 0x1778e0?}, {0x45409abf3230?, 0x734340?, 0xf0?})
+            	/home/csbuild/src/cs-evidence-go/.tools/go/src/reflect/value.go:369 +0x94
+            testing.(*F).Fuzz.func1.1(0x45409afb6d88?)
+            	/home/csbuild/src/cs-evidence-go/.tools/go/src/testing/fuzz.go:341 +0x254
+            testing.tRunner(0x45409afb6d88, 0x45409af7d7a0)
+            	/home/csbuild/src/cs-evidence-go/.tools/go/src/testing/testing.go:2195 +0xc4
+            created by testing.(*F).Fuzz.func1 in goroutine 17
+            	/home/csbuild/src/cs-evidence-go/.tools/go/src/testing/fuzz.go:328 +0x4b8
+            
+    
+    Failing input written to testdata/fuzz/FuzzLoadPolicy/e320a1351e27c060
+    To re-run:
+    go test -run=FuzzLoadPolicy/e320a1351e27c060
+FAIL
+exit status 1
+FAIL	github.com/countersign/countersign/internal/policy	5.619s
+CHECK C3.1.5 FAIL — --- FAIL: FuzzLoadPolicy (5.50s)     --- FAIL: FuzzLoadPolicy (0.00s) 
+M3.1 suite: FAILURES
