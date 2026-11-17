@@ -1048,7 +1048,7 @@ func closeWaitsOnce(t *testing.T) {
 	if err := tc.Handshake(); err != nil {
 		t.Fatal(err)
 	}
-	defer tc.Close()
+	defer func() { _ = tc.Close() }()
 	if _, err := tc.Write([]byte("GET /hold HTTP/1.1\r\nHost: slow.example\r\n\r\n")); err != nil {
 		t.Fatal(err)
 	}
@@ -1066,7 +1066,10 @@ func closeWaitsOnce(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- e.broker.Close() }()
 	select {
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			t.Errorf("Close: %v", err)
+		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("Close did not return within 10s")
 	}
