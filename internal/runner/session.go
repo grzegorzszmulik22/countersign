@@ -136,6 +136,18 @@ func newSession(ctx context.Context, opt Options, dataDir string, ambient []stri
 	table := "sessions:\n" +
 		fmt.Sprintf("  - id: %s\n    token: %s\n    client_ip: 127.0.0.1\n    policy: %s\n",
 			s.id, s.token, polPath)
+	// The credential store (M3.2) is read only from the hidden data
+	// directory, which the sandbox sees as an empty tmpfs: a store passed
+	// by path from anywhere else would stay readable inside the sandbox.
+	// A policy with credentialed grants and no store fails closed in the
+	// broker at session open.
+	credPath := filepath.Join(dataDir, CredentialsFile)
+	switch _, err := os.Stat(credPath); {
+	case err == nil:
+		table += fmt.Sprintf("    credentials: %s\n", credPath)
+	case !os.IsNotExist(err):
+		return nil, fmt.Errorf("credentials: %w", err)
+	}
 	sessFile := filepath.Join(s.sessDir, "sessions.yaml")
 	if err := os.WriteFile(sessFile, []byte(table), 0o600); err != nil {
 		return nil, err

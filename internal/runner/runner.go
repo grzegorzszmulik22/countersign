@@ -23,6 +23,11 @@ import (
 )
 
 // Options configures one `cs run` invocation.
+// CredentialsFile is the credential store (04 section 4, M3.2) inside the
+// runner data directory: <data dir>/credentials.yaml. cs run reads it only
+// there, because the data directory is hidden from the sandbox.
+const CredentialsFile = "credentials.yaml"
+
 type Options struct {
 	// PolicyFile is the session policy; empty selects the built-in
 	// allow-all test policy.

@@ -104,6 +104,7 @@ func TestC2_7_1(t *testing.T) {
 func TestC2_7_RelayConcurrent(t *testing.T) {
 	m := newM27(t)
 	dd := filepath.Join(m.work, "ddrelay")
+	m.seedCreds(t, dd)
 	rd := filepath.Join(m.work, "rdrelay")
 	cmd := exec.Command(m.bin, "run", "--data-dir", dd, "--run-dir", rd,
 		"--policy", m.policy, "--", "/bin/sh", "-c", "sleep 10")
@@ -423,6 +424,7 @@ func TestC2_7_3_ProxyEnv(t *testing.T) {
 func (m *m27) runRaw(t *testing.T, ambient []string, opts []string, cmdline ...string) runOut {
 	t.Helper()
 	dd := filepath.Join(m.work, fmt.Sprintf("dd%d", m.seq))
+	m.seedCreds(t, dd)
 	rd := filepath.Join(m.work, fmt.Sprintf("rd%d", m.seq))
 	m.seq++
 	args := []string{"run", "--data-dir", dd, "--run-dir", rd, "--policy", m.policy}
@@ -546,7 +548,7 @@ func TestC2_7_4(t *testing.T) {
 			needles = append(needles, base64.StdEncoding.EncodeToString(blk.Bytes))
 		}
 	}
-	needles = append(needles, cred, filecan, cloudcan, "PRIVATE KEY-----")
+	needles = append(needles, cred, filecan, cloudcan, m27Canary, "PRIVATE KEY-----")
 
 	// Needles travel in a file outside the scanned dirs: carrying them
 	// on the scan's own argv would be a self-inflicted hit in
@@ -761,6 +763,7 @@ func sigintRun(t *testing.T, opts []string, enforced bool, wantBoundary string) 
 	stray := filepath.Join(m.work, "stray")
 	intm := filepath.Join(m.work, "int-seen")
 	dd := filepath.Join(m.work, "ddsig")
+	m.seedCreds(t, dd)
 	rd := filepath.Join(m.work, "rdsig")
 
 	// The agent: an INT trap marker, a heartbeat child in its own

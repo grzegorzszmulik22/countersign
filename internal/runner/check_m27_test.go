@@ -213,6 +213,7 @@ func (m *m27) run(t *testing.T, extraEnv []string, opts []string, cmdline ...str
 func (m *m27) runEnv(t *testing.T, ambient []string, opts []string, cmdline ...string) runOut {
 	t.Helper()
 	dd := filepath.Join(m.work, fmt.Sprintf("dd%d", m.seq))
+	m.seedCreds(t, dd)
 	rd := filepath.Join(m.work, fmt.Sprintf("rd%d", m.seq))
 	m.seq++
 	args := []string{"run", "--data-dir", dd, "--run-dir", rd, "--policy", m.policy}
@@ -427,6 +428,24 @@ func writeFile(t *testing.T, path, s string) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(path, []byte(s), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// m27Canary is the real value behind the test policy's credentialed grant.
+// It lives only in the hidden data directory; the C2.7.4 scan must never
+// find it inside the sandbox.
+const m27Canary = "CANARY_M27REALCREDENTIAL000000000000000"
+
+// seedCreds writes the credential store cs run reads from the data
+// directory (runner.CredentialsFile, "credentials.yaml"; this black-box test does not import the package).
+func (m *m27) seedCreds(t *testing.T, dd string) {
+	t.Helper()
+	if err := os.MkdirAll(dd, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	doc := "secrets:\n  anthropic:\n    token: " + m27Canary + "\n"
+	if err := os.WriteFile(filepath.Join(dd, "credentials.yaml"), []byte(doc), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
