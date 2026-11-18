@@ -80,9 +80,10 @@ def t_detected_needs_expected_error():
             return False, (f"class {cls}: first error {bad} outside "
                            f"{sorted(exp)} counted detected")
     # A CLEAN-class verdict can never count as detected.
-    clean = deny("E_SIG", verdict="CLEAN")
-    if RS.judge_mutant(1, clean, clean)["detected"]:
-        return False, "CLEAN verdict counted detected"
+    for v in ("CLEAN", "CLEAN_WITH_DENIALS"):
+        cl = deny("E_SIG", verdict=v)
+        if RS.judge_mutant(1, cl, cl)["detected"]:
+            return False, f"{v} verdict counted detected"
     # Class 5's UNSEALED verdict (no error) is a legitimate detection.
     unsealed = {"verdict": "UNSEALED", "errors": [], "warnings": []}
     if not RS.judge_mutant(5, unsealed, unsealed)["detected"]:
@@ -182,6 +183,20 @@ def t_runs_and_samples_counted():
     return True, "short runs, dropped samples and missing loads rejected"
 
 
+def t_summarize_enforces_target():
+    """summarize is the pass/fail gate for every metric: a median off
+    target in EITHER direction must fail, in both comparator modes."""
+    if ME.summarize([9.0, 10.0], target=20.0)["pass"]:
+        return False, "median 10 under a >=20 target passed"
+    if ME.summarize([8.0], target=5.0, lower_better=True)["pass"]:
+        return False, "median 8 over a <=5 target passed"
+    if not ME.summarize([21.0], target=20.0)["pass"]:
+        return False, "median 21 over a >=20 target failed"
+    if not ME.summarize([4.0], target=5.0, lower_better=True)["pass"]:
+        return False, "median 4 under a <=5 target failed"
+    return True, "targets enforced in both comparator directions"
+
+
 def t_fsync_bound_needs_exact_count():
     """MM1.2 fsync bound: only a strace-derived count may judge it; the
     bench's own cohort estimate can never estimate it into a pass — or a
@@ -216,14 +231,16 @@ CASES = [
      t_mm13_one_high_sample_unqualifies),
     ("06§12: run counts and per-run samples checked per metric",
      t_runs_and_samples_counted),
+    ("summarize: medians off target fail in both comparator modes",
+     t_summarize_enforces_target),
     ("mm1.2 fsync bound judges only on exact (strace) counts",
      t_fsync_bound_needs_exact_count),
 ]
 
 
 def main():
-    if len(CASES) != 7:
-        print(f"selftest: {len(CASES)} cases registered, need 7 — the "
+    if len(CASES) != 8:
+        print(f"selftest: {len(CASES)} cases registered, need 8 — the "
               "negative-test set itself was tampered with")
         return 1
     print(f"harness negative tests ({len(CASES)} properties):")
