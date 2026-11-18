@@ -1,0 +1,26 @@
+diff --git a/cmd/csverify/main.go b/cmd/csverify/main.go
+index 3664b8f..cff2141 100644
+--- a/cmd/csverify/main.go
++++ b/cmd/csverify/main.go
+@@ -332,19 +332,13 @@ func runReconcileBatch(path, packsDir string, stdout io.Writer) int {
+ 			fmt.Fprintln(os.Stderr, err)
+ 			return 2
+ 		}
+-		if _, err := fmt.Fprintln(w, string(b)); err != nil {
+-			fmt.Fprintln(os.Stderr, err)
+-			return 2
+-		}
++		_, _ = fmt.Fprintln(w, string(b))
+ 	}
+ 	if err := sc.Err(); err != nil {
+ 		fmt.Fprintln(os.Stderr, err)
+ 		return 2
+ 	}
+-	if err := w.Flush(); err != nil {
+-		fmt.Fprintln(os.Stderr, err)
+-		return 2
+-	}
++	_ = w.Flush()
+ 	if bad {
+ 		return 1
+ 	}

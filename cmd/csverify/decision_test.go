@@ -189,42 +189,36 @@ func TestC924_DecisionFieldMatrix(t *testing.T) {
 
 	// Audit mode: the effect recomputes to allow+would_deny{deny,
 	// NO_INTENT}. The recorded would_deny is a claim of both fields.
-	for _, c := range []decCase{
-		{"audit/would_deny-dropped", "audit", honest["audit_deny"], del("would_deny"), []string{"F_DECISION_MISMATCH"}},
-		{"audit/would_deny-reason", "audit", honest["audit_deny"], set("would_deny", "NO_GRANT"), []string{"F_DECISION_MISMATCH"}},
-		{"audit/would_deny-action", "audit", honest["audit_deny"], set("would_deny", "REVIEW_REQUIRED"), []string{"F_DECISION_MISMATCH"}},
-		{"audit/would_deny-empty", "audit", honest["audit_deny"], set("would_deny", ""), []string{"F_DECISION_MISMATCH"}},
-		{"audit/would_deny-nonsense", "audit", honest["audit_deny"], set("would_deny", "STAGED"), []string{"F_DECISION_MISMATCH"}},
-		{"audit/action", "audit", honest["audit_deny"], set("action", "deny"), []string{"F_DECISION_MISMATCH"}},
-		{"audit/reason", "audit", honest["audit_deny"], set("reason", "NO_INTENT"), []string{"F_DECISION_MISMATCH"}},
-		{"audit/grant", "audit", honest["audit_deny"], set("grant", "cdn"), []string{"F_DECISION_MISMATCH"}},
-		{"audit/requires", "audit", honest["audit_deny"], set("requires", "allow"), []string{"F_CLASS_MISMATCH"}},
-		{"audit/credentials", "audit", honest["audit_deny"], set("credentials", []string{"AK-x"}), []string{"F_CREDENTIAL_SCOPE"}},
-	} {
-		cases = append(cases, c)
-	}
+	cases = append(cases,
+		decCase{"audit/would_deny-dropped", "audit", honest["audit_deny"], del("would_deny"), []string{"F_DECISION_MISMATCH"}},
+		decCase{"audit/would_deny-reason", "audit", honest["audit_deny"], set("would_deny", "NO_GRANT"), []string{"F_DECISION_MISMATCH"}},
+		decCase{"audit/would_deny-action", "audit", honest["audit_deny"], set("would_deny", "REVIEW_REQUIRED"), []string{"F_DECISION_MISMATCH"}},
+		decCase{"audit/would_deny-empty", "audit", honest["audit_deny"], set("would_deny", ""), []string{"F_DECISION_MISMATCH"}},
+		decCase{"audit/would_deny-nonsense", "audit", honest["audit_deny"], set("would_deny", "STAGED"), []string{"F_DECISION_MISMATCH"}},
+		decCase{"audit/action", "audit", honest["audit_deny"], set("action", "deny"), []string{"F_DECISION_MISMATCH"}},
+		decCase{"audit/reason", "audit", honest["audit_deny"], set("reason", "NO_INTENT"), []string{"F_DECISION_MISMATCH"}},
+		decCase{"audit/grant", "audit", honest["audit_deny"], set("grant", "cdn"), []string{"F_DECISION_MISMATCH"}},
+		decCase{"audit/requires", "audit", honest["audit_deny"], set("requires", "allow"), []string{"F_CLASS_MISMATCH"}},
+		decCase{"audit/credentials", "audit", honest["audit_deny"], set("credentials", []string{"AK-x"}), []string{"F_CREDENTIAL_SCOPE"}},
+	)
 
 	// The hold form: recorded would_deny "REVIEW_REQUIRED" normalizes to
 	// action hold; any other action or reason must mismatch.
-	for _, c := range []decCase{
-		{"audit-hold/would_deny-dropped", "audit", honest["audit_hold"], del("would_deny"), []string{"F_DECISION_MISMATCH"}},
-		{"audit-hold/would_deny-deny", "audit", honest["audit_hold"], set("would_deny", "NO_INTENT"), []string{"F_DECISION_MISMATCH"}},
-		{"audit-hold/action", "audit", honest["audit_hold"], set("action", "hold"), []string{"F_DECISION_MISMATCH"}},
-		{"audit-hold/requires", "audit", honest["audit_hold"], set("requires", "intent"), []string{"F_CLASS_MISMATCH"}},
-	} {
-		cases = append(cases, c)
-	}
+	cases = append(cases,
+		decCase{"audit-hold/would_deny-dropped", "audit", honest["audit_hold"], del("would_deny"), []string{"F_DECISION_MISMATCH"}},
+		decCase{"audit-hold/would_deny-deny", "audit", honest["audit_hold"], set("would_deny", "NO_INTENT"), []string{"F_DECISION_MISMATCH"}},
+		decCase{"audit-hold/action", "audit", honest["audit_hold"], set("action", "hold"), []string{"F_DECISION_MISMATCH"}},
+		decCase{"audit-hold/requires", "audit", honest["audit_hold"], set("requires", "intent"), []string{"F_CLASS_MISMATCH"}},
+	)
 
 	// NO_GRANT in audit: grant/class/requires recompute empty; the
 	// recorded would_deny still claims {deny, NO_GRANT}.
-	for _, c := range []decCase{
-		{"audit-nogrant/would_deny-dropped", "audit", honest["audit_nogrant"], del("would_deny"), []string{"F_DECISION_MISMATCH"}},
-		{"audit-nogrant/would_deny-reason", "audit", honest["audit_nogrant"], set("would_deny", "NO_INTENT"), []string{"F_DECISION_MISMATCH"}},
-		{"audit-nogrant/grant", "audit", honest["audit_nogrant"], set("grant", "api"), []string{"F_DECISION_MISMATCH"}},
-		{"audit-nogrant/reason", "audit", honest["audit_nogrant"], set("reason", "NO_GRANT"), []string{"F_DECISION_MISMATCH"}},
-	} {
-		cases = append(cases, c)
-	}
+	cases = append(cases,
+		decCase{"audit-nogrant/would_deny-dropped", "audit", honest["audit_nogrant"], del("would_deny"), []string{"F_DECISION_MISMATCH"}},
+		decCase{"audit-nogrant/would_deny-reason", "audit", honest["audit_nogrant"], set("would_deny", "NO_INTENT"), []string{"F_DECISION_MISMATCH"}},
+		decCase{"audit-nogrant/grant", "audit", honest["audit_nogrant"], set("grant", "api"), []string{"F_DECISION_MISMATCH"}},
+		decCase{"audit-nogrant/reason", "audit", honest["audit_nogrant"], set("reason", "NO_GRANT"), []string{"F_DECISION_MISMATCH"}},
+	)
 
 	// Deny-grant records (deny DENY_GRANT) in every mode.
 	for _, mode := range []string{"enforce", "audit", "learn"} {
@@ -366,7 +360,7 @@ func TestC924_DecisionFieldAbstract(t *testing.T) {
 
 	for _, tc := range []struct {
 		name string
-		wd   any // recorded would_deny (abstract object form)
+		wd   any  // recorded would_deny (abstract object form)
 		want bool // expect F_DECISION_MISMATCH
 	}{
 		{"honest", map[string]any{"action": "deny", "reason": "NO_INTENT"}, false},

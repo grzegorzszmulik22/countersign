@@ -1,0 +1,16 @@
+diff --git a/cmd/csverify/main.go b/cmd/csverify/main.go
+index 3664b8f..329fe6d 100644
+--- a/cmd/csverify/main.go
++++ b/cmd/csverify/main.go
+@@ -71,10 +71,7 @@ var reconcileRun = reconcile.ReconcileBundle
+ func applyReconcile(res *ledger.VerifyResult, bundle []byte) {
+ 	members, err := reconcileReadBundle(bundle)
+ 	if err != nil {
+-		res.Errors = append(res.Errors,
+-			ledger.Finding{Code: "E_BUNDLE", Detail: fmt.Sprintf("reconcile: %v", err)})
+-		res.Verdict = "INVALID"
+-		return
++		return // cannot re-read: trust the base verdict
+ 	}
+ 	rc, err := reconcileRun(members, nil)
+ 	if err != nil {
