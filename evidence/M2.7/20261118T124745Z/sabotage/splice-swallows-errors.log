@@ -1,0 +1,14 @@
+make[1]: Entering directory '/home/csbuild/src/cs-runner/.check-work/sabotage-M2.7-splice-swallows-errors'
+CHECK C2.7.1 FAIL — --- FAIL: TestSplicePropagatesErrors (0.00s)     relay_test.go:38: splice returned nil error when both copy directions failed FAIL FAIL	github.com/countersign/countersign/internal/runner	1.621s FAIL 
+CHECK C2.7.2 PASS
+CHECK C2.7.3 PASS
+CHECK C2.7.4 PASS
+CHECK C2.7.5 PASS
+CHECK C2.7.X PASS
+CHECK C2.7.6 PASS
+CHECK lint.runner PASS
+CHECK race.runner FAIL — --- FAIL: TestSplicePropagatesErrors (0.00s)     relay_test.go:38: splice returned nil error when both copy directions failed FAIL FAIL	github.com/countersign/countersign/internal/runner	67.472s FAIL 
+M2.7 suite: FAILURES
+check-M2.7: FAIL (exit 1, evidence: evidence/M2.7/20261118T133058Z)
+make[1]: *** [Makefile:37: check-M2.7] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-runner/.check-work/sabotage-M2.7-splice-swallows-errors'

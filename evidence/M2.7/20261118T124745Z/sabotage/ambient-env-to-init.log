@@ -1,0 +1,14 @@
+make[1]: Entering directory '/home/csbuild/src/cs-runner/.check-work/sabotage-M2.7-ambient-env-to-init'
+CHECK C2.7.1 PASS
+CHECK C2.7.2 PASS
+CHECK C2.7.3 PASS
+CHECK C2.7.4 FAIL —         empty /tmp/TestC2_7_41933441543/001/credhome/.kube ok         empty /tmp/TestC2_7_41933441543/001/dd0 ok         1 hits FAIL FAIL	github.com/countersign/countersign/internal/runner	0.990s FAIL 
+CHECK C2.7.5 PASS
+CHECK C2.7.X PASS
+CHECK C2.7.6 PASS
+CHECK lint.runner FAIL — internal/runner/init_linux.go:383:6: func envValue is unused (unused) func envValue(env []string, name string) string {      ^ 1 issues: * unused: 1 
+CHECK race.runner FAIL —         empty /tmp/TestC2_7_4517131973/001/credhome/.kube ok         empty /tmp/TestC2_7_4517131973/001/dd0 ok         1 hits FAIL FAIL	github.com/countersign/countersign/internal/runner	86.640s FAIL 
+M2.7 suite: FAILURES
+check-M2.7: FAIL (exit 1, evidence: evidence/M2.7/20261118T124750Z)
+make[1]: *** [Makefile:37: check-M2.7] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-runner/.check-work/sabotage-M2.7-ambient-env-to-init'

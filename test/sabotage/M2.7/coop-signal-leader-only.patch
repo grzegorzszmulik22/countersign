@@ -1,0 +1,25 @@
+diff --git a/internal/runner/cooperative.go b/internal/runner/cooperative.go
+index fdb1fa8..398d7a9 100644
+--- a/internal/runner/cooperative.go
++++ b/internal/runner/cooperative.go
+@@ -38,14 +38,12 @@ func (s *session) spawnCooperative(_ context.Context, ambient []string) (*sandbo
+ 	if err := cmd.Start(); err != nil {
+ 		return nil, fmt.Errorf("spawn %q: %w", s.command[0], err)
+ 	}
+-	group := func(sig syscall.Signal) {
+-		if err := syscall.Kill(-cmd.Process.Pid, sig); err != nil && err != syscall.ESRCH {
+-			fmt.Fprintf(os.Stderr, "cs: group signal %v: %v\n", sig, err)
+-		}
+-	}
+ 	return &sandboxCmd{
+-		cmd:      cmd,
+-		onSignal: func() { group(syscall.SIGINT) },
+-		onKill:   func() { group(syscall.SIGKILL) },
++		cmd: cmd,
++		onSignal: func() {
++			if err := cmd.Process.Signal(syscall.SIGINT); err != nil {
++				fmt.Fprintf(os.Stderr, "cs: signal: %v\n", err)
++			}
++		},
+ 	}, nil
+ }

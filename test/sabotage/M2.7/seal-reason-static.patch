@@ -1,0 +1,15 @@
+diff --git a/internal/runner/session.go b/internal/runner/session.go
+index 81f20d2..b346781 100644
+--- a/internal/runner/session.go
++++ b/internal/runner/session.go
+@@ -271,9 +271,7 @@ func (s *session) sealAndBundle(code int, interrupted bool) (string, error) {
+ 	}
+ 
+ 	reason := "command-exit"
+-	if interrupted {
+-		reason = "signal"
+-	}
++	_ = interrupted
+ 	// Broker chain: emitter.seal marks the head.
+ 	if err := s.brokerEm.emit("emitter.seal", &evidence.EmitterSealBody{Final: true}); err != nil {
+ 		return "", err

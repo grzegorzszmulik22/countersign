@@ -1,0 +1,14 @@
+make[1]: Entering directory '/home/csbuild/src/cs-runner/.check-work/sabotage-M2.7-proxy-env-ambient-first'
+CHECK C2.7.1 PASS
+CHECK C2.7.2 PASS
+CHECK C2.7.3 FAIL —             cs: run-dir /tmp/TestC2_7_3_ProxyEnv1405051032/001/rd2                      check_m27_checks_test.go:415: HTTP_PROXY="http://evil.corp:8888" does not name the boundary proxy FAIL FAIL	github.com/countersign/countersign/internal/runner	0.944s FAIL 
+CHECK C2.7.4 FAIL —         empty /tmp/TestC2_7_43867552124/001/credhome/.kube ok         empty /tmp/TestC2_7_43867552124/001/dd0 ok         5 hits FAIL FAIL	github.com/countersign/countersign/internal/runner	0.236s FAIL 
+CHECK C2.7.5 PASS
+CHECK C2.7.X PASS
+CHECK C2.7.6 PASS
+CHECK lint.runner FAIL — internal/runner/env.go:84:6: func boundaryOwned is unused (unused) func boundaryOwned() map[string]bool {      ^ 1 issues: * unused: 1 
+CHECK race.runner FAIL —         empty /tmp/TestC2_7_41376708309/001/credhome/.kube ok         empty /tmp/TestC2_7_41376708309/001/dd0 ok         5 hits FAIL FAIL	github.com/countersign/countersign/internal/runner	52.951s FAIL 
+M2.7 suite: FAILURES
+check-M2.7: FAIL (exit 1, evidence: evidence/M2.7/20261118T132140Z)
+make[1]: *** [Makefile:37: check-M2.7] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-runner/.check-work/sabotage-M2.7-proxy-env-ambient-first'

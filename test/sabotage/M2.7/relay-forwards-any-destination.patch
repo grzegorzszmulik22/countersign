@@ -1,5 +1,5 @@
 diff --git a/internal/runner/relay.go b/internal/runner/relay.go
-index 1a58427..d6581cd 100644
+index 160eab6..77b5c3c 100644
 --- a/internal/runner/relay.go
 +++ b/internal/runner/relay.go
 @@ -4,9 +4,11 @@
@@ -14,7 +14,7 @@ index 1a58427..d6581cd 100644
  	"sync"
  	"time"
  )
-@@ -49,7 +51,14 @@ func (r *unixRelay) acceptLoop() {
+@@ -50,9 +52,16 @@ func (r *unixRelay) acceptLoop() {
  }
  
  func (r *unixRelay) serve(c *net.UnixConn) {
@@ -28,34 +28,59 @@ index 1a58427..d6581cd 100644
 +	}
 +	up, err := net.DialTimeout("tcp", target, 10*time.Second)
  	if err != nil {
+-		r.logf("relay dial %s: %v", r.broker, err)
++		r.logf("relay dial %s: %v", target, err)
+ 		// Nothing else can be done with this conn — close errors
+ 		// here add no information.
  		_ = c.Close()
- 		return
-@@ -60,7 +69,27 @@ func (r *unixRelay) serve(c *net.UnixConn) {
+@@ -64,11 +73,49 @@ func (r *unixRelay) serve(c *net.UnixConn) {
  		r.conns.Delete(c)
  		r.conns.Delete(up)
  	}()
--	splice(c, up)
-+	spliceBuf(br, c, up)
-+}
-+
+-	if err := splice(c, up); err != nil {
++	if err := spliceBuf(br, c, up); err != nil {
+ 		r.logf("relay splice %s ↔ %s: %v", c.RemoteAddr(), up.RemoteAddr(), err)
+ 	}
+ }
+ 
 +// spliceBuf is splice with the client side's buffered remainder drained.
-+func spliceBuf(br *bufio.Reader, a, b net.Conn) {
++func spliceBuf(br *bufio.Reader, a, b net.Conn) error {
 +	var wg sync.WaitGroup
++	var mu sync.Mutex
++	var first error
++	report := func(err error) {
++		if err == nil {
++			return
++		}
++		mu.Lock()
++		if first == nil {
++			first = err
++		}
++		mu.Unlock()
++	}
 +	wg.Add(2)
 +	go func() {
-+		_, _ = io.Copy(b, br)
++		defer wg.Done()
++		_, err := io.Copy(b, br)
++		report(err)
 +		if tc, ok := b.(*net.TCPConn); ok {
 +			_ = tc.CloseWrite()
 +		}
-+		wg.Done()
 +	}()
 +	go func() {
-+		_, _ = io.Copy(a, b)
-+		wg.Done()
++		defer wg.Done()
++		_, err := io.Copy(a, b)
++		report(err)
++		if uc, ok := a.(*net.UnixConn); ok {
++			_ = uc.CloseWrite()
++		}
 +	}()
 +	wg.Wait()
 +	_ = a.Close()
 +	_ = b.Close()
- }
- 
- // splice copies both directions and propagates half-close.
++	return first
++}
++
+ // splice copies both directions and propagates half-close. Copy errors
+ // are reported to the caller: a truncated stream through the boundary
+ // is a boundary event, not silence.
