@@ -60,6 +60,10 @@ func (s *Server) upstreamTransport() *http.Transport {
 		MaxIdleConns:          200,
 		IdleConnTimeout:       90 * time.Second,
 		ResponseHeaderTimeout: 60 * time.Second,
+		// Never let the transport unzip: credentialed responses must be
+		// decoded inside the scrubber (04 §4.5), and plain ones cross
+		// byte-exact (M2.3).
+		DisableCompression: true,
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			c, err := dial(ctx, network, addr)
 			if err != nil {

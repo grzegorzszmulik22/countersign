@@ -21,6 +21,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/countersign/countersign/internal/creds"
 	"github.com/countersign/countersign/internal/policy"
 )
 
@@ -32,10 +33,11 @@ type SessionFile struct {
 
 // SessionEntry is one row of the session table.
 type SessionEntry struct {
-	ID       string `yaml:"id"`
-	Token    string `yaml:"token"`
-	ClientIP string `yaml:"client_ip"`
-	Policy   string `yaml:"policy"`
+	ID          string `yaml:"id"`
+	Token       string `yaml:"token"`
+	ClientIP    string `yaml:"client_ip"`
+	Policy      string `yaml:"policy"`
+	Credentials string `yaml:"credentials"` // local-mode secrets file (04 §4)
 }
 
 // Session is an open session: its policy, its key store entry, the CA minted
@@ -45,6 +47,13 @@ type Session struct {
 	Token    string
 	ClientIP netip.Prefix // single-address prefix when the table gives an IP
 	Policy   *policy.SessionPolicy
+
+	// placeholders maps credentialed grant ID -> the session's csph_ value
+	// (04 §4.1). It is the only client-side form of a credential; the real
+	// value stays inside credStore until the broker injects it.
+	placeholders map[string]string
+	credStore    creds.Store
+	rate         *rateTable
 
 	caCert *x509.Certificate
 	caKey  *ecdsa.PrivateKey
@@ -104,11 +113,46 @@ func loadSessions(path string, keys SessionKeyStore) (map[string]*Session, error
 			return nil, fmt.Errorf("session table: session %q policy: %w", e.ID, err)
 		}
 		s := &Session{
-			ID:        e.ID,
-			Token:     e.Token,
-			ClientIP:  pfx,
-			Policy:    pol,
-			leafCache: map[string]*tls.Certificate{},
+			ID:           e.ID,
+			Token:        e.Token,
+			ClientIP:     pfx,
+			Policy:       pol,
+			placeholders: map[string]string{},
+			rate:         newRateTable(),
+			leafCache:    map[string]*tls.Certificate{},
+		}
+		// Credential store + placeholders (04 §4, M3.2): a credentialed
+		// grant demands a resolvable store at session open — fail closed.
+		credentialed := false
+		for i := range pol.Spec.Grants {
+			if pol.Spec.Grants[i].Credential != nil {
+				credentialed = true
+			}
+		}
+		if credentialed || e.Credentials != "" {
+			if e.Credentials == "" {
+				return nil, fmt.Errorf("session table: session %q: credentialed grants require credentials", e.ID)
+			}
+			credPath := e.Credentials
+			if !filepath.IsAbs(credPath) {
+				credPath = filepath.Join(dir, credPath)
+			}
+			store, err := creds.LoadFile(credPath)
+			if err != nil {
+				return nil, fmt.Errorf("session table: session %q credentials: %w", e.ID, err)
+			}
+			s.credStore = store
+			for i := range pol.Spec.Grants {
+				g := &pol.Spec.Grants[i]
+				if g.Credential == nil {
+					continue
+				}
+				ref := creds.Ref{Secret: g.Credential.Ref.Secret, Key: g.Credential.Ref.Key}
+				if !store.Has(ref) {
+					return nil, fmt.Errorf("session table: session %q grant %q: credential ref %s not in store", e.ID, g.ID, ref.ID())
+				}
+				s.placeholders[g.ID] = creds.NewPlaceholder(e.ID, g.ID)
+			}
 		}
 		s.chain.eprev = zeroHash
 		if err := s.mintCA(); err != nil {

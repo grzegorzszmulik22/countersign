@@ -1,0 +1,17 @@
+=== RUN   TestDecisionTable
+--- PASS: TestDecisionTable (0.28s)
+=== RUN   TestSchemaConformance
+--- PASS: TestSchemaConformance (0.70s)
+=== RUN   TestPropertyVsPython
+--- PASS: TestPropertyVsPython (40.11s)
+=== RUN   TestInvalidPolicies
+--- PASS: TestInvalidPolicies (0.01s)
+=== RUN   TestPolicyDigest
+--- PASS: TestPolicyDigest (0.05s)
+PASS
+ok  	github.com/countersign/countersign/internal/policy	42.044s
+CHECK C3.1.1 PASS
+CHECK C3.1.2 PASS
+CHECK C3.1.3 PASS
+CHECK C3.1.4 PASS
+CHECK C3.1.6 PASS

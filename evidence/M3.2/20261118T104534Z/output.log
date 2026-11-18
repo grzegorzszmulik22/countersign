@@ -1,0 +1,9 @@
+CHECK C3.2.1 PASS
+CHECK C3.2.2 PASS
+CHECK C3.2.3 PASS
+CHECK C3.2.4 PASS
+CHECK C3.2.5 PASS
+CHECK C3.2.6 PASS
+CHECK canary.records PASS
+CHECK measure.latency PASS
+M3.2 suite: all checks passed

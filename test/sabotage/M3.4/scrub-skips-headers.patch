@@ -1,0 +1,12 @@
+diff --git a/internal/proxy/pipeline.go b/internal/proxy/pipeline.go
+index ee99786..4e22e48 100644
+--- a/internal/proxy/pipeline.go
++++ b/internal/proxy/pipeline.go
+@@ -371,7 +371,6 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
+ 	var scr *creds.Scrubber
+ 	if plan.injected {
+ 		scr = newScrubber(plan)
+-		scrubHeaders(scr, outRes)
+ 		src, err = scrubBody(res)
+ 		if err != nil {
+ 			// 04 §4.5: the broker offered only gzip and identity; anything
