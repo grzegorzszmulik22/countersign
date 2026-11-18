@@ -70,7 +70,7 @@ Build order: Slice 1 first (`README.md`, Build order; CR-001).
 | M8.4 | MCP inspection | TODO | 0 | | |
 | M8.5 | Privacy and redaction | TODO | 0 | | |
 | M9.1 | Reference reconciler and trace corpus | DONE | 1 | lane/reconcile-ref | run ahead of M5-M8 by supervisor waiver (no code dependency). Supervisor review on main+lane: regress green, 5/5 unseen sabotages caught (one intent matching two MCP calls, arguments not compared, result not closing the window, provider intents opening a window, maxEffects off by one). 198 hand-derived traces |
-| M9.2 | Go engine and offline verification | TODO | 0 | | |
+| M9.2 | Go engine and offline verification | DONE | 2 | lane/reconcile-go daf1da2 | merged 2026-11-18 (main 7cab66b). Run ahead of M5-M8 by supervisor waiver (needs only M9.1 and M1). Sent back once: recorded decision.would_deny not compared (audit mode), csverify --reconcile fail-open when the bundle could not be re-read, ignored output-write errors. Round 2 on agent-vpc, fresh clone: 8/8 unseen sabotages caught, race-clean, lint green. Regress on the merged tree: only C2.3.2 failed (broker timing, p99 added 2.96 ms > 2 ms at load 45 from three lanes); the same tree passed C2.3.2 3/3 run alone; M9.2 does not touch the broker |
 | M9.3 | Inline enforcement | TODO | 0 | | |
 | M9.4 | Expectation rule packs | TODO | 0 | | |
 | M9.5 | MCP: undeclared calls and server contracts | TODO | 0 | | |
