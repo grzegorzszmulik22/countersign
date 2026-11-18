@@ -27,6 +27,7 @@ import (
 
 	"github.com/countersign/countersign/internal/evidence"
 	"github.com/countersign/countersign/internal/ledger"
+	"github.com/countersign/countersign/internal/names"
 	"github.com/countersign/countersign/test/fixtures/echo"
 	"github.com/countersign/countersign/test/fixtures/fxlib"
 )
@@ -89,7 +90,7 @@ func newM27(t *testing.T) *m27 {
 	m.echoAddr = addr.String()
 
 	m.policy = filepath.Join(m.work, "policy.yaml")
-	pol := `apiVersion: countersign.dev/v1alpha1
+	pol := `apiVersion: ` + names.APIGroup + `/v1alpha1
 kind: SessionPolicy
 metadata: {name: m27-check}
 spec:

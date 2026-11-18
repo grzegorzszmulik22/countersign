@@ -18,13 +18,14 @@ import (
 	"github.com/countersign/countersign/internal/evidence"
 	"github.com/countersign/countersign/internal/keys"
 	"github.com/countersign/countersign/internal/ledger"
+	"github.com/countersign/countersign/internal/names"
 	"github.com/countersign/countersign/internal/policy"
 	"github.com/countersign/countersign/internal/proxy"
 )
 
 // defaultPolicy is used when --policy is not given: an
 // allow-everything-listed test policy (one credential-less wildcard grant).
-const defaultPolicy = `apiVersion: countersign.dev/v1alpha1
+var defaultPolicy = "apiVersion: " + names.APIGroup + `/v1alpha1
 kind: SessionPolicy
 metadata: {name: cs-run-default}
 spec:
@@ -379,7 +380,7 @@ func (s *session) loadKeys() error {
 
 func logOrigin(dataDir string) string {
 	sum := sha256.Sum256([]byte(dataDir))
-	return "countersign.dev/log/local-" + hex.EncodeToString(sum[:8])
+	return names.APIGroup + "/log/local-" + hex.EncodeToString(sum[:8])
 }
 
 func sessionMode(p *policy.SessionPolicy) string {
