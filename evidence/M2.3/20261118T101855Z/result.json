@@ -1,0 +1,9 @@
+{
+  "chunk": "M2.3",
+  "command": "make check-M2.3 (test/checks/check-M2.3.sh)",
+  "started_utc": "20261118T101855Z",
+  "duration_ms": 140685,
+  "exit_code": 0,
+  "git_commit": "b2335bd8b656d274a9230b7e56eb2ccc0f4a353d",
+  "git_dirty": "yes"
+}

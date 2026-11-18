@@ -1,0 +1,5 @@
+CHECK C0.5.1 PASS
+CHECK C0.5.2 PASS
+CHECK C0.5.3 PASS
+CHECK C0.5.4 PASS
+M0.5 suite: all checks passed
