@@ -1,6 +1,7 @@
 # Change request 002 — M1.6 performance targets vs lane host capability
 
-**Status:** filed — awaiting human decision.
+**Status:** ACCEPTED 2026-11-18 by the human ("Re-base per core"). Applied to `milestones/M1-evidence-core.md` (MM1.1–MM1.3, C1.6.3) and `FROZEN.sha256` by the supervisor.
+**Raised by:** lane `evidence-py`, 2026-11-17, with five raw runs per metric (`evidence/M1.6/20261117T171815Z/` on that lane).
 
 ## What
 
@@ -55,3 +56,17 @@ None on the format, the evidence chain, or verifier semantics; only the
 three `[T]` performance targets move to host-referenced values (or are
 re-confirmed with a noted host requirement, e.g. "on a dedicated
 <core-class> core"). MM1.4 and MM1.5 are unaffected and pass.
+
+## Decision
+
+The targets were written without naming a machine. On the build hosts (aarch64 Neoverse-N1, shared) they measure the host, not the code: one Ed25519 verification costs this core 200–230 µs, so MM1.1 at 8,000 records/s is out of reach at 100% of an idle core. Each target is now stated per core of the machine that runs it, calibrated in the same run:
+
+- **MM1.1** Go verification throughput, signatures included, in records per CPU-second of one core (`GOMAXPROCS=1`, user+sys CPU time): **≥ 50% of the same core's raw Ed25519 verification rate**, measured by a calibration loop in the same run and printed beside it. Why 50%: every record carries at least one signature, so the raw rate is the ceiling, and the original 8,000 records/s is about half the Ed25519 rate of a current x86 server core. The absolute records/s (CPU and wall) is still reported.
+- **MM1.2** Durable append throughput, single writer, group commit: **≥ 5,000 records per CPU-second of the writer** (user+sys), **and** at most one fsync per 10 records (group commit must group). Wall throughput is reported beside it.
+- **MM1.3** Append latency at 1,000 appends/s: **p99 ≤ 5 ms**, judged only on runs during which the host's 1-minute load average stayed at or below its core count (sampled every second and recorded). Latency under an oversubscribed scheduler measures the other tenants. Every run is reported. If no run qualifies, the result is recorded as `not judged: host contended` with all samples, C1.6.3 passes on the other targets, and MM1.3 is listed as open for gate G1, where the human decides whether to run it on a quiet machine.
+
+Unchanged: the `06` §12 rules (≥ 5 runs, all samples, median, CV, never the best run), MM1.4, MM1.5, and every check other than C1.6.3's wording.
+
+## Effect
+
+M1.6 can finish on the build hosts without weakening what the targets were for. A slow verifier or a per-record fsync still fails. G1 gets one open measurement instead of a blocked chunk.

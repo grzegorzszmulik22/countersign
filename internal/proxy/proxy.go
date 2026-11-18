@@ -73,6 +73,11 @@ type Server struct {
 	closed    chan struct{}
 	closeOnce sync.Once
 	wg        sync.WaitGroup
+	// reqs counts request handlers (plain listener and every tunnel's
+	// inner server). Close waits for them before closing the record sink:
+	// an HTTP/2 handler outlives its tunnel's Serve, and a result record
+	// written after the sink closed is evidence lost.
+	reqs sync.WaitGroup
 }
 
 // NewServer loads the session table and prepares the broker. In local mode
@@ -124,7 +129,7 @@ func NewServer(cfg Config) (*Server, error) {
 	}
 	s.brokerLog = blog
 	s.http = &http.Server{
-		Handler:           http.HandlerFunc(s.route),
+		Handler:           s.admit(http.HandlerFunc(s.route)),
 		ReadHeaderTimeout: 30 * time.Second,
 		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
 			return context.WithValue(ctx, connKey{}, newULID())
@@ -167,8 +172,13 @@ func (s *Server) Serve(ctx context.Context, addr string) (net.Addr, error) {
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		<-ctx.Done()
-		s.shutdown()
+		// Close must not depend on the caller cancelling ctx: it waits on
+		// wg, which holds this watcher.
+		select {
+		case <-ctx.Done():
+			s.shutdown()
+		case <-s.closed:
+		}
 	}()
 	go func() {
 		err := s.http.Serve(ln)
@@ -238,6 +248,23 @@ func (s *Server) trackTunnel(c net.Conn) bool {
 	return true
 }
 
+// admit wraps a handler so Close waits for it. A request that arrives
+// after shutdown began is refused before any upstream effect.
+func (s *Server) admit(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		if s.isClosed {
+			s.mu.Unlock()
+			http.Error(w, "broker shutting down", http.StatusServiceUnavailable)
+			return
+		}
+		s.reqs.Add(1)
+		s.mu.Unlock()
+		defer s.reqs.Done()
+		h.ServeHTTP(w, r)
+	})
+}
+
 // untrackTunnel releases a conn from tracking.
 func (s *Server) untrackTunnel(c net.Conn) {
 	s.mu.Lock()
@@ -250,6 +277,7 @@ func (s *Server) untrackTunnel(c net.Conn) {
 func (s *Server) Close() error {
 	s.shutdown()
 	s.wg.Wait()
+	s.reqs.Wait()
 	if s.brokerLog != nil {
 		// Best effort: the log is being abandoned either way; only the
 		// record sink's close error reaches the caller.

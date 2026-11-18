@@ -21,6 +21,11 @@ say() { printf 'CHECK %s %s%s\n' "$1" "$2" "${3:+ — $3}"; }
 pass() { say "$1" PASS; }
 bad() { say "$1" FAIL "$2"; fail=1; }
 
+# Hosts where C2.3.2 reports SKIP: see the note above the report loop.
+timing_skip_host() { # <check-id>: is this host listed for a SKIP of it?
+    awk -v id="$1" -v h="$(hostname -s)" '$1 == id { n = split($2, a, ","); for (i = 1; i <= n; i++) if (a[i] == h) f = 1 } END { exit !f }' tools/env-skips.txt 2>/dev/null
+}
+
 gotest() { # <id> <go-test -run pattern> [extra args...]
     local id=$1 pat=$2; shift 2
     if ! [ -x "$GO" ]; then
@@ -36,6 +41,7 @@ gotest() { # <id> <go-test -run pattern> [extra args...]
 
 job_C2.3.1() { gotest "$1" '^TestC231ByteEquality$' -timeout 300s; }
 job_C2.3.2() {
+    timing_skip_host C2.3.2 && return 0
     # The 2 ms p99 bound is measured end-to-end through three goroutine
     # hops in one process; on a host shared with other lanes/suites the
     # scheduler's tail can exceed it without the broker holding anything
@@ -44,7 +50,7 @@ job_C2.3.2() {
     gotest "$1" '^TestC232SSEFlush$' -timeout 120s || \
         gotest "$1" '^TestC232SSEFlush$' -timeout 120s
 }
-job_C2.3.3() { gotest "$1" '^TestC233WriteAheadDigest$' -timeout 120s; }
+job_C2.3.3() { gotest "$1" '^TestC233(WriteAheadDigest|CloseWaitsForInFlightRecords)$' -timeout 120s; }
 job_C2.3.4() { gotest "$1" '^TestC234ClientAbort$' -timeout 120s; }
 job_C2.3.5() { gotest "$1" '^TestC235MemoryBound$' -timeout 300s; }
 
@@ -66,13 +72,26 @@ for id in C2.3.1 C2.3.2 C2.3.3 C2.3.4 C2.3.5 lint.proxy; do
     ( "job_$id" "$id" >"$WORK/$id.out" 2>&1; echo $? >"$WORK/$id.rc" )
 done
 
+# C2.3.2's 2 ms p99 bound is measured only on hosts quiet enough to mean
+# anything. tools/env-skips.txt lists the hosts where it reports SKIP instead
+# (supervisor decision 2026-11-17: on the 2-core oci-free-a1 it read 35-70 ms
+# while other lanes and a kind cluster ran; it passes on agent-vpc). The skip
+# is never a pass: regress accepts it only on the listed hosts.
+skipped=0
 for id in C2.3.1 C2.3.2 C2.3.3 C2.3.4 C2.3.5 lint.proxy; do
-    if [ "$(cat "$WORK/$id.rc" 2>/dev/null)" = "0" ]; then
+    if [ "$id" = C2.3.2 ] && timing_skip_host C2.3.2; then
+        say "$id" SKIP "timing bound not measured on $(hostname -s) (tools/env-skips.txt); measured on agent-vpc"
+        skipped=1
+    elif [ "$(cat "$WORK/$id.rc" 2>/dev/null)" = "0" ]; then
         pass "$id"
     else
         bad "$id" "$(tail -6 "$WORK/$id.out" 2>/dev/null | tr '\n' ' ')"
     fi
 done
 
-[ "$fail" -eq 0 ] && echo "M2.3 suite: all checks passed" || echo "M2.3 suite: FAILURES" >&2
-exit "$fail"
+[ "$fail" -eq 0 ] && [ "$skipped" -eq 0 ] && echo "M2.3 suite: all checks passed"
+[ "$fail" -ne 0 ] && echo "M2.3 suite: FAILURES" >&2
+[ "$fail" -eq 0 ] && [ "$skipped" -ne 0 ] && echo "M2.3 suite: passed except listed SKIPs" >&2
+[ "$fail" -ne 0 ] && exit 1
+[ "$skipped" -ne 0 ] && exit 2
+exit 0
