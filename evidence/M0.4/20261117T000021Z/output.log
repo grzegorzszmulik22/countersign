@@ -1,0 +1,15 @@
+CHECK C0.4.1 PASS
+CHECK C0.4.2 PASS
+CHECK C0.4.3 PASS
+Traceback (most recent call last):
+  File "<stdin>", line 11, in <module>
+AssertionError: rogue run has 3 requests, baseline 1
+CHECK C0.4.4 FAIL
+CHECK C0.4.5 PASS
+CHECK C0.4.image PASS
+CHECK lint.scriptagent PASS
+CHECK snap.uncommitted PASS
+CHECK snap.untracked PASS
+CHECK snap.post-snapshot PASS
+CHECK snap.concurrent PASS
+M0.4 suite: FAILURES

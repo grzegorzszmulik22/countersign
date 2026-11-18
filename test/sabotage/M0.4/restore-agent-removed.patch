@@ -1,0 +1,13 @@
+diff --git a/test/checks/check-M0.4.sh b/test/checks/check-M0.4.sh
+index e04d74a..32df085 100755
+--- a/test/checks/check-M0.4.sh
++++ b/test/checks/check-M0.4.sh
+@@ -262,7 +262,7 @@ fi
+ #
+ # Injected "uncommitted" edits: append an init() to the snapshot's agent.go
+ # and a RUN line to the snapshot's sandbox Dockerfile.
+-cat >>"$SNAP/test/fixtures/scriptagent/agent.go" <<EOF
++cat >>"$ROOT/test/fixtures/scriptagent/agent.go" <<EOF
+ 
+ // initM04SnapEdited is a check-M0.4 snapshot probe: marker content that
+ // reached the image under test only because it was in the snapshot.

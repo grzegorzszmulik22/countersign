@@ -1,0 +1,16 @@
+k12-srv-pattern-mismatch.jsonl           ok
+k13-srv-tunnel.jsonl                     ok
+k14-unquoted-escape.jsonl                ok
+corpus: all 198 traces as expected
+CHECK C9.2.1 PASS
+wrote 10000 traces
+mm91: 10000/10000 traces identical
+CHECK C9.2.2 PASS
+wrote 242 audit traces with planted unattributed effects
+mm92: 242/242 planted unattributed effects flagged
+CHECK C9.2.3 FAIL — mm92: 242/242 planted unattributed effects flagged
+ok  	github.com/countersign/countersign/cmd/csverify	0.895s
+CHECK C9.2.4 PASS
+ok  	github.com/countersign/countersign/cmd/csverify	0.769s
+CHECK C9.2.5 PASS
+M9.2 suite: FAILURES

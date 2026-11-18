@@ -1,0 +1,12 @@
+make[1]: Entering directory '/home/opc/src/cs-agent/.check-work/sabotage-M0.4-agent-ignores-tool-result'
+CHECK C0.4.1 FAIL — replay 1 exit nonzero: [main] toolcall id=toolu_r1 name=Read start_ms=1794833734469 end_ms=1794833734469 dur_ms=0 [main] modelcall turn=1 start_ms=1794833734469 end_ms=1794833734473 err=true scriptagent: [main] model endpoint: HTTP 400: {"error":{"message":"mockllm: missing tool result for r1","type":"invalid_request_error"}}  
+CHECK C0.4.2 FAIL — agent run failed: [main] toolcall id=toolu_e1 name=WebFetch start_ms=1794833739392 end_ms=1794833740003 dur_ms=610 [main] modelcall turn=1 start_ms=1794833740003 end_ms=1794833740005 err=true scriptagent: [main] model endpoint: HTTP 400: {"error":{"message":"mockllm: missing tool result for e2; missing tool result for e1","type":"invalid_request_error"}}  
+CHECK C0.4.3 FAIL — agent run failed: [sub] toolcall id=toolu_s1 name=Bash start_ms=1794833744721 end_ms=1794833747226 dur_ms=2504 [sub] modelcall turn=1 start_ms=1794833747226 end_ms=1794833747227 err=true scriptagent: [main] model endpoint: HTTP 400: {"error":{"message":"mockllm: missing tool result for m1","type":"invalid_request_error"}}  
+CHECK C0.4.4 FAIL — undeclared-mcp run failed: [main] toolcall id=toolu_mc1 name=mcp__demo__create_record start_ms=1794833751778 end_ms=1794833751783 dur_ms=5 [main] modelcall turn=1 start_ms=1794833751784 end_ms=1794833751785 err=true scriptagent: [main] model endpoint: HTTP 400: {"error":{"message":"mockllm: missing tool result for mc1","type":"invalid_request_error"}}  
+CHECK C0.4.5 PASS
+CHECK C0.4.image PASS
+CHECK lint.scriptagent PASS
+M0.4 suite: FAILURES
+check-M0.4: FAIL (exit 1, evidence: evidence/M0.4/20261116T125447Z)
+make[1]: *** [Makefile:35: check-M0.4] Error 1
+make[1]: Leaving directory '/home/opc/src/cs-agent/.check-work/sabotage-M0.4-agent-ignores-tool-result'

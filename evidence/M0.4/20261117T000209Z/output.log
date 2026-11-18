@@ -1,0 +1,6 @@
+SABOTAGE agent-ignores-tool-result: caught (exit 2) by C0.4.1 C0.4.2 C0.4.3 C0.4.4 
+SABOTAGE image-built-from-live-tree: caught (exit 2) by C0.4.1 C0.4.2 C0.4.3 C0.4.4 C0.4.image snap.post-snapshot snap.uncommitted snap.untracked 
+SABOTAGE mockllm: caught (exit 2) by C0.4.1 C0.4.2 C0.4.3 C0.4.4 
+SABOTAGE rogue-extra-twice: caught (exit 2) by C0.4.4 
+SABOTAGE sequential-tools: caught (exit 2) by C0.4.2 
+sabotage-M0.4: 5 caught, 0 uncaught (evidence: evidence/M0.4/20261117T000209Z/sabotage)

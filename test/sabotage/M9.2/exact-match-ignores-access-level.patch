@@ -1,0 +1,13 @@
+diff --git a/internal/reconcile/expect.go b/internal/reconcile/expect.go
+index b6053e5..1994611 100644
+--- a/internal/reconcile/expect.go
++++ b/internal/reconcile/expect.go
+@@ -457,7 +457,7 @@ func gitExpectMatch(exp map[string]any, req map[string]any, grant map[string]any
+ 		return false
+ 	}
+ 	want := strOr(mget(exp, "access"), "read")
+-	if want == "read" && op.access != "read" {
++	if want == "read" && op.access == "never" {
+ 		return false // a read intent never covers a write op
+ 	}
+ 	url := mget(exp, "url")

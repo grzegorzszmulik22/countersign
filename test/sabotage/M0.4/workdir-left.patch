@@ -1,0 +1,10 @@
+--- a/test/checks/check-M0.4.sh
++++ b/test/checks/check-M0.4.sh
+@@ -90,7 +90,6 @@
+     if ! cmp -s "$WORK/pre-hashes.txt" "$WORK/post-hashes.txt"; then
+         tfail=1; tmsg="${tmsg:+$tmsg }tracked file content changed"
+     fi
+-    rm -rf "$WORK"
+     [ -d "$WORK" ] && { tfail=1; tmsg="${tmsg:+$tmsg }per-run dir left: $WORK"; }
+     if [ "$tfail" -eq 0 ]; then pass tree.restored; else bad tree.restored "$tmsg"; fi
+     return "$tfail"

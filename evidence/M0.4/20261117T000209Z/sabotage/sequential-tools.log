@@ -1,0 +1,19 @@
+make[1]: Entering directory '/home/opc/src/cs-agent/.check-work/sabotage-M0.4-sequential-tools'
+CHECK C0.4.1 PASS
+Traceback (most recent call last):
+  File "<stdin>", line 11, in <module>
+AssertionError: no interval overlap (e1=1794874121645-1794874122252 e2=1794874122252-1794874122861): calls ran sequentially
+CHECK C0.4.2 FAIL
+CHECK C0.4.3 PASS
+CHECK C0.4.4 PASS
+CHECK C0.4.5 PASS
+CHECK C0.4.image PASS
+CHECK lint.scriptagent PASS
+CHECK snap.uncommitted PASS
+CHECK snap.untracked PASS
+CHECK snap.post-snapshot PASS
+CHECK snap.concurrent PASS
+M0.4 suite: FAILURES
+check-M0.4: FAIL (exit 1, evidence: evidence/M0.4/20261117T000743Z)
+make[1]: *** [Makefile:37: check-M0.4] Error 1
+make[1]: Leaving directory '/home/opc/src/cs-agent/.check-work/sabotage-M0.4-sequential-tools'

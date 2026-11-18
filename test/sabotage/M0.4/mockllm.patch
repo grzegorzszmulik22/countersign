@@ -1,0 +1,22 @@
+diff --git a/test/fixtures/mockllm/anthropic.go b/test/fixtures/mockllm/anthropic.go
+index 5430c85..203b553 100644
+--- a/test/fixtures/mockllm/anthropic.go
++++ b/test/fixtures/mockllm/anthropic.go
+@@ -118,7 +118,7 @@ func anthRender(w http.ResponseWriter, m *Transcript, idx int, resp Resp, stream
+ 		i++
+ 	}
+ 	for _, c := range resp.Calls {
+-		s.ev("content_block_start", map[string]any{"type": "content_block_start", "index": i, "content_block": map[string]any{"type": "tool_use", "id": "toolu_" + c.Key, "name": c.Tool, "input": map[string]any{}}})
++		s.ev("content_block_start", map[string]any{"type": "content_block_start", "index": i, "content_block": map[string]any{"type": "tool_use", "id": "toolu_sab_" + c.Key, "name": c.Tool, "input": map[string]any{}}})
+ 		for _, frag := range chunks(string(c.Input)) {
+ 			s.ev("content_block_delta", map[string]any{"type": "content_block_delta", "index": i, "delta": map[string]string{"type": "input_json_delta", "partial_json": frag}})
+ 		}
+@@ -141,7 +141,7 @@ func anthContent(resp Resp) []any {
+ 	}
+ 	for _, c := range resp.Calls {
+ 		blocks = append(blocks, map[string]any{
+-			"type": "tool_use", "id": "toolu_" + c.Key, "name": c.Tool, "input": c.Input,
++			"type": "tool_use", "id": "toolu_sab_" + c.Key, "name": c.Tool, "input": c.Input,
+ 		})
+ 	}
+ 	if blocks == nil {

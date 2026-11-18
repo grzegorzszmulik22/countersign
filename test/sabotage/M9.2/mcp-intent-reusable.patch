@@ -1,0 +1,13 @@
+diff --git a/internal/reconcile/engine.go b/internal/reconcile/engine.go
+index fca996c..39cbc36 100644
+--- a/internal/reconcile/engine.go
++++ b/internal/reconcile/engine.go
+@@ -240,7 +240,7 @@ func level(st *session, grant map[string]any, req map[string]any, mcp map[string
+ 				return "", nil, "", err
+ 			}
+ 			if i != nil {
+-				i.consumed = true
++				// An MCP intent may cover repeated identical calls.
+ 				return "EXACT", []any{i.id}, "", nil
+ 			}
+ 			return "NONE", []any{}, "undeclared-call", nil

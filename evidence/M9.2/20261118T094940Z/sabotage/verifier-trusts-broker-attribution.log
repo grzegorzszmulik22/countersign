@@ -1,0 +1,26 @@
+make[1]: Entering directory '/home/csbuild/src/cs-reconcile-go/.check-work/sabotage-M9.2-verifier-trusts-broker-attribution'
+k12-srv-pattern-mismatch.jsonl           ok
+k13-srv-tunnel.jsonl                     ok
+k14-unquoted-escape.jsonl                ok
+corpus: 1/198 traces FAILED
+CHECK C9.2.1 FAIL — corpus: 1/198 traces FAILED
+wrote 10000 traces
+mm91: 10000/10000 traces identical
+CHECK C9.2.2 PASS
+wrote 711 audit traces with planted unattributed effects
+mm92: 711/711 planted unattributed effects flagged
+CHECK C9.2.3 PASS
+    reconcile_test.go:306: tampered preview must not satisfy the intent, got [{F_DECISION_MISMATCH error e1 decision (allow,OK,would_deny=<nil>) recorded, (deny,NO_INTENT,would_deny=<nil>) recomputed}]
+FAIL
+FAIL	github.com/countersign/countersign/cmd/csverify	18.456s
+FAIL
+CHECK C9.2.4 FAIL — FAIL
+injected write failure
+FAIL
+FAIL	github.com/countersign/countersign/cmd/csverify	3.098s
+FAIL
+CHECK C9.2.5 FAIL — FAIL
+M9.2 suite: FAILURES
+check-M9.2: FAIL (exit 1, evidence: evidence/M9.2/20261118T095625Z)
+make[1]: *** [Makefile:37: check-M9.2] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-reconcile-go/.check-work/sabotage-M9.2-verifier-trusts-broker-attribution'

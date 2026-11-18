@@ -1,0 +1,8 @@
+CHECK C0.4.1 PASS
+CHECK C0.4.2 PASS
+CHECK C0.4.3 PASS
+CHECK C0.4.4 PASS
+CHECK C0.4.5 PASS
+CHECK C0.4.image PASS
+CHECK lint.scriptagent PASS
+M0.4 suite: all checks passed
