@@ -1,0 +1,22 @@
+diff --git a/internal/runner/init_linux.go b/internal/runner/init_linux.go
+index 73feb3d..5e1182e 100644
+--- a/internal/runner/init_linux.go
++++ b/internal/runner/init_linux.go
+@@ -97,16 +97,10 @@ func InitMain(args []string) int {
+ 		return fail(fmt.Errorf("loopback up: %w", err))
+ 	}
+ 
+-	// 2. Hide the whole runner data directory under an empty tmpfs, then
+-	// mount a fresh /proc scoped to this pid namespace — the inherited
+-	// /proc would otherwise show every host process (its env, cmdline
+-	// and same-uid memory) to the sandbox.
++	// 2. Hide the whole runner data directory under an empty tmpfs.
+ 	if err := mountTmpfs(dataDir); err != nil {
+ 		return fail(fmt.Errorf("cover data dir: %w", err))
+ 	}
+-	if err := syscall.Mount("proc", "/proc", "proc", 0, ""); err != nil {
+-		return fail(fmt.Errorf("proc mount: %w", err))
+-	}
+ 
+ 	// 3. Relay: the only reachable peer is the parent's Unix socket,
+ 	// which splices to the broker.

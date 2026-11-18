@@ -38,7 +38,7 @@ func TestC2_7_1(t *testing.T) {
 		"-tcp6", addrs["tcp6"],
 		"-udp", addrs["udp"],
 		"-unix", addrs["unix"],
-		"-spoof-target", m.echoAddr,
+		"-spoof-target", addrs["tcp"],
 		"-rundir", "%RUNDIR%")
 	t.Log(out.stdout, out.stderr)
 	if out.code != 0 {

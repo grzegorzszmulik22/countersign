@@ -1,0 +1,13 @@
+diff --git a/internal/runner/runner.go b/internal/runner/runner.go
+index 5f014be..c546d30 100644
+--- a/internal/runner/runner.go
++++ b/internal/runner/runner.go
+@@ -96,7 +96,7 @@ func Run(ctx context.Context, opt Options) (*Result, error) {
+ 
+ 	// Probe before any heavy setup: enforced mode fails closed when
+ 	// unprivileged namespaces are unavailable.
+-	boundary := boundaryCooperative
++	boundary := boundaryEnforced
+ 	if !opt.Cooperative {
+ 		pr := probe(ctx)
+ 		writeProbeResult(dataDir, pr)

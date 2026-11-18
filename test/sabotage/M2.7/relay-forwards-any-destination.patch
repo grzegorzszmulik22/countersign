@@ -1,0 +1,61 @@
+diff --git a/internal/runner/relay.go b/internal/runner/relay.go
+index 1a58427..d6581cd 100644
+--- a/internal/runner/relay.go
++++ b/internal/runner/relay.go
+@@ -4,9 +4,11 @@
+ package runner
+ 
+ import (
++	"bufio"
+ 	"fmt"
+ 	"io"
+ 	"net"
++	"strings"
+ 	"sync"
+ 	"time"
+ )
+@@ -49,7 +51,14 @@ func (r *unixRelay) acceptLoop() {
+ }
+ 
+ func (r *unixRelay) serve(c *net.UnixConn) {
+-	up, err := net.DialTimeout("tcp", r.broker, 10*time.Second)
++	// SABOTAGE relay-forwards-any-destination: honor a TARGET= header.
++	br := bufio.NewReader(c)
++	line, _ := br.ReadString('\n')
++	target := r.broker
++	if strings.HasPrefix(line, "TARGET=") {
++		target = strings.TrimSpace(strings.TrimPrefix(line, "TARGET="))
++	}
++	up, err := net.DialTimeout("tcp", target, 10*time.Second)
+ 	if err != nil {
+ 		_ = c.Close()
+ 		return
+@@ -60,7 +69,27 @@ func (r *unixRelay) serve(c *net.UnixConn) {
+ 		r.conns.Delete(c)
+ 		r.conns.Delete(up)
+ 	}()
+-	splice(c, up)
++	spliceBuf(br, c, up)
++}
++
++// spliceBuf is splice with the client side's buffered remainder drained.
++func spliceBuf(br *bufio.Reader, a, b net.Conn) {
++	var wg sync.WaitGroup
++	wg.Add(2)
++	go func() {
++		_, _ = io.Copy(b, br)
++		if tc, ok := b.(*net.TCPConn); ok {
++			_ = tc.CloseWrite()
++		}
++		wg.Done()
++	}()
++	go func() {
++		_, _ = io.Copy(a, b)
++		wg.Done()
++	}()
++	wg.Wait()
++	_ = a.Close()
++	_ = b.Close()
+ }
+ 
+ // splice copies both directions and propagates half-close.
