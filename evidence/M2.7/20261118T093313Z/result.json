@@ -1,0 +1,9 @@
+{
+  "chunk": "M2.7",
+  "command": "make sabotage-M2.7 (tools/sabotage.sh)",
+  "started_utc": "20261118T093313Z",
+  "duration_ms": 129681,
+  "exit_code": 0,
+  "git_commit": "3f45181a94d9dda0acae659e5dca4c0ab4e75bb2",
+  "git_dirty": "no"
+}

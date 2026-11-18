@@ -1,0 +1,14 @@
+make[1]: Entering directory '/home/csbuild/src/cs-runner/.check-work/sabotage-M2.7-relay-conns-map-unsafe'
+CHECK C2.7.1 PASS
+CHECK C2.7.2 PASS
+CHECK C2.7.3 PASS
+CHECK C2.7.4 PASS
+CHECK C2.7.5 PASS
+CHECK C2.7.X PASS
+CHECK C2.7.6 PASS
+CHECK lint.runner PASS
+CHECK race.runner FAIL —         cs: bundle /tmp/TestC2_7_32010867589/001/dd0/bundles/8TT8X380AEE2KX3KK209NXYG60.tar         cs: run-dir /tmp/TestC2_7_32010867589/001/rd0         Found 5 data race(s) FAIL FAIL	github.com/countersign/countersign/internal/runner	73.040s FAIL 
+M2.7 suite: FAILURES
+check-M2.7: FAIL (exit 1, evidence: evidence/M2.7/20261118T132301Z)
+make[1]: *** [Makefile:37: check-M2.7] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-runner/.check-work/sabotage-M2.7-relay-conns-map-unsafe'

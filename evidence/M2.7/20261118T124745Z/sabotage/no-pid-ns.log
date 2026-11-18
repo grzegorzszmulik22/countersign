@@ -1,0 +1,14 @@
+make[1]: Entering directory '/home/csbuild/src/cs-runner/.check-work/sabotage-M2.7-no-pid-ns'
+CHECK C2.7.1 FAIL —         cs: boundary enforced         cs: bundle /tmp/TestC2_7_RelayConcurrent3691328464/001/ddrelay/bundles/6WNACT56N03J3ET3TSP8MXYG60.tar         cs: run-dir /tmp/TestC2_7_RelayConcurrent3691328464/001/rdrelay FAIL FAIL	github.com/countersign/countersign/internal/runner	5.206s FAIL 
+CHECK C2.7.2 FAIL —         cs: run-dir /tmp/TestC2_7_21594082393/001/rd0              check_m27_checks_test.go:182: grandchild run exited 1 FAIL FAIL	github.com/countersign/countersign/internal/runner	0.116s FAIL 
+CHECK C2.7.3 FAIL —             cs: run-dir /tmp/TestC2_7_3_ProxyEnv4054108205/001/rd2                      check_m27_checks_test.go:413: env dump run exited 1 FAIL FAIL	github.com/countersign/countersign/internal/runner	0.689s FAIL 
+CHECK C2.7.4 FAIL —         cs: boundary enforced         cs: bundle /tmp/TestC2_7_42123083457/001/dd0/bundles/GS4325RX8014PQHHAHP9MXYG60.tar         cs: run-dir /tmp/TestC2_7_42123083457/001/rd0 FAIL FAIL	github.com/countersign/countersign/internal/runner	0.142s FAIL 
+CHECK C2.7.5 PASS
+CHECK C2.7.X FAIL —             cs: bundle /tmp/TestC2_7_ExitStatus2654868085/001/dd0/bundles/C66FMVX9M1HBGRV498X9MXYG60.tar             cs: run-dir /tmp/TestC2_7_ExitStatus2654868085/001/rd0     check_m27_checks_test.go:691: seal: reason=command-exit emitters=map[broker:true controller:true world:true] counts={Effects:0 Intents:0 Denials:0 Entries:0 Commits:0} FAIL FAIL	github.com/countersign/countersign/internal/runner	0.658s FAIL 
+CHECK C2.7.6 FAIL —             cs: boundary enforced             cs: bundle /tmp/TestC2_7_6enforced1468512363/001/ddsig/bundles/TQQ1M0WG7Y832GGXVM2AMXYG60.tar             cs: run-dir /tmp/TestC2_7_6enforced1468512363/001/rdsig FAIL FAIL	github.com/countersign/countersign/internal/runner	6.235s FAIL 
+CHECK lint.runner PASS
+CHECK race.runner FAIL —             cs: boundary enforced             cs: bundle /tmp/TestC2_7_6enforced3011259913/001/ddsig/bundles/J9SZXKHF62B3CVF5AT2FMXYG60.tar             cs: run-dir /tmp/TestC2_7_6enforced3011259913/001/rdsig FAIL FAIL	github.com/countersign/countersign/internal/runner	28.720s FAIL 
+M2.7 suite: FAILURES
+check-M2.7: FAIL (exit 1, evidence: evidence/M2.7/20261118T132038Z)
+make[1]: *** [Makefile:37: check-M2.7] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-runner/.check-work/sabotage-M2.7-no-pid-ns'

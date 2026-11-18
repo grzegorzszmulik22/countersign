@@ -1,0 +1,14 @@
+make[1]: Entering directory '/home/csbuild/src/cs-runner/.check-work/sabotage-M2.7-seal-reason-static'
+CHECK C2.7.1 PASS
+CHECK C2.7.2 PASS
+CHECK C2.7.3 PASS
+CHECK C2.7.4 PASS
+CHECK C2.7.5 PASS
+CHECK C2.7.X PASS
+CHECK C2.7.6 FAIL —     --- FAIL: TestC2_7_6/cooperative (1.09s)         check_m27_checks_test.go:819: cs exit 130         check_m27_checks_test.go:847: seal reason "command-exit", want "signal" FAIL FAIL	github.com/countersign/countersign/internal/runner	2.217s FAIL 
+CHECK lint.runner PASS
+CHECK race.runner FAIL —     --- FAIL: TestC2_7_6/cooperative (2.87s)         check_m27_checks_test.go:819: cs exit 130         check_m27_checks_test.go:847: seal reason "command-exit", want "signal" FAIL FAIL	github.com/countersign/countersign/internal/runner	100.914s FAIL 
+M2.7 suite: FAILURES
+check-M2.7: FAIL (exit 1, evidence: evidence/M2.7/20261118T132814Z)
+make[1]: *** [Makefile:37: check-M2.7] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-runner/.check-work/sabotage-M2.7-seal-reason-static'

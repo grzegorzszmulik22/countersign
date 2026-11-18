@@ -1,0 +1,6 @@
+SABOTAGE ambient-env-to-init: caught (exit 2) by C2.7.4 lint.runner 
+SABOTAGE cooperative-not-recorded: caught (exit 2) by C2.7.5 lint.runner 
+SABOTAGE datadir-visible-in-sandbox: caught (exit 2) by C2.7.4 
+SABOTAGE no-pid-ns: caught (exit 2) by C2.7.1 C2.7.2 C2.7.3 C2.7.4 C2.7.6 
+SABOTAGE relay-forwards-any-destination: caught (exit 2) by C2.7.1 C2.7.2 C2.7.3 
+sabotage-M2.7: 5 caught, 0 uncaught (evidence: evidence/M2.7/20261118T093313Z/sabotage)

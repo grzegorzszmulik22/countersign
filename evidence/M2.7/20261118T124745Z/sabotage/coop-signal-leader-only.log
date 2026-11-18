@@ -1,0 +1,14 @@
+make[1]: Entering directory '/home/csbuild/src/cs-runner/.check-work/sabotage-M2.7-coop-signal-leader-only'
+CHECK C2.7.1 PASS
+CHECK C2.7.2 PASS
+CHECK C2.7.3 PASS
+CHECK C2.7.4 PASS
+CHECK C2.7.5 PASS
+CHECK C2.7.X PASS
+CHECK C2.7.6 FAIL — github.com/countersign/countersign/test/fixtures/echo.(*Server).Serve.func1() 	/home/csbuild/src/cs-runner/.check-work/sabotage-M2.7-coop-signal-leader-only/test/fixtures/echo/echo.go:177 +0x64 created by github.com/countersign/countersign/test/fixtures/echo.(*Server).Serve in goroutine 21 	/home/csbuild/src/cs-runner/.check-work/sabotage-M2.7-coop-signal-leader-only/test/fixtures/echo/echo.go:177 +0x11c FAIL	github.com/countersign/countersign/internal/runner	300.132s FAIL 
+CHECK lint.runner PASS
+CHECK race.runner FAIL — github.com/countersign/countersign/test/fixtures/echo.(*Server).Serve.func1() 	/home/csbuild/src/cs-runner/.check-work/sabotage-M2.7-coop-signal-leader-only/test/fixtures/echo/echo.go:177 +0xf4 created by github.com/countersign/countersign/test/fixtures/echo.(*Server).Serve in goroutine 179 	/home/csbuild/src/cs-runner/.check-work/sabotage-M2.7-coop-signal-leader-only/test/fixtures/echo/echo.go:177 +0x194 FAIL	github.com/countersign/countersign/internal/runner	609.898s FAIL 
+M2.7 suite: FAILURES
+check-M2.7: FAIL (exit 1, evidence: evidence/M2.7/20261118T125424Z)
+make[1]: *** [Makefile:37: check-M2.7] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-runner/.check-work/sabotage-M2.7-coop-signal-leader-only'

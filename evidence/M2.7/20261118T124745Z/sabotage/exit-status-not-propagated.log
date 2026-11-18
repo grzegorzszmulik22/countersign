@@ -1,0 +1,14 @@
+make[1]: Entering directory '/home/csbuild/src/cs-runner/.check-work/sabotage-M2.7-exit-status-not-propagated'
+CHECK C2.7.1 PASS
+CHECK C2.7.2 PASS
+CHECK C2.7.3 PASS
+CHECK C2.7.4 PASS
+CHECK C2.7.5 PASS
+CHECK C2.7.X FAIL —             cs: bundle /tmp/TestC2_7_ExitStatus4069311648/001/dd9/bundles/P72QFYER80F3E57WV23MKXYG60.tar             cs: run-dir /tmp/TestC2_7_ExitStatus4069311648/001/rd9     check_m27_checks_test.go:691: seal: reason=command-exit emitters=map[broker:true controller:true world:true] counts={Effects:0 Intents:0 Denials:0 Entries:0 Commits:0} FAIL FAIL	github.com/countersign/countersign/internal/runner	1.294s FAIL 
+CHECK C2.7.6 PASS
+CHECK lint.runner PASS
+CHECK race.runner FAIL —             cs: bundle /tmp/TestC2_7_ExitStatus2407369761/001/dd9/bundles/247FEMEGZF5B26EJVQPWKXYG60.tar             cs: run-dir /tmp/TestC2_7_ExitStatus2407369761/001/rd9     check_m27_checks_test.go:691: seal: reason=command-exit emitters=map[broker:true controller:true world:true] counts={Effects:0 Intents:0 Denials:0 Entries:0 Commits:0} FAIL FAIL	github.com/countersign/countersign/internal/runner	58.157s FAIL 
+M2.7 suite: FAILURES
+check-M2.7: FAIL (exit 1, evidence: evidence/M2.7/20261118T131736Z)
+make[1]: *** [Makefile:37: check-M2.7] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-runner/.check-work/sabotage-M2.7-exit-status-not-propagated'

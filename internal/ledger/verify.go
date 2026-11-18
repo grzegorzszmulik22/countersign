@@ -27,6 +27,7 @@ type Finding struct {
 // VerifyResult is the csverify JSON output of 03 §10.
 type VerifyResult struct {
 	Verdict  string         `json:"verdict"`
+	Boundary *string        `json:"boundary"`
 	World    string         `json:"world"`
 	Errors   []Finding      `json:"errors"`
 	Warnings []Finding      `json:"warnings"`
@@ -197,6 +198,7 @@ func VerifyBundle2(members map[string][]byte, trusted keys.Manifest) *VerifyResu
 		addErr(errf("E_OPEN", "first record is not session.open"))
 	} else {
 		openBody, _ = recs[0].rec.Body.(*evidence.SessionOpenBody)
+		res.Boundary = openBody.Boundary
 	}
 	if openBody != nil {
 		if pol, ok := members["policy.yaml"]; !ok || fmt.Sprintf("%x", sha256.Sum256(pol)) != openBody.PolicyDigest {

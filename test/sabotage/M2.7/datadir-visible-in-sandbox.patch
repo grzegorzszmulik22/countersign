@@ -1,0 +1,21 @@
+diff --git a/internal/runner/init_linux.go b/internal/runner/init_linux.go
+index 73feb3d..769ddff 100644
+--- a/internal/runner/init_linux.go
++++ b/internal/runner/init_linux.go
+@@ -97,13 +97,9 @@ func InitMain(args []string) int {
+ 		return fail(fmt.Errorf("loopback up: %w", err))
+ 	}
+ 
+-	// 2. Hide the whole runner data directory under an empty tmpfs, then
+-	// mount a fresh /proc scoped to this pid namespace — the inherited
+-	// /proc would otherwise show every host process (its env, cmdline
+-	// and same-uid memory) to the sandbox.
+-	if err := mountTmpfs(dataDir); err != nil {
+-		return fail(fmt.Errorf("cover data dir: %w", err))
+-	}
++	// 2. Mount a fresh /proc scoped to this pid namespace — the
++	// inherited /proc would otherwise show every host process (its
++	// env, cmdline and same-uid memory) to the sandbox.
+ 	if err := syscall.Mount("proc", "/proc", "proc", 0, ""); err != nil {
+ 		return fail(fmt.Errorf("proc mount: %w", err))
+ 	}
