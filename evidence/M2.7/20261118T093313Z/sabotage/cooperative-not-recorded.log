@@ -1,0 +1,12 @@
+make[1]: Entering directory '/home/csbuild/src/cs-runner/.check-work/sabotage-M2.7-cooperative-not-recorded'
+CHECK C2.7.1 PASS
+CHECK C2.7.2 PASS
+CHECK C2.7.3 PASS
+CHECK C2.7.4 PASS
+CHECK C2.7.5 FAIL —     check_m27_checks_test.go:284:  cs run: unprivileged user namespaces unavailable on this host (probe forced unavailable by CS_RUN_PROBE_OVERRIDE); re-run with --cooperative to run without the enforced boundary              check_m27_checks_test.go:313: cooperative boundary = enforced FAIL FAIL	github.com/countersign/countersign/internal/runner	0.151s FAIL 
+CHECK C2.7.6 PASS
+CHECK lint.runner FAIL — internal/runner/runner.go:60:7: const boundaryCooperative is unused (unused) const boundaryCooperative = "cooperative"       ^ 1 issues: * unused: 1 
+M2.7 suite: FAILURES
+check-M2.7: FAIL (exit 1, evidence: evidence/M2.7/20261118T093339Z)
+make[1]: *** [Makefile:37: check-M2.7] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-runner/.check-work/sabotage-M2.7-cooperative-not-recorded'
