@@ -1,0 +1,23 @@
+make[1]: Entering directory '/home/csbuild/src/cs-reconcile-go/.check-work/sabotage-M9.2-reconcile-batch-drops-write-errors'
+k12-srv-pattern-mismatch.jsonl           ok
+k13-srv-tunnel.jsonl                     ok
+k14-unquoted-escape.jsonl                ok
+corpus: all 198 traces as expected
+CHECK C9.2.1 PASS
+wrote 10000 traces
+mm91: 10000/10000 traces identical
+CHECK C9.2.2 PASS
+wrote 711 audit traces with planted unattributed effects
+mm92: 711/711 planted unattributed effects flagged
+CHECK C9.2.3 PASS
+ok  	github.com/countersign/countersign/cmd/csverify	130.885s
+CHECK C9.2.4 PASS
+    v16step_test.go:173: /tmp/TestC925_BatchWriteErrorFails1417805828/001/small.jsonl: exited 0 with a failing stdout
+FAIL
+FAIL	github.com/countersign/countersign/cmd/csverify	12.480s
+FAIL
+CHECK C9.2.5 FAIL — FAIL
+M9.2 suite: FAILURES
+check-M9.2: FAIL (exit 1, evidence: evidence/M9.2/20261118T095155Z)
+make[1]: *** [Makefile:37: check-M9.2] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-reconcile-go/.check-work/sabotage-M9.2-reconcile-batch-drops-write-errors'
