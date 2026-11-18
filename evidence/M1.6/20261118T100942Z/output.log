@@ -1,0 +1,5 @@
+SABOTAGE calibration-underreport: caught (exit 2) by C1.6.3 
+SABOTAGE fsync-per-record: caught (exit 2) by C1.6.3 
+SABOTAGE load-samples-missing: caught (exit 2) by C1.6.3 
+SABOTAGE mutator-noop-class-5: caught (exit 2) by C1.6.2 C1.6.3 
+sabotage-M1.6: 4 caught, 0 uncaught (evidence: evidence/M1.6/20261118T100942Z/sabotage)
