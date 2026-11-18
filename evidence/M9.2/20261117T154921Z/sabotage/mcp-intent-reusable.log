@@ -1,0 +1,20 @@
+make[1]: Entering directory '/home/csbuild/src/cs-reconcile-go/.check-work/sabotage-M9.2-mcp-intent-reusable'
+k12-srv-pattern-mismatch.jsonl           ok
+k13-srv-tunnel.jsonl                     ok
+k14-unquoted-escape.jsonl                ok
+corpus: 2/198 traces FAILED
+CHECK C9.2.1 FAIL — corpus: 2/198 traces FAILED
+wrote 10000 traces
+mm91: 10000/10000 traces identical
+CHECK C9.2.2 PASS
+wrote 711 audit traces with planted unattributed effects
+mm92: 711/711 planted unattributed effects flagged
+CHECK C9.2.3 PASS
+ok  	github.com/countersign/countersign/cmd/csverify	0.863s
+CHECK C9.2.4 PASS
+ok  	github.com/countersign/countersign/cmd/csverify	0.728s
+CHECK C9.2.5 PASS
+M9.2 suite: FAILURES
+check-M9.2: FAIL (exit 1, evidence: evidence/M9.2/20261117T154933Z)
+make[1]: *** [Makefile:37: check-M9.2] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-reconcile-go/.check-work/sabotage-M9.2-mcp-intent-reusable'

@@ -1,0 +1,14 @@
+diff --git a/internal/reconcile/engine.go b/internal/reconcile/engine.go
+index 8a7b7c7..b46c02a 100644
+--- a/internal/reconcile/engine.go
++++ b/internal/reconcile/engine.go
+@@ -373,8 +373,7 @@ func compareRecorded(r rec, res effectResult, findings *[]Finding) {
+ 				"grant %v recorded, %v recomputed", mget(dec, "grant"), res["grant"]))
+ 		}
+ 		if !sameValue(nilIfEmpty(mget(dec, "action")), res["action"]) ||
+-			!sameValue(nilIfEmpty(mget(dec, "reason")), res["reason"]) ||
+-			!sameValue(nilIfEmpty(mget(dec, "would_deny")), res["would_deny"]) {
++			!sameValue(nilIfEmpty(mget(dec, "reason")), res["reason"]) {
+ 			*findings = append(*findings, finding("F_DECISION_MISMATCH", rid,
+ 				"decision (%v,%v,would_deny=%v) recorded, (%v,%v,would_deny=%v) recomputed",
+ 				mget(dec, "action"), mget(dec, "reason"), mget(dec, "would_deny"),

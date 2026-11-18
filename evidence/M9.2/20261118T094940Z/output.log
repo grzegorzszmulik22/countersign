@@ -1,0 +1,7 @@
+SABOTAGE decision-compare-skips-would-deny: caught (exit 2) by C9.2.4 
+SABOTAGE exact-match-ignores-access-level: caught (exit 2) by C9.2.1 C9.2.2 
+SABOTAGE mcp-intent-reusable: caught (exit 2) by C9.2.1 
+SABOTAGE reconcile-batch-drops-write-errors: caught (exit 2) by C9.2.5 
+SABOTAGE reconcile-read-error-passes-clean: caught (exit 2) by C9.2.5 
+SABOTAGE verifier-trusts-broker-attribution: caught (exit 2) by C9.2.1 C9.2.4 C9.2.5 
+sabotage-M9.2: 6 caught, 0 uncaught (evidence: evidence/M9.2/20261118T094940Z/sabotage)
