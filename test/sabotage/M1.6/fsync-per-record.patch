@@ -1,0 +1,12 @@
+diff --git a/internal/ledger/ledger.go b/internal/ledger/ledger.go
+index c195958..add0823 100644
+--- a/internal/ledger/ledger.go
++++ b/internal/ledger/ledger.go
+@@ -190,6 +190,7 @@ func (l *Ledger) Append(line []byte) (uint64, error) {
+ 	if err != nil {
+ 		return 0, err
+ 	}
++	l.syncFiles() // sabotage: fsync per record
+ 
+ 	select {
+ 	case l.flushCh <- struct{}{}:
