@@ -60,14 +60,35 @@ def case(name, fn):
 
 def t_detected_needs_expected_error():
     """03 §11 Denied: first error out of the class's expected set is NOT a
-    detection even when both verifiers reject identically."""
+    detection even when both verifiers reject identically. Covers every
+    class's set and the CLEAN-class and UNSEALED paths."""
     wrong = deny("E_BUNDLE", "E_CHAIN")
     if RS.judge_mutant(1, wrong, wrong)["detected"]:
         return False, "class-1 mutant with first error E_BUNDLE counted detected"
     right = deny("E_SIG", "E_CHAIN")
     if not RS.judge_mutant(1, right, right)["detected"]:
         return False, "class-1 mutant with first error E_SIG not detected"
-    return True, "wrong first error rejected, expected error detected"
+    # Every class: a real error code outside its expected set must not
+    # detect — catches tampering that broadens any EXPECTED entry.
+    all_codes = {"E_SIG", "E_CHAIN", "E_INCLUSION", "E_SEAL", "E_SESSION",
+                 "E_KEY", "E_CHECKPOINT", "E_BUNDLE", "E_POLICY",
+                 "E_STRUCTURE"}
+    for cls, exp in RS.EXPECTED.items():
+        bad = sorted(all_codes - exp)[0]
+        w = deny(bad, "E_STRUCTURE")
+        if RS.judge_mutant(cls, w, w)["detected"]:
+            return False, (f"class {cls}: first error {bad} outside "
+                           f"{sorted(exp)} counted detected")
+    # A CLEAN-class verdict can never count as detected.
+    clean = deny("E_SIG", verdict="CLEAN")
+    if RS.judge_mutant(1, clean, clean)["detected"]:
+        return False, "CLEAN verdict counted detected"
+    # Class 5's UNSEALED verdict (no error) is a legitimate detection.
+    unsealed = {"verdict": "UNSEALED", "errors": [], "warnings": []}
+    if not RS.judge_mutant(5, unsealed, unsealed)["detected"]:
+        return False, "class-5 UNSEALED not detected"
+    return True, "wrong first error rejected per class; expected/" \
+                 "UNSEALED paths detected"
 
 
 def t_agreement_needs_full_sets():
@@ -83,6 +104,10 @@ def t_agreement_needs_full_sets():
     pw = deny("E_SIG", "E_CHAIN")
     if RS.verdicts_agree(gw, pw):
         return False, "diverging WARNING sets counted agree"
+    gd = deny("E_SIG", verdict="DENIED")
+    pd = deny("E_SIG", verdict="SEALED")
+    if RS.verdicts_agree(gd, pd):
+        return False, "diverging verdicts counted agree"
     same = deny("E_SIG", "E_CHAIN", warns=["W_TAINT"])
     if not RS.verdicts_agree(same, dict(same)):
         return False, "identical outputs counted disagree"
