@@ -43,6 +43,7 @@ import (
 
 	"github.com/countersign/countersign/internal/keys"
 	"github.com/countersign/countersign/internal/ledger"
+	"github.com/countersign/countersign/internal/names"
 )
 
 func fatalf(format string, args ...any) {
@@ -229,7 +230,7 @@ func benchVerify(bundlePath, keysPath string, runs int) {
 func benchAppend(dir, linesPath string, n, workers, runs int) {
 	lines := loadLines(linesPath)
 	for r := 0; r < runs; r++ {
-		l, err := ledger.Open(dir, "countersign.dev/log/bench",
+		l, err := ledger.Open(dir, names.APIGroup+"/log/bench",
 			keys.NewSigner(bytes.Repeat([]byte{7}, 32)))
 		if err != nil {
 			fatalf("%v", err)
@@ -283,7 +284,7 @@ func benchAppend(dir, linesPath string, n, workers, runs int) {
 // 1-minute load average is sampled every second for the whole run.
 func benchLatency(dir, linesPath string, rate, n, workers int) {
 	lines := loadLines(linesPath)
-	l, err := ledger.Open(dir, "countersign.dev/log/bench",
+	l, err := ledger.Open(dir, names.APIGroup+"/log/bench",
 		keys.NewSigner(bytes.Repeat([]byte{7}, 32)))
 	if err != nil {
 		fatalf("%v", err)
