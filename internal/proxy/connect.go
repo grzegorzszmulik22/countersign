@@ -210,9 +210,9 @@ func (s *Server) intercept(cli net.Conn, sess *Session, cID string, client Clien
 	// it (net/http: Serve configures HTTP/2 when TLSConfig names "h2" or is
 	// nil; an explicit list documents intent).
 	inner := &http.Server{
-		Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		Handler: s.admit(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			s.handleInner(w, req, sess, cID, client, authority, host, port, sni)
-		}),
+		})),
 		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
 			return context.WithValue(ctx, connKey{}, cID)
 		},
