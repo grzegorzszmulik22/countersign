@@ -1,0 +1,14 @@
+diff --git a/test/mutgen/run_suite.py b/test/mutgen/run_suite.py
+index eca8a7b..757f06d 100644
+--- a/test/mutgen/run_suite.py
++++ b/test/mutgen/run_suite.py
+@@ -95,8 +95,7 @@ def verdicts_agree(gv, pv):
+     a disagreement — agreement is on the sets, never on the first error
+     alone."""
+     return (gv.get("verdict") == pv.get("verdict") and
+-            code_set(gv, "errors") == code_set(pv, "errors") and
+-            code_set(gv, "warnings") == code_set(pv, "warnings"))
++            first_err(gv) == first_err(pv))
+ 
+ 
+ def judge_mutant(cls, gv, pv):

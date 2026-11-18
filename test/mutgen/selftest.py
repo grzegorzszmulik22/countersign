@@ -197,6 +197,10 @@ CASES = [
 
 
 def main():
+    if len(CASES) != 7:
+        print(f"selftest: {len(CASES)} cases registered, need 7 — the "
+              "negative-test set itself was tampered with")
+        return 1
     print(f"harness negative tests ({len(CASES)} properties):")
     misses = [n for n, fn in CASES if not case(n, fn)]
     if misses:

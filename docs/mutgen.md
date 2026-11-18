@@ -21,6 +21,10 @@ running every mutant through **both** verifiers (`csverify` and
   restated by `spec/CHANGE_REQUESTS/002` (accepted).
 - `test/bench/csbench.go` — Go-side timing for MM1.1–MM1.3 (verify
   throughput, durable-append throughput, append latency).
+- `selftest.py` — C1.6.4 harness negative tests: feeds every enforced
+  property a wrong input through the same judgment functions the suite
+  uses and requires rejection. `check-M1.6` runs it first — a harness
+  that cannot flag bad input produces a green suite that proves nothing.
 
 ## Measurement rules (CR-002)
 
@@ -35,14 +39,23 @@ running every mutant through **both** verifiers (`csverify` and
 - MM1.2 counts group commits exactly: the append runs execute under
   `strace --seccomp-bpf -f -y -e trace=fsync,fdatasync`, and commits are
   the fsync calls on `log/entries.jsonl` (one per commit; each commit
-  also syncs `hashes.bin` and the session index). The in-process
-  return-cohort count is kept as a labelled estimate. Bound: ≤ 1 commit
-  per 10 records (the `fsync-per-record` sabotage exercises this).
+  also syncs `hashes.bin` and the session index). Bound: ≤ 1 commit
+  per 10 records (the `fsync-per-record` sabotage exercises this). When
+  strace is unavailable the fsync bound is recorded `not judged` — the
+  in-process return-cohort estimate is the benchmark's own claim, not an
+  observation of syscalls, and can never estimate the bound into a pass
+  (`fsync-estimate-judged` sabotage). The strace-derived rates are also
+  verified field-by-field: `records_per_cpu_s` must equal
+  `records/cpu_s` with `records_per_s` separately from `wall_s`
+  (`rate-not-verified` sabotage).
 - MM1.3 samples `/proc/loadavg` every second per run; a run is judged
-  only if every sample stayed ≤ core count, otherwise it is recorded
-  unjudged. If no run qualifies the metric reports
-  `not judged: host contended` (open for gate G1). Runs without samples
-  are a harness integrity failure (`load-samples-missing` sabotage).
+  only if every sample stayed ≤ core count — one sample above makes it
+  not judged (`load-gate-accepts-high` sabotage). If no run qualifies
+  the metric reports `not judged: host contended` (open for gate G1).
+  Runs without samples are a harness integrity failure
+  (`load-samples-missing` sabotage).
+- Every metric must report ≥ 5 runs with each run's samples complete —
+  dropped runs or samples fail the metric (`runs-not-counted` sabotage).
 
 ## Detection rule
 
