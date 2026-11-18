@@ -17,9 +17,32 @@ running every mutant through **both** verifiers (`csverify` and
   (policy.yaml, result-before-effect, bundled keys.json).
 - `run_suite.py` — C1.6.1 (200 clean bundles) + C1.6.2 (≥1,000 mutants,
   ≥100/class) differential driver.
-- `measure.py` — C1.6.3 measurements MM1.1–MM1.5 per `06` §12.
+- `measure.py` — C1.6.3 measurements MM1.1–MM1.5 per `06` §12, targets as
+  restated by `spec/CHANGE_REQUESTS/002` (accepted).
 - `test/bench/csbench.go` — Go-side timing for MM1.1–MM1.3 (verify
   throughput, durable-append throughput, append latency).
+
+## Measurement rules (CR-002)
+
+- Rates are per **CPU-second** (process user+sys via `getrusage`), so an
+  oversubscribed host does not depress the number being judged; wall
+  rates are reported beside them.
+- MM1.1 runs at `GOMAXPROCS=1` and is judged ≥ 50% of a raw Ed25519
+  verify loop calibrated in the same invocation. Sanity: record
+  verification can never outrun the calibration — a faster reported
+  verify rate means a broken measurement, not a pass (this is what the
+  `calibration-underreport` sabotage exercises).
+- MM1.2 counts group commits exactly: the append runs execute under
+  `strace --seccomp-bpf -f -y -e trace=fsync,fdatasync`, and commits are
+  the fsync calls on `log/entries.jsonl` (one per commit; each commit
+  also syncs `hashes.bin` and the session index). The in-process
+  return-cohort count is kept as a labelled estimate. Bound: ≤ 1 commit
+  per 10 records (the `fsync-per-record` sabotage exercises this).
+- MM1.3 samples `/proc/loadavg` every second per run; a run is judged
+  only if every sample stayed ≤ core count, otherwise it is recorded
+  unjudged. If no run qualifies the metric reports
+  `not judged: host contended` (open for gate G1). Runs without samples
+  are a harness integrity failure (`load-samples-missing` sabotage).
 
 ## Detection rule
 
