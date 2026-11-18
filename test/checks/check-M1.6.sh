@@ -25,6 +25,17 @@ WORK="$root/.check-work/m16"
 mkdir -p "$WORK/suite"
 fail=0
 
+# C1.6.4: harness negative tests first — feed every enforced property a
+# wrong input and require rejection. A harness that cannot flag bad input
+# produces a green suite that proves nothing, so it does not run.
+if "$PY" test/mutgen/selftest.py; then
+    echo "CHECK C1.6.4 PASS  every enforced property rejected its wrong input"
+else
+    echo "CHECK C1.6.4 FAIL  harness does not enforce a required property"
+    echo "check-M1.6: suite FAIL" >&2
+    exit 1
+fi
+
 # C1.6.1 + C1.6.2: one suite run produces both (plus MM1.4/MM1.5 inputs).
 # status.json is written even when the suite exits non-zero, so each
 # check is attributed independently of the run's exit code. Remove any

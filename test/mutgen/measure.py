@@ -11,8 +11,10 @@ test/bench/csbench with the pinned Go toolchain, then runs:
          verify it contains, so records_per_cpu_s > calibration is a
          harness defect, not a pass.
 - MM1.2  records per CPU-second of the writer >= 5,000, and group
-         commits (fsync events, counted from append-return cohorts)
-         <= 1 per 10 records.
+         commits <= 1 per 10 records, counted exactly from strace
+         fsync() calls on log/entries.jsonl — one per commit. Without
+         strace the fsync bound is not judged; the bench's in-process
+         return-cohort estimate is recorded beside it, never judged.
 - MM1.3  append p99 <= 5 ms at 1,000/s, judged only on runs whose
          per-second 1-minute load samples all stayed <= core count;
          every run is recorded. If none qualifies the result is
@@ -119,6 +121,94 @@ def summarize(vals, target=None, lower_better=False):
             "target": target, "pass": ok}
 
 
+# ------------------------- judgment helpers -----------------------------
+# Extracted so the harness negative tests (selftest.py) can feed each rule
+# a wrong input and require it to be rejected.
+
+def rate_consistent(row, single_core):
+    """A bench row's reported per-CPU rate must be exactly records/cpu_s of
+    the measured process, with the wall rate reported separately as
+    records/wall_s — never derived from the CPU time and never substituted
+    for it. On a single core (GOMAXPROCS=1) cpu_s cannot exceed wall_s;
+    multi-worker writers may use more CPU than wall and only the field
+    identities are asserted."""
+    try:
+        n = float(row["records"])
+        cpu = float(row["cpu_s"])
+        wall = float(row["wall_s"])
+        r_cpu = float(row["records_per_cpu_s"])
+        r_wall = float(row["records_per_s"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    if n <= 0 or cpu <= 0 or wall <= 0:
+        return False
+    if single_core and cpu > wall * 1.05:
+        return False
+    return (abs(r_cpu - n / cpu) <= 1e-9 * (n / cpu) + 1e-9 and
+            abs(r_wall - n / wall) <= 1e-9 * (n / wall) + 1e-9)
+
+
+def fsync_samples(rows):
+    """Exact group-commit ratios, one per run — the ONLY fsync source that
+    may judge the MM1.2 bound is a strace-derived count on the bench row.
+    The in-process return-cohort estimate is the benchmark's own claim,
+    not an observation of syscalls, and can never stand in: any run
+    without an exact count makes the whole bound not judged (None)."""
+    out = []
+    for s in rows:
+        v = s.get("fsync_per_record")
+        if v is None:
+            return None
+        out.append(v)
+    return out
+
+
+def mm13_classify(load1_samples, cores):
+    """A latency run is judged only when EVERY per-second 1-minute load
+    sample stayed <= cores. One sample above makes it not judged; a run
+    carrying no samples cannot be classified at all (integrity failure,
+    not a disqualification)."""
+    if not load1_samples:
+        return "missing"
+    return "qualified" if max(load1_samples) <= cores else "unqualified"
+
+
+def validate_metric(name, res, want_runs):
+    """06 §12: every run reported, none dropped. Checks the recorded run
+    count and that each per-run sample list is complete; returns a list of
+    problems (empty when the metric is complete)."""
+    problems = []
+    runs = res.get("runs")
+    if not isinstance(runs, int) or runs < want_runs:
+        problems.append(f"{name}: {runs} runs recorded, need >= "
+                        f"{want_runs}")
+        return problems
+    samples = res.get("samples")
+    if samples is not None and len(samples) != runs:
+        problems.append(f"{name}: {len(samples)} samples for {runs} "
+                        "runs — a run's samples were dropped")
+    per_run = res.get("all_samples")
+    if per_run is not None:
+        if len(per_run) != runs:
+            problems.append(f"{name}: {len(per_run)} run records for "
+                            f"{runs} runs — a run was dropped")
+        empty = [i for i, e in enumerate(per_run)
+                 if isinstance(e, dict) and not e.get("load1_samples")]
+        if empty:
+            problems.append(f"{name}: run(s) {empty[:5]} missing "
+                            "per-second load samples")
+    loads = res.get("load1_samples")
+    if isinstance(loads, dict):
+        if len(loads) != runs:
+            problems.append(f"{name}: load samples for {len(loads)} of "
+                            f"{runs} runs")
+        empty = sorted(k for k, v in loads.items() if not v)
+        if empty:
+            problems.append(f"{name}: empty load samples in run(s) "
+                            f"{empty[:5]}")
+    return problems
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--seed", type=int, default=1)
@@ -149,6 +239,18 @@ def main() -> int:
         cal_rows = [s for s in out if s.get("metric") == "calibration"]
         run_rows = [s for s in out if s.get("metric") == "MM1.1"]
         cal = cal_rows[-1]["ed25519_verify_per_cpu_s"] if cal_rows else None
+        # CR-002: the judged rate is records / (user+sys CPU-s) of this
+        # process. Assert the bench reports exactly that (never the wall
+        # rate) and that the wall rate is separately reported; a bench
+        # that invents or substitutes the number is a harness defect.
+        for s in run_rows:
+            if not rate_consistent(s, single_core=True):
+                fails.append(f"MM1.1 run {s.get('run')}: reported "
+                             "records_per_cpu_s is not records/cpu_s, or "
+                             "wall rate missing")
+        if len(run_rows) < args.runs:
+            fails.append(f"MM1.1: {len(run_rows)} run rows emitted, "
+                         f"need >= {args.runs}")
         mm1_samples = [s["records_per_cpu_s"] for s in run_rows]
         wall = [s["records_per_s"] for s in run_rows]
         load = {f"run{s['run']}": s.get("load1_samples")
@@ -164,6 +266,7 @@ def main() -> int:
                     "target_text": ">= 50% of same-core Ed25519 rate "
                                    f"({cal:.0f} ops/cpu-s)"})
         results["metrics"]["MM1.1"] = res
+        fails += validate_metric("MM1.1", res, args.runs)
         status = "PASS" if res["pass"] else "FAIL"
         print(f"MM1.1: median {res['median']:.0f} rec/cpu-s, "
               f"cal {cal:.0f} ops/cpu-s, ratio {res['median']/cal:.2f} "
@@ -181,12 +284,13 @@ def main() -> int:
     # Each run is one csbench invocation; when strace(1) is present the run
     # is wrapped in --seccomp-bpf -f -y so the group-commit count is exact:
     # one fsync() on log/entries.jsonl per commit (each commit also syncs
-    # hashes.bin and the session index). Otherwise the in-process
-    # return-cohort estimate is used, marked as such.
+    # hashes.bin and the session index). Without strace the fsync bound is
+    # recorded not judged — the in-process cohort estimate is the bench's
+    # own claim, never an observation of syscalls, and cannot judge it.
     import re
     import shutil
     strace = shutil.which("strace")
-    run_rows, exact = [], []
+    run_rows = []
     for i in range(args.runs):
         ldir = os.path.join(WORK, f"ledger-a{i}")
         inner = [bench, "append", ldir, rp, "20000", "32", "1"]
@@ -224,35 +328,40 @@ def main() -> int:
                 fails.append(f"MM1.2 run {i}: strace output unreadable — "
                              "fsync count cannot be verified")
                 break
-            exact.append(commits)
         run_rows.append(row)
     if run_rows:
+        for s in run_rows:
+            if not rate_consistent(s, single_core=False):
+                fails.append(f"MM1.2 run {s.get('run')}: reported "
+                             "records_per_cpu_s is not records/cpu_s, or "
+                             "wall rate missing")
+        if len(run_rows) < args.runs:
+            fails.append(f"MM1.2: {len(run_rows)} run rows emitted, "
+                         f"need >= {args.runs}")
         rates = [s["records_per_cpu_s"] for s in run_rows]
         wall = [s["records_per_s"] for s in run_rows]
-        fpr = [s["fsync_per_record"] if "fsync_per_record" in s
-               else s["cluster_per_record"] for s in run_rows]
-        commits = [s.get("fsync_commits", s.get("cluster_commits"))
-                   for s in run_rows]
+        # The fsync bound judges ONLY on strace-derived exact counts; the
+        # in-process cohort estimate is the benchmark's own claim and can
+        # never estimate the bound into a pass — with any run uncounted
+        # the bound is recorded not judged.
+        fpr = fsync_samples(run_rows)
+        commits = [s.get("fsync_commits") for s in run_rows]
         for i, s in enumerate(run_rows):
-            c = commits[i]
-            if c is None or not (1 <= c <= s["records"]):
+            c = s.get("fsync_commits")
+            if strace and (c is None or not (1 <= c <= s["records"])):
                 fails.append(f"MM1.2 run {i}: impossible commit count "
                              f"{c} for {s['records']} records")
         res = summarize(rates, target=MM12_RATE)
-        fres = summarize(fpr, target=MM12_FSYNC, lower_better=True)
         res.update({"command": ("strace --seccomp-bpf -f -y -e "
                                 "trace=fsync,fdatasync " if strace else "")
                                + f"{bench} append {WORK}/ledger-a<i> "
                                f"{rp} 20000 32 1",
-                    "fsync_counting": ("exact: fsync() calls on "
-                                       "log/entries.jsonl via strace"
-                                       if exact else
-                                       "estimate: append-return cohorts"),
                     "wall_records_per_s": wall,
                     "fsync_commits_samples": commits,
                     "cluster_commits_estimate": [
                         s.get("cluster_commits") for s in run_rows],
-                    "fsync_per_record": fres,
+                    "cluster_per_record_estimate": [
+                        s.get("cluster_per_record") for s in run_rows],
                     "median_commit_gap_ms": [
                         s.get("median_commit_gap_ms") for s in run_rows],
                     "load1_samples": {f"run{i}": s.get(
@@ -261,15 +370,28 @@ def main() -> int:
                                    "(group commit) per 10 records",
                     "fsync_note": "one group commit fsyncs entries.jsonl, "
                                   "hashes.bin and the session index"})
-        res["pass"] = res["pass"] and fres["median"] <= MM12_FSYNC
+        if fpr is not None:
+            fres = summarize(fpr, target=MM12_FSYNC, lower_better=True)
+            res["fsync_counting"] = ("exact: fsync() calls on "
+                                     "log/entries.jsonl via strace")
+            res["fsync_per_record"] = fres
+            res["fsync_judgment"] = "judged"
+            res["pass"] = res["pass"] and fres["median"] <= MM12_FSYNC
+            fsync_status = f"fsync/rec {fres['median']:.3f} (exact)"
+        else:
+            res["fsync_counting"] = ("unavailable: no strace — "
+                                     "cohort estimate never judges")
+            res["fsync_judgment"] = ("not judged: fsync counting "
+                                     "unavailable (strace missing)")
+            fsync_status = "fsync bound not judged (no strace)"
         results["metrics"]["MM1.2"] = res
+        fails += validate_metric("MM1.2", res, args.runs)
         status = "PASS" if res["pass"] else "FAIL"
-        print(f"MM1.2: median {res['median']:.0f} rec/cpu-s, fsync/rec "
-              f"{fres['median']:.3f} ({'exact' if exact else 'est'}) "
-              f"{status}")
+        print(f"MM1.2: median {res['median']:.0f} rec/cpu-s, "
+              f"{fsync_status} {status}")
         if not res["pass"]:
-            fails.append(f"MM1.2: rate {res['median']:.0f} or fsync ratio "
-                         f"{fres['median']:.3f} missed target")
+            fails.append(f"MM1.2: rate {res['median']:.0f} or fsync "
+                         "bound missed target")
 
     # ------------------------- MM1.3 ----------------------------------
     # One csbench invocation per run (each carries its own per-second
@@ -288,16 +410,19 @@ def main() -> int:
                      if s.get("metric") == "MM1.3"]
     qualified, unqualified, missing = [], [], []
     for i, s in enumerate(lat_rows):
-        ls = s.get("load1_samples")
-        if not ls:
+        cls = mm13_classify(s.get("load1_samples"), CORES)
+        if cls == "missing":
             missing.append(i)
-        elif max(ls) <= CORES:
+        elif cls == "qualified":
             qualified.append(s)
         else:
             unqualified.append(s)
     if missing:
         fails.append(f"MM1.3: runs without load1 samples: {missing} "
                      "(harness cannot classify them)")
+    if len(lat_rows) < args.runs:
+        fails.append(f"MM1.3: {len(lat_rows)} run rows emitted, "
+                     f"need >= {args.runs}")
     judged = qualified
     if lat_rows:
         res = {
@@ -306,6 +431,7 @@ def main() -> int:
             "cores": CORES,
             "runs": len(lat_rows),
             "qualified_runs": len(qualified),
+            "samples": [s["p99_ms"] for s in lat_rows],
             "all_samples": [{
                 "p50_ms": s["p50_ms"], "p99_ms": s["p99_ms"],
                 "max_ms": s["max_ms"],
@@ -315,18 +441,20 @@ def main() -> int:
             "target": MM13_P99,
         }
         if judged:
-            p99 = [s["p99_ms"] for s in judged]
-            res.update(summarize(p99, target=MM13_P99, lower_better=True))
-            res["judgment"] = "judged"
+            s99 = summarize([s["p99_ms"] for s in judged],
+                            target=MM13_P99, lower_better=True)
+            res.update({"judged_samples": s99["samples"],
+                        "median": s99["median"], "cv": s99["cv"],
+                        "unstable": s99["unstable"],
+                        "pass": s99["pass"], "judgment": "judged"})
         else:
-            res.update({"samples": [s["p99_ms"] for s in lat_rows],
-                        "median": statistics.median(
-                            [s["p99_ms"] for s in lat_rows]),
+            res.update({"median": statistics.median(res["samples"]),
                         "judgment": "not judged: host contended",
                         "pass": True,
                         "note": "no run had every 1s load1 sample <= "
                                 f"{CORES} cores; open for gate G1"})
         results["metrics"]["MM1.3"] = res
+        fails += validate_metric("MM1.3", res, args.runs)
         if res["judgment"] == "judged":
             status = "PASS" if res["pass"] else "FAIL"
             print(f"MM1.3: median p99 {res['median']:.1f} ms on "

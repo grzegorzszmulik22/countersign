@@ -89,6 +89,30 @@ def code_set(res, key):
     return {i.get("code") for i in (res.get(key) or [])}
 
 
+def verdicts_agree(gv, pv):
+    """C1.6.2 agreement: identical verdict AND the FULL error and warning
+    code sets. A matching first error with divergence later in the list is
+    a disagreement — agreement is on the sets, never on the first error
+    alone."""
+    return (gv.get("verdict") == pv.get("verdict") and
+            code_set(gv, "errors") == code_set(pv, "errors") and
+            code_set(gv, "warnings") == code_set(pv, "warnings"))
+
+
+def judge_mutant(cls, gv, pv):
+    """Per-mutant judgment (03 §11 + C1.6.2). A mutant counts as detected
+    only when neither verifier returns a CLEAN-class verdict, the two
+    agree on the full code sets, AND the first emitted error of each is in
+    the class's expected set — a rejection on any other primary error is
+    not a detection."""
+    clean = (gv.get("verdict") in CLEAN_CLASS or
+             pv.get("verdict") in CLEAN_CLASS)
+    agree = verdicts_agree(gv, pv)
+    detected = (not clean and agree and
+                in_expected(cls, gv) and in_expected(cls, pv))
+    return {"clean": clean, "agree": agree, "detected": detected}
+
+
 def norm(res):
     def fs(items):
         return sorted((i.get("code"), i.get("index"), i.get("detail"))
@@ -308,22 +332,21 @@ def main() -> int:
             fails.append(f"class {cls} mutant {r['seq']}: "
                          f"mutant identical to original (no-op mutator)")
             continue
-        agree = (gv["verdict"] == pv["verdict"] and
-                 code_set(gv, "errors") == code_set(pv, "errors") and
-                 code_set(gv, "warnings") == code_set(pv, "warnings"))
-        if gv["verdict"] in CLEAN_CLASS or pv["verdict"] in CLEAN_CLASS:
+        j = judge_mutant(cls, gv, pv)
+        if j["clean"]:
             clean_mutants.append(
                 f"class {cls} #{per_class[cls]}: go={gv['verdict']} "
                 f"py={pv['verdict']}")
             if cls == 5:
                 class5_clean.append(per_class[cls])
-        elif agree and in_expected(cls, gv) and in_expected(cls, pv):
+        elif j["detected"]:
             detected += 1
         elif not in_expected(cls, gv) or not in_expected(cls, pv):
             fails.append(
                 f"class {cls} #{per_class[cls]}: first error out of "
                 f"expected {sorted(EXPECTED[cls])}: "
                 f"go={first_err(gv)} py={first_err(pv)}")
+        agree = j["agree"]
         if agree:
             agreed += 1
         else:
@@ -350,9 +373,7 @@ def main() -> int:
         if not r["changed"]:
             fails.append(f"extra {name}: no-op mutant")
             continue
-        agree = (gv["verdict"] == pv["verdict"] and
-                 code_set(gv, "errors") == code_set(pv, "errors") and
-                 code_set(gv, "warnings") == code_set(pv, "warnings"))
+        agree = verdicts_agree(gv, pv)
         rejected = gv["verdict"] not in CLEAN_CLASS and \
             pv["verdict"] not in CLEAN_CLASS
         if name == "result-before-effect":
