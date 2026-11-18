@@ -1,0 +1,16 @@
+make[1]: Entering directory '/home/opc/src/cs-agent/.check-work/sabotage-M0.4-image-built-from-live-tree'
+CHECK C0.4.1 FAIL — replay 1 exit nonzero: 
+CHECK C0.4.2 FAIL — agent run failed: 
+CHECK C0.4.3 FAIL — agent run failed: 
+CHECK C0.4.4 FAIL — undeclared-mcp run failed: 
+CHECK C0.4.5 PASS
+CHECK C0.4.image FAIL — missing scriptagent
+CHECK lint.scriptagent PASS
+CHECK snap.uncommitted FAIL — edited init() did not run inside image
+CHECK snap.untracked FAIL — untracked file init() did not run inside image
+CHECK snap.post-snapshot FAIL — post-snapshot Dockerfile edit reached image
+CHECK snap.concurrent PASS
+M0.4 suite: FAILURES
+check-M0.4: FAIL (exit 1, evidence: evidence/M0.4/20261117T000339Z)
+make[1]: *** [Makefile:37: check-M0.4] Error 1
+make[1]: Leaving directory '/home/opc/src/cs-agent/.check-work/sabotage-M0.4-image-built-from-live-tree'

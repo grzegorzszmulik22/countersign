@@ -1,0 +1,12 @@
+diff --git a/test/checks/check-M0.4.sh b/test/checks/check-M0.4.sh
+index e04d74a..e3fdf7c 100755
+--- a/test/checks/check-M0.4.sh
++++ b/test/checks/check-M0.4.sh
+@@ -273,6 +273,7 @@ func init() {
+ }
+ EOF
+ printf 'RUN echo %s > /home/agent/m04snap-uncomm\n' "'M04SNAP-UNCOMM-$$'" >>"$SNAP/test/fixtures/scriptagent/Dockerfile"
++printf 'stray\n' >"$ROOT/zz_m04probe_$$"
+ # Injected "untracked" file: a new source file the fixtures build needs —
+ # the probe init calls m04SnapNewfile(), so dropping this file breaks the
+ # build, and its init() marker must run inside the image.

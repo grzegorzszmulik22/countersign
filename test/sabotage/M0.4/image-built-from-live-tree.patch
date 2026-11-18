@@ -1,0 +1,11 @@
+--- a/test/checks/check-M0.4.sh
++++ b/test/checks/check-M0.4.sh
+@@ -211,7 +211,7 @@
+     exit "$fail"
+ fi
+ 
+-docker build -f "$SNAP/test/fixtures/scriptagent/Dockerfile" -t "$IMG" "$SNAP" >"$WORK/logs/docker-build.log" 2>&1
++DOCKER_BUILDKIT=0 docker build -f "$ROOT/test/fixtures/scriptagent/Dockerfile" -t "$IMG" "$ROOT" >"$WORK/logs/docker-build.log" 2>&1
+ docker_build_rc=$?
+ rm -f "$WPROB/.run"; wait "$wprobpid" 2>/dev/null
+ wprob_writes=$(cat "$WPROB/.count" 2>/dev/null || echo 0)

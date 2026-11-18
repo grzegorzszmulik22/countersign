@@ -15,7 +15,10 @@ RUN apt-get update \
 RUN useradd --create-home --uid 1010 --shell /bin/bash agent \
  && mkdir -p /work && chown agent:agent /work
 
-COPY .check-work/M0.4/bin/scriptagent /usr/local/bin/scriptagent
+# Build context is the check suite's work dir (bin/scriptagent inside it);
+# that keeps the image self-contained and lets parallel runs build isolated
+# contexts under .check-work/M0.4-<pid>.
+COPY bin/scriptagent /usr/local/bin/scriptagent
 
 USER agent
 WORKDIR /work
