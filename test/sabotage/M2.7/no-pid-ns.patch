@@ -1,0 +1,13 @@
+diff --git a/internal/runner/namespaces_linux.go b/internal/runner/namespaces_linux.go
+index f0f4793..ff64238 100644
+--- a/internal/runner/namespaces_linux.go
++++ b/internal/runner/namespaces_linux.go
+@@ -28,7 +28,7 @@ const nsFlags = syscall.CLONE_NEWUSER | syscall.CLONE_NEWNS | syscall.CLONE_NEWN
+ func spawnInNS(argv []string, env []string, extraFiles []*os.File) *exec.Cmd {
+ 	cmd := exec.Command("/proc/self/exe", argv...)
+ 	cmd.SysProcAttr = &syscall.SysProcAttr{
+-		Cloneflags: nsFlags,
++		Cloneflags: nsFlags &^ syscall.CLONE_NEWPID,
+ 		UidMappings: []syscall.SysProcIDMap{
+ 			{ContainerID: 0, HostID: os.Geteuid(), Size: 1},
+ 		},
