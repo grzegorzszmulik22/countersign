@@ -48,7 +48,7 @@ job_C3.5.3() {
         echo "go toolchain missing: run make tools"
         return 1
     fi
-    if "$GO" test -tags fixtures -race -count=200 -run '^TestC353StreamingBodyCap$' \
+    if "$GO" test -tags fixtures -race -count=200 -run '^TestC353' \
         ./internal/proxy >"$WORK/$1.full.log" 2>&1; then
         return 0
     fi

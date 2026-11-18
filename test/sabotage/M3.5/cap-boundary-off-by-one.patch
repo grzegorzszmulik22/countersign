@@ -1,0 +1,13 @@
+diff --git a/internal/proxy/limits.go b/internal/proxy/limits.go
+index ee2a96d..94e0fd8 100644
+--- a/internal/proxy/limits.go
++++ b/internal/proxy/limits.go
+@@ -62,7 +62,7 @@ func (c *capBody) Read(b []byte) (int, error) {
+ 	if c.over {
+ 		return 0, errBodyLimit
+ 	}
+-	if c.count >= c.max {
++	if c.count >= c.max-1 {
+ 		// Exactly at the cap: one more source byte means the body
+ 		// exceeds it; an end here is a legal at-limit body.
+ 		var one [1]byte

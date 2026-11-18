@@ -36,6 +36,14 @@ const m35Grants = `  grants:
       match: {hosts: [h2.anthropic.example], paths: [/lim/**]}
       bufferLimit: 1Ki
       limits: {maxRequestBodyBytes: 4096}
+    - id: lim-tight
+      match: {hosts: [api.anthropic.com, h2.anthropic.example], paths: [/tight/**]}
+      bufferLimit: 4094
+      limits: {maxRequestBodyBytes: 4096}
+    - id: lim-edge
+      match: {hosts: [api.anthropic.com, h2.anthropic.example], paths: [/edge/**]}
+      bufferLimit: 4095
+      limits: {maxRequestBodyBytes: 4096}
     - id: lim2
       match: {hosts: [api.anthropic.com], paths: [/lim2/**]}
       limits: {requestsPerMinute: 60}
@@ -298,6 +306,56 @@ func TestC353StreamingBodyCap(t *testing.T) {
 		t.Fatalf("h2 8192: upstream received %d bytes, cap is 4096", got)
 	}
 
+	// Boundary chunkings — the cap's off-by-one surface (04 §1: whatever
+	// the chunking). lim-tight's bufferLimit 4094 leaves the buffered
+	// prefix at cap-1, so the deferred reader's count sits at max-1 when
+	// the prefix drains and the next Read still has a byte to give —
+	// the boundary comparison fires on a real wire delivery, under every
+	// framing. lim-edge (bufferLimit 4095) lands the count exactly at
+	// max. Each row: at-limit complete, one over denied with ≤ cap
+	// upstream (or nothing for a declared over-limit, denied pre-wire).
+	boundaries := []struct {
+		name string
+		cl   *http.Client
+		sink *headerSink
+		url  string
+		decl bool // declared Content-Length vs chunked
+	}{
+		{"h1-chunked@cap-1", h1c, ce.anthro, "https://api.anthropic.com/tight/x", false},
+		{"h1-declared@cap-1", h1c, ce.anthro, "https://api.anthropic.com/tight/x", true},
+		{"h2@cap-1", h2c, ce.h2, "https://h2.anthropic.example/tight/x", false},
+		{"h1-chunked@cap", h1c, ce.anthro, "https://api.anthropic.com/edge/x", false},
+		{"h1-declared@cap", h1c, ce.anthro, "https://api.anthropic.com/edge/x", true},
+		{"h2@cap", h2c, ce.h2, "https://h2.anthropic.example/edge/x", false},
+	}
+	for _, c := range boundaries {
+		decl := int64(-1)
+		if c.decl {
+			decl = 4096
+		}
+		res, i = stream(c.cl, c.sink, c.url, 4096, decl)
+		if res.StatusCode != 200 {
+			t.Fatalf("%s at-limit denied: status=%d reason=%q", c.name, res.StatusCode, denyReason(res))
+		}
+		if got := delivered(c.sink, i); got != 4096 {
+			t.Fatalf("%s at-limit incomplete: upstream got %d of 4096", c.name, got)
+		}
+		if c.decl {
+			decl = 4097
+		}
+		res, i = stream(c.cl, c.sink, c.url, 4097, decl)
+		if res.StatusCode != http.StatusForbidden || denyReason(res) != "LIMIT_BODY" {
+			t.Fatalf("%s over-limit: status=%d reason=%q", c.name, res.StatusCode, denyReason(res))
+		}
+		if c.decl {
+			if c.sink.count() != i {
+				t.Fatalf("%s declared over-limit reached upstream", c.name)
+			}
+		} else if got := delivered(c.sink, i); got > 4096 {
+			t.Fatalf("%s over-limit: upstream received %d bytes, cap is 4096", c.name, got)
+		}
+	}
+
 	// Concurrency: two sessions streaming over the cap simultaneously —
 	// each request's own delivery is still ≤ cap.
 	c0 := ce.anthro.count()
@@ -364,6 +422,62 @@ func TestC353StreamingBodyCap(t *testing.T) {
 	}
 	if resErr != "limit-body" {
 		t.Fatalf("result.error = %q, want limit-body", resErr)
+	}
+}
+
+// TestC353CapBodyReads drives capBody with controlled Read sizes so the
+// boundary comparisons see count == max-1 and count == max at a read
+// boundary, whatever the delivery granularity: one byte per Read, a
+// chunk boundary exactly at max-1 or at max, or one giant read.
+func TestC353CapBodyReads(t *testing.T) {
+	const max = 4096
+	// run streams n body bytes through capBody{max} using read buffers
+	// drawn round-robin from sizes; it returns the bytes emitted and the
+	// terminal error.
+	run := func(n int64, sizes ...int) (int64, error) {
+		c := &capBody{r: io.LimitReader(zeroReader{}, n), max: max}
+		var got int64
+		b := make([]byte, 0, 8192)
+		for i := 0; ; i++ {
+			sz := sizes[i%len(sizes)]
+			if cap(b) < sz {
+				b = make([]byte, sz)
+			}
+			b = b[:sz]
+			m, err := c.Read(b)
+			got += int64(m)
+			if err != nil {
+				return got, err
+			}
+			if m == 0 {
+				t.Fatalf("capBody returned (0, nil) — reader contract violation")
+			}
+		}
+	}
+	sizeTables := [][]int{
+		{1},                 // one byte per Read — every count value
+		{max - 1},           // boundary exactly at max-1
+		{max},               // boundary exactly at max
+		{max + 1},           // one chunk bigger than the cap
+		{8192},              // single giant read
+		{max / 2, 3, max},  // mixed sizes, irregular landing
+		{1025, 3071},       // the lim-stream deferred split
+		{max - 3, 2, 7},    // second read lands count exactly at max-1
+	}
+	for _, sizes := range sizeTables {
+		got, err := run(max, sizes...)
+		if err != io.EOF || got != max {
+			t.Fatalf("reads %v: at-limit emitted %d err %v, want %d + EOF", sizes, got, err, max)
+		}
+		got, err = run(max+1, sizes...)
+		if err != errBodyLimit || got != max {
+			t.Fatalf("reads %v: over-limit emitted %d err %v, want %d + errBodyLimit", sizes, got, err, max)
+		}
+		// Well over: still exactly the cap emitted, then errBodyLimit.
+		got, err = run(2*max, sizes...)
+		if err != errBodyLimit || got != max {
+			t.Fatalf("reads %v: 2×cap emitted %d err %v, want %d + errBodyLimit", sizes, got, err, max)
+		}
 	}
 }
 
