@@ -1,0 +1,19 @@
+diff --git a/internal/proxy/pipeline.go b/internal/proxy/pipeline.go
+index 1fa0a7b..0340570 100644
+--- a/internal/proxy/pipeline.go
++++ b/internal/proxy/pipeline.go
+@@ -318,11 +318,9 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
+ 	}
+ 	upReq.Host = tgt.authority
+ 	upReq.Header = outHdr
+-	if plan.injected {
+-		// 04 §4.5: credentialed requests offer exactly gzip or identity so
+-		// every response arrives in an encoding the broker can scan.
+-		upReq.Header.Set("Accept-Encoding", "gzip, identity")
+-	}
++	// 04 §4.5: credentialed requests offer exactly gzip or identity so
++	// every response arrives in an encoding the broker can scan.
++	upReq.Header.Set("Accept-Encoding", "gzip, identity")
+ 	if bodyLen >= 0 {
+ 		upReq.ContentLength = bodyLen
+ 	}

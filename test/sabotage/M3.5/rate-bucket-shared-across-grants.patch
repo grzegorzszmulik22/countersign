@@ -1,0 +1,18 @@
+diff --git a/internal/proxy/limits.go b/internal/proxy/limits.go
+index ee2a96d..ccb90ee 100644
+--- a/internal/proxy/limits.go
++++ b/internal/proxy/limits.go
+@@ -109,11 +109,11 @@ func newRateTable() *rateTable {
+ func (t *rateTable) take(grantID string, rpm int) bool {
+ 	t.mu.Lock()
+ 	defer t.mu.Unlock()
+-	b := t.buckets[grantID]
++	b := t.buckets["_"]
+ 	now := t.now()
+ 	if b == nil {
+ 		b = &tokenBucket{tokens: burstCap(rpm), last: now}
+-		t.buckets[grantID] = b
++		t.buckets["_"] = b
+ 	}
+ 	if d := now.Sub(b.last).Seconds(); d > 0 {
+ 		b.tokens += d * float64(rpm) / 60.0

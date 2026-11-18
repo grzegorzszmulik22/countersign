@@ -1,0 +1,32 @@
+diff --git a/internal/proxy/limits.go b/internal/proxy/limits.go
+index ee2a96d..0316129 100644
+--- a/internal/proxy/limits.go
++++ b/internal/proxy/limits.go
+@@ -33,7 +33,7 @@ func checkLimits(grant *policy.Grant, r *http.Request, tgt forwardTarget) string
+ 		int64(len(tgt.path)+len(tgt.rawQuery)) > int64(*lim.MaxURLBytes) {
+ 		return "LIMIT_URL"
+ 	}
+-	if lim.MaxRequestBodyBytes != nil && r.ContentLength > int64(*lim.MaxRequestBodyBytes) {
++	if lim.MaxRequestBodyBytes != nil && r.ContentLength > int64(*lim.MaxRequestBodyBytes)+1 {
+ 		return "LIMIT_BODY"
+ 	}
+ 	return ""
+diff --git a/internal/proxy/pipeline.go b/internal/proxy/pipeline.go
+index 1fa0a7b..66ac289 100644
+--- a/internal/proxy/pipeline.go
++++ b/internal/proxy/pipeline.go
+@@ -224,12 +224,12 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
+ 	// wire — the connection dies mid-write and the result carries
+ 	// error: limit-body (C3.5.3).
+ 	if mb := maxBody(grant); mb > 0 {
+-		if int64(len(buf)) > mb {
++		if int64(len(buf)) > mb+1 {
+ 			s.denyRequest(w, r, env, "LIMIT_BODY", tgt.scheme, tgt.authority, tgt.path, tgt.rawQuery, mres.Grant)
+ 			return
+ 		}
+ 		if bodyReader != nil {
+-			bodyReader = &capBody{r: bodyReader, max: mb}
++			bodyReader = &capBody{r: bodyReader, max: mb + 1}
+ 		}
+ 	}
+ 	reqRec := RequestRecord{

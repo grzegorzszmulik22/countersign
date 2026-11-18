@@ -34,8 +34,12 @@ gotest() { # gotest <id> <pkg> <test-pattern> [extra go test flags]
 
 # C3.4.1 — fakehub /debug/echo through a credentialed grant: the client
 # sees the placeholder where the real credential was reflected;
-# result.scrubbed >= 1 (A5 in miniature).
-job_C3.4.1() { gotest "$1" ./internal/proxy '^TestC341EchoScrubbed$'; }
+# result.scrubbed >= 1 (A5 in miniature). Plus every §4.5 wire form
+# alone — raw, base64, URL-encoded (an escapable secret so the encoded
+# form differs from raw), and the Basic composite — in body and
+# headers, including a reflected Authorization response header and
+# chunk-straddling streams.
+job_C3.4.1() { gotest "$1" ./internal/proxy '^TestC341'; }
 
 # C3.4.2 — secret split at every interior byte of a ~40-byte secret is
 # always scrubbed (the carry-over window); byte-at-a-time streams and
@@ -54,8 +58,10 @@ job_C3.4.3() {
 job_C3.4.4() { gotest "$1" ./internal/proxy '^TestC344HeaderTrailerBig$'; }
 
 # C3.4.5 — non-credentialed requests are not scanned and not decoded:
-# byte-exact pass-through including Content-Encoding.
-job_C3.4.5() { gotest "$1" ./internal/proxy '^TestC345NonCredentialedPassthrough$'; }
+# byte-exact pass-through including Content-Encoding. Accept-Encoding is
+# controlled (gzip, identity) only for credentialed requests; a
+# non-credentialed request's header crosses byte-exact.
+job_C3.4.5() { gotest "$1" ./internal/proxy '^TestC345'; }
 
 # C3.4.6 — MM3.4: scrubbing penalty on a 100 MiB credentialed download
 # <= 25%; MM3.2: no canary in records/logs (also asserted suite-wide).

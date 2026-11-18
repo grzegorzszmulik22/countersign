@@ -51,8 +51,10 @@ job_C3.2.2() {
 job_C3.2.3() { gotest "$1" ./internal/proxy '^TestC323Scope$'; }
 
 # C3.2.4 — real git clone through the broker with a Basic credential
-# delivered via the session's placeholder environment.
-job_C3.2.4() { gotest "$1" ./internal/proxy '^TestC324GitCloneBasic$'; }
+# delivered via the session's placeholder environment; and the exact
+# Authorization bytes upstream: "Basic "+base64(user:secret) for two
+# configured usernames, added and placeholder-replaced.
+job_C3.2.4() { gotest "$1" ./internal/proxy '^TestC324'; }
 
 # C3.2.5 — 50k-request injection invariant vs the Python reference
 # matcher (a wrapper logs every injection).

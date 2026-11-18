@@ -13,8 +13,10 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -32,11 +34,17 @@ import (
 // oracle plus a Basic-inject grant, over the same secrets file.
 const m34Grants = `  grants:
     - id: anthro-basic
-      match: {hosts: [api.anthropic.com], paths: [/scrub/basic]}
+      match: {hosts: [api.anthropic.com], paths: [/scrub/basic, /scrub/authhdr, /escb/**]}
       credential:
         ref: {secret: github-token, key: value}
-        inject: {basic: {username: svc-user}}
+        inject: {basic: {username: svc-agent}}
         placeholderEnv: GH_TOK
+    - id: anthro-esc
+      match: {hosts: [api.anthropic.com], paths: [/escu/**]}
+      credential:
+        ref: {secret: escapable, key: value}
+        inject: {header: x-api-key, format: "{secret}"}
+        placeholderEnv: ESC_TOK
     - id: anthro-plain
       match: {hosts: [api.anthropic.com], paths: [/scrub/bigplain]}
     - id: anthro-all
@@ -94,42 +102,190 @@ func TestC341EchoScrubbed(t *testing.T) {
 	}
 }
 
+// noWireForm asserts b carries none of secret's §4.5 wire forms — raw,
+// base64, URL-escaped, and (when user is set) the Basic composite —
+// and that the placeholder replaced them. Failure text never echoes the
+// material: even an encoded form is credential material.
+func noWireForm(t *testing.T, what string, b []byte, secret, user, placeholder string) {
+	t.Helper()
+	for i, f := range [][]byte{
+		[]byte(secret),
+		[]byte(base64.StdEncoding.EncodeToString([]byte(secret))),
+		[]byte(url.QueryEscape(secret)),
+	} {
+		if bytes.Contains(b, f) {
+			t.Fatalf("%s: wire form %d of the secret survived", what, i)
+		}
+	}
+	if user != "" {
+		comp := []byte(base64.StdEncoding.EncodeToString([]byte(user + ":" + secret)))
+		if bytes.Contains(b, comp) {
+			t.Fatalf("%s: Basic composite form survived", what)
+		}
+	}
+	if !bytes.Contains(b, []byte(placeholder)) {
+		t.Fatalf("%s: placeholder missing", what)
+	}
+}
+
+// Every §4.5 wire form alone, in the body and in a header: raw and
+// base64 for the plain secret, the URL-escaped form for a secret whose
+// escaping differs from its raw bytes, and the Basic base64(user:secret)
+// composite — including a response header literally named Authorization
+// and streams where the form straddles chunk boundaries.
+func TestC341ScrubbedForms(t *testing.T) {
+	ce := startCredEnv(t, m34Grants, nil)
+	e := ce.env
+	anth := fxlib.Canary("anthropic")
+	esc := m3Secrets()["escapable"]["value"]
+	gh := fxlib.Canary("github-agent")
+
+	// Without a URL-sensitive secret the encoded-form cases are vacuous.
+	if url.QueryEscape(esc) == esc {
+		t.Fatal("escapable fixture secret does not exercise the URL form")
+	}
+	pAll := ph(t, e, "s1", "anthro-all")
+	pEsc := ph(t, e, "s1", "anthro-esc")
+	pBas := ph(t, e, "s1", "anthro-basic")
+
+	// Raw form alone — body and response header (header-inject grant).
+	res, body := doCred(t, e, "tok-one", "GET",
+		"https://api.anthropic.com/scrub/form/raw", nil, nil)
+	if res.StatusCode != 200 {
+		t.Fatalf("raw body: status %d", res.StatusCode)
+	}
+	if string(body) != "v="+pAll {
+		t.Fatalf("raw body: want exactly %q after scrub", "v="+pAll)
+	}
+	if got := ce.anthro.last().Get("X-Api-Key"); got != anth {
+		t.Fatal("upstream did not receive the real credential")
+	}
+	res, _ = doCred(t, e, "tok-one", "GET",
+		"https://api.anthropic.com/scrub/form/hraw", nil, nil)
+	if got := res.Header.Get("X-Leak-Key"); got != pAll {
+		t.Fatalf("raw header: X-Leak-Key not scrubbed to the placeholder")
+	}
+
+	// Base64 form alone — body and response header.
+	res, body = doCred(t, e, "tok-one", "GET",
+		"https://api.anthropic.com/scrub/form/b64", nil, nil)
+	if res.StatusCode != 200 {
+		t.Fatalf("b64 body: status %d", res.StatusCode)
+	}
+	if string(body) != "v="+pAll {
+		t.Fatalf("b64 body: base64 form survived or mangled")
+	}
+	res, _ = doCred(t, e, "tok-one", "GET",
+		"https://api.anthropic.com/scrub/form/hb64", nil, nil)
+	if got := res.Header.Get("X-Leak-Key"); got != pAll {
+		t.Fatalf("b64 header: X-Leak-Key not scrubbed to the placeholder")
+	}
+
+	// URL-escaped form alone, of a secret whose escaping differs from
+	// raw — body, header, and a stream split inside the escaped bytes.
+	res, body = doCred(t, e, "tok-one", "GET",
+		"https://api.anthropic.com/escu/body", nil, nil)
+	if res.StatusCode != 200 {
+		t.Fatalf("url body: status %d", res.StatusCode)
+	}
+	if string(body) != "v="+pEsc {
+		t.Fatalf("url body: escaped form survived or mangled")
+	}
+	if got := ce.anthro.last().Get("X-Api-Key"); got != esc {
+		t.Fatal("upstream did not receive the escapable credential")
+	}
+	res, _ = doCred(t, e, "tok-one", "GET",
+		"https://api.anthropic.com/escu/hdr", nil, nil)
+	if got := res.Header.Get("X-Leak-Key"); got != pEsc {
+		t.Fatalf("url header: X-Leak-Key not scrubbed to the placeholder")
+	}
+	res, body = doCred(t, e, "tok-one", "GET",
+		"https://api.anthropic.com/escu/stream", nil, nil)
+	pad := strings.Repeat("0", 64)
+	if res.StatusCode != 200 || string(body) != pad+pEsc+pad {
+		t.Fatalf("url stream: status %d, escaped form survived or mangled", res.StatusCode)
+	}
+	noWireForm(t, "url stream", body, esc, "", pEsc)
+
+	// Basic composite alone — body, a response header literally named
+	// Authorization, and a stream split inside the composite.
+	res, body = doCred(t, e, "tok-one", "GET",
+		"https://api.anthropic.com/escb/body", nil, nil)
+	if res.StatusCode != 200 {
+		t.Fatalf("basic body: status %d", res.StatusCode)
+	}
+	if string(body) != "v=Basic "+pBas {
+		t.Fatalf("basic body: composite survived or mangled")
+	}
+	if got := ce.anthro.last().Get("Authorization"); got !=
+		"Basic "+base64.StdEncoding.EncodeToString([]byte("svc-agent:"+gh)) {
+		t.Fatal("upstream did not receive the real Basic credential")
+	}
+	res, _ = doCred(t, e, "tok-one", "GET",
+		"https://api.anthropic.com/scrub/authhdr", nil, nil)
+	if got := res.Header.Get("Authorization"); got != "Basic "+pBas {
+		t.Fatalf("reflected Authorization header not scrubbed to placeholder")
+	}
+	res, body = doCred(t, e, "tok-one", "GET",
+		"https://api.anthropic.com/escb/stream", nil, nil)
+	if res.StatusCode != 200 || string(body) != pad+"Basic "+pBas+pad {
+		t.Fatalf("basic stream: status %d, composite survived or mangled", res.StatusCode)
+	}
+	noWireForm(t, "basic stream", body, gh, "svc-agent", pBas)
+}
+
 // --- C3.4.2 -------------------------------------------------------------
-// A 40-byte secret split across every possible chunk boundary (39 split
-// points) is always scrubbed — the carry-over window makes the boundary
-// position irrelevant. Also: a whole stream split byte-at-a-time, and a
-// split inside the base64 form.
+// A secret split across every possible chunk boundary is always
+// scrubbed — the carry-over window makes the boundary position
+// irrelevant. Every §4.5 wire form (raw, base64, URL-escaped, Basic
+// composite) is split at every interior byte; also: a whole stream
+// split byte-at-a-time.
 func TestC342SplitPoints(t *testing.T) {
-	// C3.4.2 says "40-byte secret, 39 split points"; the fixture canary
-	// is 39 bytes — every interior split point is exercised.
-	secret := []byte(fxlib.Canary("anthropic"))
+	// Every interior split point is exercised for each §4.5 wire form
+	// (04 §4.5 covers all forms); the escapable secret makes the
+	// URL-encoded form differ from raw so the case is not vacuous.
+	secret := []byte(m3Secrets()["escapable"]["value"])
 	repl := []byte("csph_deadbeef_grant_0000000000000000000000")
-	pats := creds.Patterns(string(secret))
+	const user = "svc-agent"
+	pats := append(creds.Patterns(string(secret)), creds.BasicPattern(user, string(secret)))
 
 	collect := func() (func([]byte), *bytes.Buffer) {
 		b := &bytes.Buffer{}
 		return func(p []byte) { b.Write(p) }, b
 	}
-	for split := 1; split < len(secret); split++ {
-		body := append(append(append([]byte("pre "), secret[:split]...), secret[split:]...), []byte(" post")...)
-		s := creds.NewScrubber(pats, repl)
-		emit, buf := collect()
-		cut := 4 + split // inside the secret
-		s.Write(body[:cut], emit)
-		s.Write(body[cut:], emit)
-		s.Flush(emit)
-		out := buf.Bytes()
-		if bytes.Contains(out, secret) || !bytes.Contains(out, repl) {
-			t.Fatalf("split %d: secret survived or placeholder missing", split)
-		}
-		if s.Count != 1 {
-			t.Fatalf("split %d: count %d", split, s.Count)
+	forms := []struct {
+		name string
+		form []byte
+	}{
+		{"raw", secret},
+		{"b64", []byte(base64.StdEncoding.EncodeToString(secret))},
+		{"url", []byte(url.QueryEscape(string(secret)))},
+		{"basic", creds.BasicPattern(user, string(secret))},
+	}
+	for _, f := range forms {
+		for split := 1; split < len(f.form); split++ {
+			body := append(append(append([]byte("pre "), f.form[:split]...), f.form[split:]...), []byte(" post")...)
+			s := creds.NewScrubber(pats, repl)
+			emit, buf := collect()
+			cut := 4 + split // inside the form
+			s.Write(body[:cut], emit)
+			s.Write(body[cut:], emit)
+			s.Flush(emit)
+			out := buf.Bytes()
+			if bytes.Contains(out, f.form) || !bytes.Contains(out, repl) {
+				t.Fatalf("%s split %d: form survived or placeholder missing", f.name, split)
+			}
+			if s.Count != 1 {
+				t.Fatalf("%s split %d: count %d", f.name, split, s.Count)
+			}
 		}
 	}
 
-	// Byte-at-a-time across a mixed stream with all three wire forms.
+	// Byte-at-a-time across a mixed stream with all four wire forms.
 	b64s := base64.StdEncoding.EncodeToString(secret)
-	raw := append(append([]byte("x "), secret...), []byte(" y "+b64s)...)
+	enc := url.QueryEscape(string(secret))
+	bas := base64.StdEncoding.EncodeToString([]byte(user + ":" + string(secret)))
+	raw := []byte("x " + string(secret) + " y " + b64s + " z " + enc + " w " + bas)
 	s := creds.NewScrubber(pats, repl)
 	rng := rand.New(rand.NewSource(7))
 	emit, ebuf := collect()
@@ -143,11 +299,13 @@ func TestC342SplitPoints(t *testing.T) {
 	}
 	s.Flush(emit)
 	out := ebuf.Bytes()
-	if bytes.Contains(out, secret) || bytes.Contains(out, []byte(b64s)) {
-		t.Fatalf("byte-at-a-time stream leaked: %q", out)
+	for _, f := range forms {
+		if bytes.Contains(out, f.form) {
+			t.Fatalf("byte-at-a-time stream leaked the %s form", f.name)
+		}
 	}
-	if s.Count != 2 {
-		t.Fatalf("count %d, want 2", s.Count)
+	if s.Count != 4 {
+		t.Fatalf("count %d, want 4", s.Count)
 	}
 	// Memory stays bounded by the carry window no matter the stream size.
 	var tail bytes.Buffer
@@ -302,6 +460,35 @@ func TestC345NonCredentialedPassthrough(t *testing.T) {
 	plain, _ := io.ReadAll(zr)
 	if !bytes.Contains(plain, []byte(marker)) {
 		t.Fatalf("gunzipped passthrough body lost marker")
+	}
+}
+
+// Accept-Encoding is broker-controlled ("gzip, identity") exactly when
+// a credential was injected — the response must stay scannable — and is
+// forwarded byte-exact for non-credentialed requests (04 §4.5).
+func TestC345AcceptEncodingScope(t *testing.T) {
+	ce := startCredEnv(t, m34Grants, nil)
+	e := ce.env
+	const offer = "br, zstd"
+
+	res, _ := doCred(t, e, "tok-one", "GET",
+		"https://api.anthropic.com/scrub/raw",
+		map[string]string{"Accept-Encoding": offer}, nil)
+	if res.StatusCode != 200 {
+		t.Fatalf("credentialed status %d", res.StatusCode)
+	}
+	if got := ce.anthro.last().Get("Accept-Encoding"); got != "gzip, identity" {
+		t.Fatalf("credentialed upstream Accept-Encoding = %q, want broker-controlled", got)
+	}
+
+	res, _ = doCred(t, e, "tok-one", "GET",
+		"https://pypi.org/scrub/raw",
+		map[string]string{"Accept-Encoding": offer}, nil)
+	if res.StatusCode != 200 {
+		t.Fatalf("non-credentialed status %d", res.StatusCode)
+	}
+	if got := ce.pypi.last().Get("Accept-Encoding"); got != offer {
+		t.Fatalf("non-credentialed upstream Accept-Encoding = %q, want client's %q", got, offer)
 	}
 }
 

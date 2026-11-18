@@ -69,6 +69,10 @@ func m3Secrets() map[string]map[string]string {
 	return map[string]map[string]string{
 		"anthropic":    {"api-key": fxlib.Canary("anthropic")},
 		"github-token": {"value": fxlib.Canary("github-agent")},
+		// escapable carries characters URL-escaping rewrites, so the §4.5
+		// URL-encoded wire form differs from the raw bytes and a scrubber
+		// that skips the encoded form provably leaks (C3.4.1).
+		"escapable": {"value": "esc_tok+a/b=c&d"},
 	}
 }
 
@@ -92,7 +96,8 @@ type headerSink struct {
 }
 
 func (h *headerSink) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if strings.HasPrefix(r.URL.Path, "/scrub/") || r.URL.Path == "/redir" {
+	if strings.HasPrefix(r.URL.Path, "/scrub/") || strings.HasPrefix(r.URL.Path, "/escu/") ||
+		strings.HasPrefix(r.URL.Path, "/escb/") || r.URL.Path == "/redir" {
 		h.scrubEP(w, r)
 		return
 	}
@@ -193,6 +198,35 @@ func (h *headerSink) scrubEP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Location", r.URL.Query().Get("to"))
 		w.WriteHeader(http.StatusFound)
 		_, _ = fmt.Fprint(w, "redirect")
+	case r.URL.Path == "/scrub/form/raw":
+		_, _ = fmt.Fprintf(w, "v=%s", k)
+	case r.URL.Path == "/scrub/form/b64":
+		_, _ = fmt.Fprintf(w, "v=%s", base64.StdEncoding.EncodeToString([]byte(k)))
+	case r.URL.Path == "/scrub/form/hraw":
+		w.Header().Set("X-Leak-Key", k)
+		_, _ = fmt.Fprint(w, "header body")
+	case r.URL.Path == "/scrub/form/hb64":
+		w.Header().Set("X-Leak-Key", base64.StdEncoding.EncodeToString([]byte(k)))
+		_, _ = fmt.Fprint(w, "header body")
+	case r.URL.Path == "/scrub/authhdr":
+		// The inbound Authorization value reflected under the header's own
+		// name — for a basic grant it is "Basic base64(user:secret)".
+		w.Header().Set("Authorization", k)
+		_, _ = fmt.Fprint(w, "auth header")
+	case r.URL.Path == "/escu/body":
+		// The URL-encoded wire form alone (04 §4.5): only a scrubber that
+		// scans the escaped form catches this — raw and base64 are absent.
+		_, _ = fmt.Fprintf(w, "v=%s", url.QueryEscape(k))
+	case r.URL.Path == "/escu/hdr":
+		w.Header().Set("X-Leak-Key", url.QueryEscape(k))
+		_, _ = fmt.Fprint(w, "header body")
+	case r.URL.Path == "/escu/stream":
+		streamLeak(w, url.QueryEscape(k))
+	case r.URL.Path == "/escb/body":
+		// The Basic composite alone: k is "Basic base64(user:secret)".
+		_, _ = fmt.Fprintf(w, "v=%s", k)
+	case r.URL.Path == "/escb/stream":
+		streamLeak(w, k)
 	case r.URL.Path == "/scrub/basic":
 		// The Basic wire form: Authorization arrives as
 		// "Basic base64(user:secret)" upstream-side; reflect it whole.
@@ -203,6 +237,25 @@ func (h *headerSink) scrubEP(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "unknown scrub endpoint", http.StatusNotFound)
 	}
+}
+
+// streamLeak writes val mid-stream with flushes around each half, so the
+// value straddles real response-chunk boundaries on the broker's side.
+func streamLeak(w http.ResponseWriter, val string) {
+	fl, _ := w.(http.Flusher)
+	pad := bytes.Repeat([]byte{'0'}, 64)
+	flush := func() {
+		if fl != nil {
+			fl.Flush()
+		}
+	}
+	_, _ = w.Write(pad)
+	flush()
+	_, _ = w.Write([]byte(val[:len(val)/2]))
+	flush()
+	_, _ = w.Write([]byte(val[len(val)/2:]))
+	flush()
+	_, _ = w.Write(pad)
 }
 
 func (h *headerSink) count() int {
@@ -557,6 +610,68 @@ func TestC324GitCloneBasic(t *testing.T) {
 	}
 	if sawPH {
 		t.Fatal("fakehub saw a placeholder upstream")
+	}
+}
+
+// m324Grants: two Basic-inject grants on the header-recording upstream
+// with different configured usernames, so C3.2.4 asserts the exact
+// Authorization bytes for each, not merely that authentication worked.
+const m324Grants = `  grants:
+    - id: basic-alpha
+      match: {hosts: [api.anthropic.com], paths: [/basic/alpha]}
+      credential:
+        ref: {secret: github-token, key: value}
+        inject: {basic: {username: x-access-token}}
+        placeholderEnv: GH_TOK
+    - id: basic-beta
+      match: {hosts: [api.anthropic.com], paths: [/basic/beta]}
+      credential:
+        ref: {secret: github-token, key: value}
+        inject: {basic: {username: svc-user}}
+        placeholderEnv: GH_TOK
+    - id: open
+      match: {hosts: [api.anthropic.com]}
+    - id: pypi
+      match: {hosts: [pypi.org, files.pythonhosted.org]}
+`
+
+// The wire form is exactly "Basic "+base64(username ":" secret) — for
+// the configured username and for a second configured username — both
+// when the broker adds the header and when it replaces a placeholder.
+func TestC324BasicExactHeader(t *testing.T) {
+	ce := startCredEnv(t, m324Grants, nil)
+	e := ce.env
+	secret := fxlib.Canary("github-agent")
+
+	for _, tc := range []struct{ grant, path, user string }{
+		{"basic-alpha", "/basic/alpha", "x-access-token"},
+		{"basic-beta", "/basic/beta", "svc-user"},
+	} {
+		want := "Basic " + base64.StdEncoding.EncodeToString([]byte(tc.user+":"+secret))
+
+		// Absent credential slot: the broker adds the real Basic form.
+		res, body := doCred(t, e, "tok-one", "GET", "https://api.anthropic.com"+tc.path, nil, nil)
+		if res.StatusCode != 200 {
+			t.Fatalf("%s: status %d body %s", tc.grant, res.StatusCode, body)
+		}
+		if got := ce.anthro.last().Get("Authorization"); got != want {
+			// Failure text never echoes the value — a wrong form is still
+			// credential material and must not enter test output.
+			t.Fatalf("%s absent slot: upstream Authorization is not the exact Basic form", tc.grant)
+		}
+		canaryFree(t, "client response", body)
+
+		// Placeholder form: replaced by the identical real bytes.
+		p := ph(t, e, "s1", tc.grant)
+		auth := "Basic " + base64.StdEncoding.EncodeToString([]byte(tc.user+":"+p))
+		res, body = doCred(t, e, "tok-one", "GET", "https://api.anthropic.com"+tc.path,
+			map[string]string{"Authorization": auth}, nil)
+		if res.StatusCode != 200 {
+			t.Fatalf("%s placeholder slot: status %d body %s", tc.grant, res.StatusCode, body)
+		}
+		if got := ce.anthro.last().Get("Authorization"); got != want {
+			t.Fatalf("%s placeholder slot: upstream Authorization is not the exact Basic form", tc.grant)
+		}
 	}
 }
 
