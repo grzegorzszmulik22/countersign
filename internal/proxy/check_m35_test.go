@@ -140,6 +140,18 @@ func TestC352RateScope(t *testing.T) {
 	e := ce.env
 	const lim = "https://api.anthropic.com/lim/r"
 
+	// Freeze the sessions' rate clocks: the burst must be exactly
+	// rpm/10 regardless of host load — under a saturated regress run a
+	// >1 s stall between requests would otherwise legitimately refill a
+	// token (60 rpm refills 1/s) and shift the first denial right.
+	frozen := time.Now()
+	for _, id := range []string{"s1", "s2"} {
+		s := e.broker.Session(id)
+		s.rate.mu.Lock()
+		s.rate.now = func() time.Time { return frozen }
+		s.rate.mu.Unlock()
+	}
+
 	var denyAt = -1
 	for i := 0; i < 8; i++ {
 		res, _ := doCred(t, e, "tok-one", "GET", lim, nil, nil)
@@ -229,7 +241,7 @@ func TestC353StreamingBodyCap(t *testing.T) {
 	// upstream's ReadAll, which can lag the client's 403.
 	delivered := func(sink *headerSink, i int) int64 {
 		t.Helper()
-		sink.waitSeen(i, 3*time.Second)
+		sink.waitSeen(i, 10*time.Second)
 		return sink.bodyLenAt(i)
 	}
 
@@ -327,7 +339,7 @@ func TestC353StreamingBodyCap(t *testing.T) {
 	if nres != 2 {
 		t.Fatalf("concurrent streams: %d responses, want 2", nres)
 	}
-	if !ce.anthro.waitSeen(c0+1, 3*time.Second) {
+	if !ce.anthro.waitSeen(c0+1, 10*time.Second) {
 		t.Fatal("concurrent over-limit requests never reached upstream")
 	}
 	for j := c0; j <= c0+1; j++ {
