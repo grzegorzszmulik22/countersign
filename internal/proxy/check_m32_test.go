@@ -203,7 +203,10 @@ func (h *headerSink) scrubEP(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/scrub/form/b64":
 		_, _ = fmt.Fprintf(w, "v=%s", base64.StdEncoding.EncodeToString([]byte(k)))
 	case r.URL.Path == "/scrub/form/hraw":
-		w.Header().Set("X-Leak-Key", k)
+		// Two values: a scrubber must replace every occurrence, not the
+		// first only.
+		w.Header().Add("X-Leak-Key", k)
+		w.Header().Add("X-Leak-Key", k)
 		_, _ = fmt.Fprint(w, "header body")
 	case r.URL.Path == "/scrub/form/hb64":
 		w.Header().Set("X-Leak-Key", base64.StdEncoding.EncodeToString([]byte(k)))

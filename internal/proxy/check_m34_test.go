@@ -160,10 +160,17 @@ func TestC341ScrubbedForms(t *testing.T) {
 	if got := ce.anthro.last().Get("X-Api-Key"); got != anth {
 		t.Fatal("upstream did not receive the real credential")
 	}
+	// Every occurrence is replaced, not just the first — the endpoint
+	// emits the raw form twice in body and twice in the header.
+	res, body = doCred(t, e, "tok-one", "GET",
+		"https://api.anthropic.com/scrub/raw", nil, nil)
+	if res.StatusCode != 200 || string(body) != "start "+pAll+" mid "+pAll+" end" {
+		t.Fatalf("raw twice: status %d, an occurrence survived", res.StatusCode)
+	}
 	res, _ = doCred(t, e, "tok-one", "GET",
 		"https://api.anthropic.com/scrub/form/hraw", nil, nil)
-	if got := res.Header.Get("X-Leak-Key"); got != pAll {
-		t.Fatalf("raw header: X-Leak-Key not scrubbed to the placeholder")
+	if got := res.Header.Values("X-Leak-Key"); len(got) != 2 || got[0] != pAll || got[1] != pAll {
+		t.Fatalf("raw header: X-Leak-Key values not all scrubbed to the placeholder")
 	}
 
 	// Base64 form alone — body and response header.
