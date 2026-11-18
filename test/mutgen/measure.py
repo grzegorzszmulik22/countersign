@@ -178,43 +178,95 @@ def main() -> int:
         fails.append("MM1.1: no calibration/runs emitted")
 
     # ------------------------- MM1.2 ----------------------------------
-    cmd = [bench, "append", os.path.join(WORK, "ledger-a"),
-           rp, "40000", "32", str(args.runs)]
-    r = sh(cmd)
-    run_rows = ([s for s in samples_from(r.stdout)
-                 if s.get("metric") == "MM1.2"]
-                if r.returncode == 0 else [])
-    if r.returncode != 0 or not run_rows:
-        fails.append(f"MM1.2: bench failed: {r.stderr[-200:]}")
-    else:
+    # Each run is one csbench invocation; when strace(1) is present the run
+    # is wrapped in --seccomp-bpf -f -y so the group-commit count is exact:
+    # one fsync() on log/entries.jsonl per commit (each commit also syncs
+    # hashes.bin and the session index). Otherwise the in-process
+    # return-cohort estimate is used, marked as such.
+    import re
+    import shutil
+    strace = shutil.which("strace")
+    run_rows, exact = [], []
+    for i in range(args.runs):
+        ldir = os.path.join(WORK, f"ledger-a{i}")
+        inner = [bench, "append", ldir, rp, "20000", "32", "1"]
+        cmd = inner
+        trace = None
+        if strace:
+            trace = os.path.join(WORK, f"mm12-trace-{i}.txt")
+            cmd = [strace, "--seccomp-bpf", "-f", "-y",
+                   "-e", "trace=fsync,fdatasync", "-o", trace] + inner
+        r = sh(cmd)
+        rows = [s for s in samples_from(r.stdout)
+                if s.get("metric") == "MM1.2"]
+        if r.returncode != 0 or not rows:
+            fails.append(f"MM1.2 run {i}: bench failed: {r.stderr[-200:]}")
+            break
+        row = rows[0]
+        if trace:
+            commits = None
+            try:
+                tl = open(trace).read()
+                ent = len(re.findall(
+                    r"(?:fsync|fdatasync)\(\d+<[^>]*entries\.jsonl", tl))
+                tot = len(re.findall(r"(?:fsync|fdatasync)", tl))
+                # commits = fsyncs on entries.jsonl; tot/3 bounds it when
+                # a call was split unfinished/resumed (each commit issues
+                # exactly 3 syscalls here: entries+hashes+session idx).
+                commits = max(ent, tot // 3)
+                row["fsync_commits"] = commits
+                row["fsync_calls_on_entries"] = ent
+                row["fsync_syscalls_total"] = tot
+                row["fsync_per_record"] = commits / row["records"]
+            except OSError:
+                pass
+            if commits is None:
+                fails.append(f"MM1.2 run {i}: strace output unreadable — "
+                             "fsync count cannot be verified")
+                break
+            exact.append(commits)
+        run_rows.append(row)
+    if run_rows:
         rates = [s["records_per_cpu_s"] for s in run_rows]
         wall = [s["records_per_s"] for s in run_rows]
-        fpr = [s["fsync_per_record"] for s in run_rows]
-        commits = [s["fsync_commits"] for s in run_rows]
+        fpr = [s["fsync_per_record"] if "fsync_per_record" in s
+               else s["cluster_per_record"] for s in run_rows]
+        commits = [s.get("fsync_commits", s.get("cluster_commits"))
+                   for s in run_rows]
         for i, s in enumerate(run_rows):
-            if not (1 <= s["fsync_commits"] <= s["records"]):
-                fails.append(f"MM1.2 run {i}: impossible fsync_commits "
-                             f"{s['fsync_commits']} for {s['records']} "
-                             "records")
+            c = commits[i]
+            if c is None or not (1 <= c <= s["records"]):
+                fails.append(f"MM1.2 run {i}: impossible commit count "
+                             f"{c} for {s['records']} records")
         res = summarize(rates, target=MM12_RATE)
         fres = summarize(fpr, target=MM12_FSYNC, lower_better=True)
-        res.update({"command": " ".join(cmd),
+        res.update({"command": ("strace --seccomp-bpf -f -y -e "
+                                "trace=fsync,fdatasync " if strace else "")
+                               + f"{bench} append {WORK}/ledger-a<i> "
+                               f"{rp} 20000 32 1",
+                    "fsync_counting": ("exact: fsync() calls on "
+                                       "log/entries.jsonl via strace"
+                                       if exact else
+                                       "estimate: append-return cohorts"),
                     "wall_records_per_s": wall,
                     "fsync_commits_samples": commits,
+                    "cluster_commits_estimate": [
+                        s.get("cluster_commits") for s in run_rows],
                     "fsync_per_record": fres,
                     "median_commit_gap_ms": [
                         s.get("median_commit_gap_ms") for s in run_rows],
-                    "load1_samples": {f"run{s['run']}": s.get(
-                        "load1_samples") for s in run_rows},
+                    "load1_samples": {f"run{i}": s.get(
+                        "load1_samples") for i, s in enumerate(run_rows)},
                     "target_text": ">= 5000 rec/cpu-s and <= 1 fsync "
                                    "(group commit) per 10 records",
-                    "fsync_note": "each group commit syncs the entries, "
-                                  "hashes and session index files"})
+                    "fsync_note": "one group commit fsyncs entries.jsonl, "
+                                  "hashes.bin and the session index"})
         res["pass"] = res["pass"] and fres["median"] <= MM12_FSYNC
         results["metrics"]["MM1.2"] = res
         status = "PASS" if res["pass"] else "FAIL"
         print(f"MM1.2: median {res['median']:.0f} rec/cpu-s, fsync/rec "
-              f"{fres['median']:.3f} {status}")
+              f"{fres['median']:.3f} ({'exact' if exact else 'est'}) "
+              f"{status}")
         if not res["pass"]:
             fails.append(f"MM1.2: rate {res['median']:.0f} or fsync ratio "
                          f"{fres['median']:.3f} missed target")

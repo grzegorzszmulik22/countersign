@@ -12,10 +12,13 @@
 // second and recorded with every run; MM1.3 is judged only on runs whose
 // samples all stayed at or below the core count.
 //
-// The group-commit count is observed, not instrumented: every Append returns
-// only after a commit covering it, so append-return timestamps cluster at
-// commit instants (>= 2 ms apart by the fsync cadence). Each cluster is one
-// group commit — the spec's "fsync" (03 §5: an fsync at most every 2 ms).
+// The group-commit count is reported two ways: in-process it is estimated
+// from append-return timestamp cohorts (appends covered by one commit are
+// released together, so returns cluster at commit instants); the exact
+// count is obtained by the harness, which runs this mode under
+// "strace --seccomp-bpf -f -y -e trace=fsync,fdatasync" and counts fsync
+// calls on log/entries.jsonl — one per group commit (03 §5: an fsync at
+// most every 2 ms, covering entries, hashes and session indices).
 //
 //	csbench verify   <bundle.tar> <keys.json> <runs>
 //	csbench append   <dir> <records.jsonl> <n> <workers> <runs>
@@ -268,7 +271,7 @@ func benchAppend(dir, linesPath string, n, workers, runs int) {
 			"cpu_s":   cpuS, "wall_s": el,
 			"records_per_cpu_s": float64(n) / cpuS,
 			"records_per_s":     float64(n) / el,
-			"fsync_commits":     commits, "fsync_per_record": float64(commits) / float64(n),
+			"cluster_commits":   commits, "cluster_per_record": float64(commits) / float64(n),
 			"median_commit_gap_ms": medGap,
 			"load1_samples":        *samples, "load1_max": loadMax(*samples),
 		})
