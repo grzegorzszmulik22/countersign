@@ -22,6 +22,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -36,12 +37,53 @@ func fatal(err error) {
 	os.Exit(2)
 }
 
-func writeJSON(v any) {
+// writeLine writes one line to w. The command's stdout is its product:
+// a failed write must fail the command, never exit 0 with output lost.
+func writeLine(w io.Writer, s string) error {
+	_, err := fmt.Fprintln(w, s)
+	return err
+}
+
+// writeJSONTo marshals v indented and writes it to w.
+func writeJSONTo(w io.Writer, v any) error {
 	out, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
+		return err
+	}
+	return writeLine(w, string(out))
+}
+
+func writeJSON(v any) {
+	if err := writeJSONTo(os.Stdout, v); err != nil {
 		fatal(err)
 	}
-	fmt.Println(string(out))
+}
+
+// reconcileReadBundle and reconcileRun are the V16 inputs — package vars
+// so tests can inject a failure and prove a CLEAN-class verdict is never
+// returned without reconciliation having run.
+var reconcileReadBundle = ledger.ReadBundle
+var reconcileRun = reconcile.ReconcileBundle
+
+// applyReconcile runs step V16 of 03 §10. Any failure to re-read the
+// bundle or to reconcile lands in Errors and forces INVALID: --reconcile
+// may never report a CLEAN-class verdict it did not compute.
+func applyReconcile(res *ledger.VerifyResult, bundle []byte) {
+	members, err := reconcileReadBundle(bundle)
+	if err != nil {
+		res.Errors = append(res.Errors,
+			ledger.Finding{Code: "E_BUNDLE", Detail: fmt.Sprintf("reconcile: %v", err)})
+		res.Verdict = "INVALID"
+		return
+	}
+	rc, err := reconcileRun(members, nil)
+	if err != nil {
+		res.Errors = append(res.Errors,
+			ledger.Finding{Code: "E_POLICY", Detail: fmt.Sprintf("reconcile: %v", err)})
+		res.Verdict = "INVALID"
+		return
+	}
+	mergeReconcile(res, rc)
 }
 
 // verdict merges the reconciliation findings into the base verdict
@@ -80,9 +122,15 @@ func mergeReconcile(res *ledger.VerifyResult, rc *reconcile.Result) {
 }
 
 func cmdVerify(args []string) {
-	// `csverify <bundle> --keys keys.json [--reconcile]` — the spec's
-	// order has the positional first, so parse the flags by hand.
-	var keysPath, bundlePath string
+	os.Exit(runVerify(args, os.Stdout))
+}
+
+// runVerify is `csverify <bundle> --keys keys.json [--reconcile]` with
+// the result writer passed in: 0 for CLEAN/CLEAN_WITH_DENIALS, 1 for
+// any other verdict, 2 for usage/read/write failure.
+func runVerify(args []string, stdout io.Writer) int {
+	// The spec's order has the positional first, so parse flags by hand.
+	var keysPath string
 	var doReconcile bool
 	rest := []string{}
 	for i := 0; i < len(args); i++ {
@@ -101,40 +149,40 @@ func cmdVerify(args []string) {
 	}
 	if len(rest) != 1 || keysPath == "" {
 		fmt.Fprintln(os.Stderr, "usage: csverify <bundle> --keys keys.json [--reconcile]")
-		os.Exit(2)
+		return 2
 	}
-	bundlePath = rest[0]
-	bundle, err := os.ReadFile(bundlePath)
+	bundle, err := os.ReadFile(rest[0])
 	if err != nil {
-		fatal(err)
+		fmt.Fprintln(os.Stderr, err)
+		return 2
 	}
 	m, err := keys.LoadManifest(keysPath)
 	if err != nil {
-		fatal(err)
+		fmt.Fprintln(os.Stderr, err)
+		return 2
 	}
 	res := ledger.VerifyBundle(bundle, m)
 	if doReconcile {
-		if members, merr := ledger.ReadBundle(bundle); merr == nil {
-			if rc, rerr := reconcile.ReconcileBundle(members, nil); rerr == nil {
-				mergeReconcile(res, rc)
-			} else {
-				res.Errors = append(res.Errors,
-					ledger.Finding{Code: "E_POLICY", Detail: fmt.Sprintf("reconcile: %v", rerr)})
-				res.Verdict = "INVALID"
-			}
-		}
+		applyReconcile(res, bundle)
 	}
-	writeJSON(res)
+	if err := writeJSONTo(stdout, res); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
 	if res.Verdict == "CLEAN" || res.Verdict == "CLEAN_WITH_DENIALS" {
-		os.Exit(0)
+		return 0
 	}
-	os.Exit(1)
+	return 1
 }
 
 // cmdExplain prints the recorded vs recomputed attribution of one effect
 // (spec/04 §6.5): the recomputed values stand on their own; the findings
 // list names every disagreement.
 func cmdExplain(args []string) {
+	os.Exit(runExplain(args, os.Stdout))
+}
+
+func runExplain(args []string, stdout io.Writer) int {
 	var keysPath string
 	rest := []string{}
 	for i := 0; i < len(args); i++ {
@@ -151,27 +199,32 @@ func cmdExplain(args []string) {
 	}
 	if len(rest) != 2 || keysPath == "" {
 		fmt.Fprintln(os.Stderr, "usage: csverify explain <bundle> --keys keys.json <effect_id>")
-		os.Exit(2)
+		return 2
 	}
 	bundle, err := os.ReadFile(rest[0])
 	if err != nil {
-		fatal(err)
+		fmt.Fprintln(os.Stderr, err)
+		return 2
 	}
 	if _, err := keys.LoadManifest(keysPath); err != nil {
-		fatal(err)
+		fmt.Fprintln(os.Stderr, err)
+		return 2
 	}
 	effectID := rest[1]
 	members, err := ledger.ReadBundle(bundle)
 	if err != nil {
-		fatal(err)
+		fmt.Fprintln(os.Stderr, err)
+		return 2
 	}
 	meta, records, err := reconcile.BundleInput(members)
 	if err != nil {
-		fatal(err)
+		fmt.Fprintln(os.Stderr, err)
+		return 2
 	}
 	rc, err := reconcile.Reconcile(meta, records, nil)
 	if err != nil {
-		fatal(err)
+		fmt.Fprintln(os.Stderr, err)
+		return 2
 	}
 	var recorded map[string]any
 	for _, r := range records {
@@ -205,7 +258,11 @@ func cmdExplain(args []string) {
 	if rc.Effects[effectID] == nil && recorded == nil {
 		out["error"] = "no such effect"
 	}
-	writeJSON(out)
+	if err := writeJSONTo(stdout, out); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	return 0
 }
 
 func cmdReconcileTrace(path, packsDir string) {
@@ -232,19 +289,27 @@ func cmdReconcileTrace(path, packsDir string) {
 // cmdReconcileBatch reads a JSONL file of {"meta","records"} lines and
 // writes one result object per line — the differential harness.
 func cmdReconcileBatch(path, packsDir string) {
+	os.Exit(runReconcileBatch(path, packsDir, os.Stdout))
+}
+
+// runReconcileBatch is cmdReconcileBatch with the output writer passed
+// in, so a test can inject a failing writer: a write error exits 2, a
+// reconciled-line error exits 1, a clean run exits 0.
+func runReconcileBatch(path, packsDir string, stdout io.Writer) int {
 	packs, err := reconcile.LoadPacks(packsDir)
 	if err != nil {
-		fatal(err)
+		fmt.Fprintln(os.Stderr, err)
+		return 2
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		fatal(err)
+		fmt.Fprintln(os.Stderr, err)
+		return 2
 	}
 	defer func() { _ = f.Close() }()
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 1<<20), 64<<20)
-	w := bufio.NewWriter(os.Stdout)
-	defer func() { _ = w.Flush() }()
+	w := bufio.NewWriter(stdout)
 	bad := false
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
@@ -256,37 +321,53 @@ func cmdReconcileBatch(path, packsDir string) {
 		if err == nil {
 			res, err = reconcile.Reconcile(meta, records, packs)
 		}
+		var b []byte
 		if err != nil {
 			bad = true
-			b, _ := json.Marshal(map[string]any{"error": err.Error()})
-			_, _ = fmt.Fprintln(w, string(b))
-			continue
+			b, err = json.Marshal(map[string]any{"error": err.Error()})
+		} else {
+			b, err = json.Marshal(res)
 		}
-		b, err := json.Marshal(res)
 		if err != nil {
-			fatal(err)
+			fmt.Fprintln(os.Stderr, err)
+			return 2
 		}
-		_, _ = fmt.Fprintln(w, string(b))
+		if _, err := fmt.Fprintln(w, string(b)); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
 	}
 	if err := sc.Err(); err != nil {
-		fatal(err)
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	if err := w.Flush(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
 	}
 	if bad {
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
 
 // cmdReconcileCorpus runs every *.jsonl trace in dir and diffs the
 // recomputed result against the trace.meta expect block (same rule as
 // the reference's `corpus` command).
 func cmdReconcileCorpus(dir, packsDir string) {
+	os.Exit(runReconcileCorpus(dir, packsDir, os.Stdout))
+}
+
+func runReconcileCorpus(dir, packsDir string, stdout io.Writer) int {
 	packs, err := reconcile.LoadPacks(packsDir)
 	if err != nil {
-		fatal(err)
+		fmt.Fprintln(os.Stderr, err)
+		return 2
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		fatal(err)
+		fmt.Fprintln(os.Stderr, err)
+		return 2
 	}
 	var names []string
 	for _, e := range entries {
@@ -296,14 +377,21 @@ func cmdReconcileCorpus(dir, packsDir string) {
 	}
 	sort.Strings(names)
 	fails := 0
+	out := func(format string, args ...any) error {
+		return writeLine(stdout, fmt.Sprintf(format, args...))
+	}
 	for _, name := range names {
 		path := dir + "/" + name
 		f, err := os.Open(path)
 		if err != nil {
-			fatal(err)
+			fmt.Fprintln(os.Stderr, err)
+			return 2
 		}
 		meta, records, err := reconcile.ParseTrace(f)
-		_ = f.Close()
+		if cerr := f.Close(); cerr != nil {
+			fmt.Fprintln(os.Stderr, cerr)
+			return 2
+		}
 		var diffs []string
 		if err != nil {
 			diffs = []string{err.Error()}
@@ -316,18 +404,32 @@ func cmdReconcileCorpus(dir, packsDir string) {
 				diffs = compareExpected(meta, res)
 			}
 		}
+		var werr error
 		if len(diffs) > 0 {
 			fails++
-			fmt.Printf("%-40s %s\n", name, strings.Join(diffs[:firstN(3, len(diffs))], "; "))
+			werr = out("%-40s %s", name, strings.Join(diffs[:firstN(3, len(diffs))], "; "))
 		} else {
-			fmt.Printf("%-40s ok\n", name)
+			werr = out("%-40s ok", name)
+		}
+		if werr != nil {
+			fmt.Fprintln(os.Stderr, werr)
+			return 2
 		}
 	}
+	var line string
 	if fails > 0 {
-		fmt.Printf("corpus: %d/%d traces FAILED\n", fails, len(names))
-		os.Exit(1)
+		line = fmt.Sprintf("corpus: %d/%d traces FAILED", fails, len(names))
+	} else {
+		line = fmt.Sprintf("corpus: all %d traces as expected", len(names))
 	}
-	fmt.Printf("corpus: all %d traces as expected\n", len(names))
+	if err := writeLine(stdout, line); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	if fails > 0 {
+		return 1
+	}
+	return 0
 }
 
 func firstN(a, b int) int {
