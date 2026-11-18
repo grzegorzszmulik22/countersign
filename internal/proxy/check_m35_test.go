@@ -455,14 +455,14 @@ func TestC353CapBodyReads(t *testing.T) {
 		}
 	}
 	sizeTables := [][]int{
-		{1},                 // one byte per Read — every count value
-		{max - 1},           // boundary exactly at max-1
-		{max},               // boundary exactly at max
-		{max + 1},           // one chunk bigger than the cap
-		{8192},              // single giant read
-		{max / 2, 3, max},  // mixed sizes, irregular landing
-		{1025, 3071},       // the lim-stream deferred split
-		{max - 3, 2, 7},    // second read lands count exactly at max-1
+		{1},               // one byte per Read — every count value
+		{max - 1},         // boundary exactly at max-1
+		{max},             // boundary exactly at max
+		{max + 1},         // one chunk bigger than the cap
+		{8192},            // single giant read
+		{max / 2, 3, max}, // mixed sizes, irregular landing
+		{1025, 3071},      // the lim-stream deferred split
+		{max - 3, 2, 7},   // second read lands count exactly at max-1
 	}
 	for _, sizes := range sizeTables {
 		got, err := run(max, sizes...)
