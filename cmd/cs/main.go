@@ -34,6 +34,8 @@ func main() {
 	dataDir := fs.String("data-dir", "", "runner data directory (default: $XDG_DATA_HOME/countersign)")
 	runDir := fs.String("run-dir", "", "sandbox-visible run directory (default: mktemp)")
 	fs.Usage = func() {
+		// Usage output: a write failure means stderr is already
+		// unreadable, so there is nowhere better to report it.
 		_, _ = fmt.Fprintln(fs.Output(), "usage: cs run [--policy FILE] [--cooperative] -- COMMAND [ARGS...]")
 		fs.PrintDefaults()
 	}
@@ -55,6 +57,8 @@ func main() {
 		cmd = cmd[1:]
 	}
 	if len(cmd) == 0 {
+		// Same rationale as Usage: stderr is the only channel a CLI
+		// has for argument errors.
 		_, _ = fmt.Fprintln(fs.Output(), "cs run: a command after -- is required")
 		os.Exit(2)
 	}
@@ -70,10 +74,14 @@ func main() {
 		Command:     cmd,
 	})
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "cs run:", err)
+		// Same rationale as Usage: stderr is the only channel a CLI
+		// has for run errors.
+		_, _ = fmt.Fprintln(os.Stderr, "cs run:", err)
 		os.Exit(1)
 	}
-	fmt.Fprintf(os.Stderr, "cs: session %s\ncs: boundary %s\ncs: bundle %s\ncs: run-dir %s\n",
+	// Session summary to stderr; a broken stderr cannot be reported
+	// any better than this.
+	_, _ = fmt.Fprintf(os.Stderr, "cs: session %s\ncs: boundary %s\ncs: bundle %s\ncs: run-dir %s\n",
 		res.SessionID, res.Boundary, res.BundlePath, res.RunDir)
 	os.Exit(res.ExitCode)
 }

@@ -20,18 +20,19 @@ import (
 type unixRelay struct {
 	ln     *net.UnixListener
 	broker string
+	logf   func(string, ...any)
 	wg     sync.WaitGroup
 	conns  sync.Map // net.Conn → struct{} for close-time cleanup
 }
 
-func newUnixRelay(sockPath, brokerAddr string) (*unixRelay, error) {
+func newUnixRelay(sockPath, brokerAddr string, logf func(string, ...any)) (*unixRelay, error) {
 	laddr := &net.UnixAddr{Name: sockPath, Net: "unix"}
 	ln, err := net.ListenUnix("unix", laddr)
 	if err != nil {
 		return nil, fmt.Errorf("relay listen: %w", err)
 	}
 	ln.SetUnlinkOnClose(true)
-	r := &unixRelay{ln: ln, broker: brokerAddr}
+	r := &unixRelay{ln: ln, broker: brokerAddr, logf: logf}
 	r.wg.Add(1)
 	go r.acceptLoop()
 	return r, nil
@@ -51,6 +52,9 @@ func (r *unixRelay) acceptLoop() {
 func (r *unixRelay) serve(c *net.UnixConn) {
 	up, err := net.DialTimeout("tcp", r.broker, 10*time.Second)
 	if err != nil {
+		r.logf("relay dial %s: %v", r.broker, err)
+		// Nothing else can be done with this conn — close errors
+		// here add no information.
 		_ = c.Close()
 		return
 	}
@@ -60,37 +64,61 @@ func (r *unixRelay) serve(c *net.UnixConn) {
 		r.conns.Delete(c)
 		r.conns.Delete(up)
 	}()
-	splice(c, up)
+	if err := splice(c, up); err != nil {
+		r.logf("relay splice %s ↔ %s: %v", c.RemoteAddr(), up.RemoteAddr(), err)
+	}
 }
 
-// splice copies both directions and propagates half-close.
-func splice(a, b net.Conn) {
+// splice copies both directions and propagates half-close. Copy errors
+// are reported to the caller: a truncated stream through the boundary
+// is a boundary event, not silence.
+func splice(a, b net.Conn) error {
 	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var first error
+	report := func(err error) {
+		if err == nil {
+			return
+		}
+		mu.Lock()
+		if first == nil {
+			first = err
+		}
+		mu.Unlock()
+	}
 	wg.Add(2)
 	go func() {
-		_, _ = io.Copy(b, a)
+		defer wg.Done()
+		_, err := io.Copy(b, a)
+		report(err)
 		if tc, ok := b.(*net.TCPConn); ok {
+			// Half-close is best effort: a peer that died mid-copy
+			// makes it fail, and both conns are closed below.
 			_ = tc.CloseWrite()
 		}
-		wg.Done()
 	}()
 	go func() {
-		_, _ = io.Copy(a, b)
+		defer wg.Done()
+		_, err := io.Copy(a, b)
+		report(err)
 		if uc, ok := a.(*net.UnixConn); ok {
 			_ = uc.CloseWrite()
 		}
 		if tc, ok := a.(*net.TCPConn); ok {
 			_ = tc.CloseWrite()
 		}
-		wg.Done()
 	}()
 	wg.Wait()
+	// Both copies are done; close failures now cannot lose data.
 	_ = a.Close()
 	_ = b.Close()
+	return first
 }
 
 // close stops accepting and closes in-flight connections.
 func (r *unixRelay) close() {
+	// Shutdown path: the listener and conns are torn down regardless
+	// of close errors, which only ever mean "already closed".
 	_ = r.ln.Close()
 	r.conns.Range(func(k, _ any) bool {
 		_ = k.(net.Conn).Close()

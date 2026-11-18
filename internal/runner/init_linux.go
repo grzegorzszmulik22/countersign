@@ -27,7 +27,7 @@ import (
 // init exits with the agent's status.
 func InitMain(args []string) int {
 	var relaySock, dataDir, caPath, runDir, token, ph, envFD string
-	var argv []string
+	var argv, covers []string
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		if a == "--" {
@@ -56,6 +56,8 @@ func InitMain(args []string) int {
 			ph = val
 		case "--env-fd":
 			envFD = val
+		case "--cover":
+			covers = append(covers, val)
 		default:
 			fmt.Fprintln(os.Stderr, "cs-init: unknown flag", a)
 			return 2
@@ -80,6 +82,8 @@ func InitMain(args []string) int {
 		}
 		f := os.NewFile(uintptr(n), "envpipe")
 		data, err := io.ReadAll(f)
+		// ReadAll consumed the stream; a close error on an already
+		// drained pipe carries no information for us.
 		_ = f.Close()
 		if err != nil {
 			return fail(fmt.Errorf("read env pipe: %w", err))
@@ -108,6 +112,18 @@ func InitMain(args []string) int {
 		return fail(fmt.Errorf("proc mount: %w", err))
 	}
 
+	// 2b. Credential channels that are files, not env vars: the shared
+	// filesystem exposes them even behind the env allowlist, and the
+	// network namespace cannot block a unix socket — so each ambient
+	// agent socket and every well-known credential path is hidden
+	// under an empty tmpfs (dirs) or /dev/null (files/sockets). A
+	// cover that fails mounts nothing and fails closed.
+	for _, c := range covers {
+		if err := coverPath(c); err != nil {
+			return fail(fmt.Errorf("cover %s: %w", c, err))
+		}
+	}
+
 	// 3. Relay: the only reachable peer is the parent's Unix socket,
 	// which splices to the broker.
 	ln, err := listenLoopback()
@@ -131,7 +147,9 @@ func InitMain(args []string) int {
 	}
 	env := sandboxEnv(ambient, proxyURL(fmt.Sprintf("127.0.0.1:%d", relayPort), token), caPath, placeholders)
 	if runDir != "" {
-		writeProxyEnv(runDir, env, fmt.Sprintf("127.0.0.1:%d", relayPort))
+		if err := writeProxyEnv(runDir, env, fmt.Sprintf("127.0.0.1:%d", relayPort)); err != nil {
+			return fail(fmt.Errorf("proxy.env: %w", err))
+		}
 	}
 
 	// 5. Spawn the agent in its own process group so signal forwarding
@@ -179,11 +197,16 @@ func InitMain(args []string) int {
 	for {
 		select {
 		case s := <-sig:
+			killSig := syscall.SIGKILL
 			if !forwarded {
 				forwarded = true
-				_ = syscall.Kill(-proc.Pid, s.(syscall.Signal))
-			} else {
-				_ = syscall.Kill(-proc.Pid, syscall.SIGKILL)
+				killSig = s.(syscall.Signal)
+			}
+			// ESRCH (group already gone) is expected on a second
+			// signal; anything else still ends the session via the
+			// post-exit group SIGKILL below.
+			if err := syscall.Kill(-proc.Pid, killSig); err != nil && err != syscall.ESRCH {
+				fmt.Fprintln(os.Stderr, "cs-init: forward signal:", err)
 			}
 		case r := <-reaped:
 			if r.err != nil {
@@ -200,8 +223,11 @@ func InitMain(args []string) int {
 agentDone:
 	// The agent is done: kill whatever survived in its group, then exit
 	// with its status. Anything that escaped the group dies with the
-	// pid namespace when init exits.
-	_ = syscall.Kill(-proc.Pid, syscall.SIGKILL)
+	// pid namespace when init exits. ESRCH just means the group is
+	// already empty — the outcome we wanted anyway.
+	if err := syscall.Kill(-proc.Pid, syscall.SIGKILL); err != nil && err != syscall.ESRCH {
+		fmt.Fprintln(os.Stderr, "cs-init: group kill:", err)
+	}
 	if ws.Exited() {
 		return ws.ExitStatus()
 	}
@@ -215,7 +241,7 @@ agentDone:
 // connects it to the broker.
 func (s *session) spawnEnforced(_ context.Context) (*sandboxCmd, error) {
 	relaySock := s.runDir + "/relay.sock"
-	r, err := newUnixRelay(relaySock, s.brokerAddr)
+	r, err := newUnixRelay(relaySock, s.brokerAddr, s.logf)
 	if err != nil {
 		return nil, err
 	}
@@ -234,8 +260,11 @@ func (s *session) spawnEnforced(_ context.Context) (*sandboxCmd, error) {
 		"--token=" + s.token,
 		"--ph=" + strings.Join(ph, ";"),
 		"--env-fd=3",
-		"--",
 	}
+	for _, c := range coversFor(s.ambient) {
+		args = append(args, "--cover="+c)
+	}
+	args = append(args, "--")
 	args = append(args, s.command...)
 
 	// The agent's ambient env goes over an inherited pipe, not init's
@@ -251,22 +280,40 @@ func (s *session) spawnEnforced(_ context.Context) (*sandboxCmd, error) {
 	cmd := spawnInNS(args, initEnv, []*os.File{envR})
 	if err := cmd.Start(); err != nil {
 		r.close()
-		_ = envR.Close()
-		_ = envW.Close()
+		if cerr := envR.Close(); cerr != nil {
+			err = fmt.Errorf("%w (env pipe close: %v)", err, cerr)
+		}
+		if werr := envW.Close(); werr != nil {
+			err = fmt.Errorf("%w (env pipe close: %v)", err, werr)
+		}
 		return nil, fmt.Errorf("namespace spawn: %w", err)
 	}
-	_ = envR.Close() // child's copy is fd 3 now
+	// The parent's copy of the read end is dead weight now — the child
+	// holds fd 3. Close errors here can't lose data already written.
+	if err := envR.Close(); err != nil {
+		fmt.Fprintf(os.Stderr, "cs: env pipe close: %v\n", err)
+	}
+	envDone := make(chan error, 1)
 	go func() {
+		var werr error
 		for _, kv := range s.ambient {
-			_, _ = envW.WriteString(kv)
-			_, _ = envW.WriteString("\x00")
+			if _, err := envW.WriteString(kv + "\x00"); err != nil {
+				werr = fmt.Errorf("env pipe write: %w", err)
+				break
+			}
 		}
-		_ = envW.Close()
+		if err := envW.Close(); err != nil && werr == nil {
+			werr = fmt.Errorf("env pipe close: %w", err)
+		}
+		envDone <- werr
 	}()
 	return &sandboxCmd{
-		cmd: cmd,
+		cmd:    cmd,
+		envErr: envDone,
 		onSignal: func() {
-			_ = cmd.Process.Signal(syscall.SIGINT)
+			if err := cmd.Process.Signal(syscall.SIGINT); err != nil {
+				fmt.Fprintf(os.Stderr, "cs: signal init: %v\n", err)
+			}
 		},
 	}, nil
 }
@@ -282,10 +329,16 @@ func relayToSock(ln net.Listener, sock string) {
 		go func() {
 			up, err := net.Dial("unix", sock)
 			if err != nil {
+				fmt.Fprintln(os.Stderr, "cs-init: relay dial:", err)
+				// The upstream is gone; drop the sandbox side.
+				// A close error here reports nothing new — the
+				// conn is already considered dead.
 				_ = c.Close()
 				return
 			}
-			splice(c, up)
+			if err := splice(c, up); err != nil {
+				fmt.Fprintln(os.Stderr, "cs-init: relay splice:", err)
+			}
 		}()
 	}
 }
@@ -296,6 +349,8 @@ func loUp() error {
 	if err != nil {
 		return err
 	}
+	// The ioctl fd is dropped when the namespace dies either way; a
+	// close error here cannot affect the interface state we just set.
 	defer func() { _ = syscall.Close(s) }()
 	type ifreq struct {
 		name  [16]byte
@@ -338,7 +393,7 @@ func envValue(env []string, name string) string {
 // writeProxyEnv drops the sandbox's proxy environment into the run dir
 // so out-of-band checks (e.g. env -i grandchildren) can recover it.
 // relay names where boundary traffic flows.
-func writeProxyEnv(runDir string, env []string, relay string) {
+func writeProxyEnv(runDir string, env []string, relay string) error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "relay=%s\n", relay)
 	for _, kv := range env {
@@ -348,5 +403,23 @@ func writeProxyEnv(runDir string, env []string, relay string) {
 			}
 		}
 	}
-	_ = os.WriteFile(runDir+"/proxy.env", []byte(b.String()), 0o644)
+	return os.WriteFile(runDir+"/proxy.env", []byte(b.String()), 0o644)
+}
+
+// coverPath hides one host path inside the mount namespace: an existing
+// directory goes under an empty tmpfs; a file or socket gets /dev/null
+// bound over it (a unix socket stays a file — the netns cannot block
+// it, only the mount namespace can). Missing paths need no cover.
+func coverPath(path string) error {
+	st, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if st.IsDir() {
+		return mountTmpfs(path)
+	}
+	return syscall.Mount("/dev/null", path, "", syscall.MS_BIND, "")
 }

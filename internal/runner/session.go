@@ -66,9 +66,14 @@ type session struct {
 	placeholders map[string]string // env name → csph_ value
 	ambient      []string          // environment the command inherits
 	command      []string
+	logf         func(string, ...any)
 }
 
 func newSession(ctx context.Context, opt Options, dataDir string, ambient []string, boundary string) (*session, error) {
+	logf := opt.Logf
+	if logf == nil {
+		logf = func(string, ...any) {}
+	}
 	s := &session{
 		id:       evidence.NewULID(nil),
 		dataDir:  dataDir,
@@ -76,6 +81,7 @@ func newSession(ctx context.Context, opt Options, dataDir string, ambient []stri
 		worldID:  evidence.NewULID(nil),
 		ambient:  ambient,
 		command:  opt.Command,
+		logf:     logf,
 	}
 	tok := make([]byte, 16)
 	if _, err := rand.Read(tok); err != nil {
@@ -98,7 +104,9 @@ func newSession(ctx context.Context, opt Options, dataDir string, ambient []stri
 	if s.pol, err = policy.Load(polBytes); err != nil {
 		return nil, fmt.Errorf("policy: %w", err)
 	}
-	s.placeholders = placeholdersFor(s.pol, s.id)
+	if s.placeholders, err = placeholdersFor(s.pol, s.id); err != nil {
+		return nil, err
+	}
 
 	// Runner keys: four persistent Ed25519 signers under the data dir.
 	if err := s.loadKeys(); err != nil {
@@ -147,7 +155,10 @@ func newSession(ctx context.Context, opt Options, dataDir string, ambient []stri
 		SessionsFile: sessFile,
 		RecordsDir:   recordsDir,
 		Sink:         s.bridge,
-		Logf:         func(f string, a ...any) { _, _ = fmt.Fprintf(blog, f+"\n", a...) },
+		// broker.log is diagnostics only — the proxy API gives no
+		// error return for log writes, and a full disk must not
+		// take the session down through the logging path.
+		Logf: func(f string, a ...any) { _, _ = fmt.Fprintf(blog, f+"\n", a...) },
 	})
 	if err != nil {
 		return nil, fmt.Errorf("broker: %w", err)
@@ -225,10 +236,16 @@ func (s *session) spawnAndWait(ctx context.Context) (code int, interrupted bool,
 
 	select {
 	case <-done:
+		if err := cmd.envWriteErr(); err != nil {
+			return 0, false, fmt.Errorf("ambient env to sandbox: %w", err)
+		}
 		return cmd.exitCode(), false, nil
 	case <-ctx.Done():
 		interrupted = true
 		cmd.interrupt(done)
+		if err := cmd.envWriteErr(); err != nil {
+			return 0, true, fmt.Errorf("ambient env to sandbox: %w", err)
+		}
 		code = cmd.exitCode()
 		if code <= 0 {
 			code = 130
@@ -271,10 +288,14 @@ func (s *session) sealAndBundle(code int, interrupted bool) (string, error) {
 		return "", err
 	}
 
+	counts, err := s.counts()
+	if err != nil {
+		return "", err
+	}
 	seal := &evidence.SessionSealBody{
 		Reason:   reason,
 		Emitters: []evidence.SealEmitter{s.brokerEm.sealRef(), s.worldEm.sealRef(), s.ctl.sealRef()},
-		Counts:   s.counts(),
+		Counts:   counts,
 	}
 	if err := s.ctl.emit("session.seal", seal); err != nil {
 		return "", err
@@ -297,12 +318,15 @@ func (s *session) sealAndBundle(code int, interrupted bool) (string, error) {
 	return bp, nil
 }
 
-func (s *session) counts() evidence.SealCounts {
+func (s *session) counts() (evidence.SealCounts, error) {
 	c := evidence.SealCounts{}
 	for _, line := range s.brokerEm.lines() {
 		_, _, r, err := evidence.DecodeRecordLine(line)
 		if err != nil {
-			continue
+			// These lines came from this emitter — an undecodable
+			// one means the chain is already broken, which the
+			// seal must not paper over.
+			return c, fmt.Errorf("seal counts: %w", err)
 		}
 		switch r.Type {
 		case "effect.http", "effect.tunnel", "effect.exec", "effect.connect":
@@ -314,7 +338,7 @@ func (s *session) counts() evidence.SealCounts {
 			c.Denials++
 		}
 	}
-	return c
+	return c, nil
 }
 
 func (s *session) cleanup(logf func(string, ...any)) {
@@ -399,6 +423,7 @@ func localPrincipal() evidence.Principal {
 }
 
 func localSandbox() evidence.SandboxRef {
+	// A hostname is a label here — an unresolvable host still runs.
 	host, _ := os.Hostname()
 	return evidence.SandboxRef{Namespace: "local", Node: host}
 }
@@ -406,16 +431,20 @@ func localSandbox() evidence.SandboxRef {
 // placeholdersFor mints one csph_ token per (session, credentialed
 // grant), matching spec/04 §4.1: csph_<8 hex of session>_<grant>_<22
 // base62>.
-func placeholdersFor(p *policy.SessionPolicy, session string) map[string]string {
+func placeholdersFor(p *policy.SessionPolicy, session string) (map[string]string, error) {
 	out := map[string]string{}
 	tag := sessionTag(session)
 	for _, g := range p.Spec.Grants {
 		if g.Credential == nil || g.Credential.PlaceholderEnv == "" {
 			continue
 		}
-		out[g.Credential.PlaceholderEnv] = "csph_" + tag + "_" + g.ID + "_" + randBase62(22)
+		suffix, err := randBase62(22)
+		if err != nil {
+			return nil, err
+		}
+		out[g.Credential.PlaceholderEnv] = "csph_" + tag + "_" + g.ID + "_" + suffix
 	}
-	return out
+	return out, nil
 }
 
 func sessionTag(session string) string {
@@ -425,14 +454,16 @@ func sessionTag(session string) string {
 
 const base62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
-func randBase62(n int) string {
+func randBase62(n int) (string, error) {
 	b := make([]byte, n)
 	r := make([]byte, n*2)
-	_, _ = rand.Read(r)
+	if _, err := rand.Read(r); err != nil {
+		return "", fmt.Errorf("placeholder entropy: %w", err)
+	}
 	for i := range b {
 		b[i] = base62[int(r[i])%62]
 	}
-	return string(b)
+	return string(b), nil
 }
 
 // chainEmitter wraps a keys.Emitter with its ledger and tracks the chain
@@ -472,9 +503,14 @@ func (c *chainEmitter) lines() [][]byte { return c.em.Lines() }
 // sealRef is this chain's entry in session.seal: the head before the
 // seal record. For the sealing emitter the session.seal record itself
 // bumps the chain head, so its entry names the pre-seal head — exactly
-// what head/eseq hold before session.seal is emitted.
+// what head/eseq hold before session.seal is emitted. Clean reports
+// the chain really emitted a contiguous eseq sequence from 0 — every
+// emit above went through this emitter, so a mismatch means a record
+// was dropped between emission and the ledger.
 func (c *chainEmitter) sealRef() evidence.SealEmitter {
+	clean := c.eseq == 0 && c.n == 0 ||
+		c.n == int(c.eseq)+1
 	return evidence.SealEmitter{
-		Emitter: c.em.Name(), FinalEseq: c.eseq, HeadHash: c.head, Clean: true,
+		Emitter: c.em.Name(), FinalEseq: c.eseq, HeadHash: c.head, Clean: clean,
 	}
 }

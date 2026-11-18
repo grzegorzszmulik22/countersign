@@ -9,6 +9,8 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"syscall"
+	"time"
 )
 
 // Enforced mode is Linux-only: elsewhere the probe always reports
@@ -36,7 +38,10 @@ func (s *session) spawnEnforced(context.Context) (*sandboxCmd, error) {
 type sandboxCmd struct {
 	cmd      *exec.Cmd
 	code     int
+	envErr   chan error
 	onSignal func()
+	onKill   func()
+	grace    time.Duration
 }
 
 func (c *sandboxCmd) wait() {
@@ -44,14 +49,40 @@ func (c *sandboxCmd) wait() {
 	if err == nil {
 		c.code = 0
 	} else if ee, ok := err.(*exec.ExitError); ok {
-		c.code = ee.ExitCode()
+		if ws, ok := ee.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+			c.code = 128 + int(ws.Signal())
+		} else {
+			c.code = ee.ExitCode()
+		}
 	} else {
 		c.code = 1
 	}
 }
+
+func (c *sandboxCmd) envWriteErr() error {
+	if c.envErr == nil {
+		return nil
+	}
+	return <-c.envErr
+}
+
 func (c *sandboxCmd) exitCode() int { return c.code }
-func (c *sandboxCmd) interrupt(<-chan struct{}) {
+
+func (c *sandboxCmd) interrupt(done <-chan struct{}) {
 	if c.onSignal != nil {
 		c.onSignal()
 	}
+	grace := c.grace
+	if grace == 0 {
+		grace = 2 * time.Second
+	}
+	select {
+	case <-done:
+		return
+	case <-time.After(grace):
+	}
+	if c.onKill != nil {
+		c.onKill()
+	}
+	<-done
 }

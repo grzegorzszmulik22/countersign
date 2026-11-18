@@ -18,6 +18,8 @@
 #           csverify prints
 #   C2.7.6  SIGINT ends the command and its descendants, seals the
 #           session, both verifiers accept the bundle
+#   C2.7.X  exit status passes through unchanged (0,1,3,42,128+sig)
+#   race.runner  whole suite under the race detector (hosts with cc)
 #   lint.runner golangci-lint over the chunk's packages
 set -u
 export PATH="$HOME/.local/bin:$HOME/.local/usr/bin:$PATH"
@@ -76,12 +78,29 @@ gotest() { # <id> <go-test -run pattern>
     return 1
 }
 
-job_C2.7.1() { gotest "$1" '^TestC2_7_1$'; }
+job_C2.7.1() { gotest "$1" '^TestC2_7_1$|^TestC2_7_RelayConcurrent$|^TestSplicePropagatesErrors$'; }
 job_C2.7.2() { gotest "$1" '^TestC2_7_2$'; }
-job_C2.7.3() { gotest "$1" '^TestC2_7_3$'; }
+job_C2.7.3() { gotest "$1" '^TestC2_7_3'; }
 job_C2.7.4() { gotest "$1" '^TestC2_7_4$'; }
 job_C2.7.5() { gotest "$1" '^TestC2_7_5$'; }
+job_C2.7.X() { gotest "$1" '^TestC2_7_ExitStatus$'; }
 job_C2.7.6() { gotest "$1" '^TestC2_7_6$'; }
+
+# The same suite under the race detector: the tests rebuild cs with
+# -race themselves when M27_BIN is unset, so the subprocess is covered
+# too. Requires a C compiler for cgo — skip only when none exists.
+job_race.runner() {
+    command -v cc >/dev/null 2>&1 || command -v gcc >/dev/null 2>&1 \
+        || command -v clang >/dev/null 2>&1 \
+        || { echo "no C compiler; -race unsupported here"; return 0; }
+    if env -u M27_BIN "$GO" test -race -tags fixtures -count=1 \
+            -timeout 600s ./internal/runner \
+            >"$WORK/race.runner.detail.log" 2>&1; then
+        return 0
+    fi
+    tail -12 "$WORK/race.runner.detail.log"
+    return 1
+}
 
 # fixtures-tagged lint of the packages this chunk owns.
 job_lint.runner() {
@@ -99,11 +118,11 @@ job_lint.runner() {
 
 # Serial: the tests spawn real user/mount/net/pid namespaces and drive
 # signals through process groups; parallel runs only add flake surface.
-for id in C2.7.1 C2.7.2 C2.7.3 C2.7.4 C2.7.5 C2.7.6 lint.runner; do
+for id in C2.7.1 C2.7.2 C2.7.3 C2.7.4 C2.7.5 C2.7.X C2.7.6 lint.runner race.runner; do
     ( "job_$id" "$id" >"$WORK/$id.out" 2>&1; echo $? >"$WORK/$id.rc" )
 done
 
-for id in C2.7.1 C2.7.2 C2.7.3 C2.7.4 C2.7.5 C2.7.6 lint.runner; do
+for id in C2.7.1 C2.7.2 C2.7.3 C2.7.4 C2.7.5 C2.7.X C2.7.6 lint.runner race.runner; do
     if [ "$(cat "$WORK/$id.rc" 2>/dev/null)" = "0" ]; then
         pass "$id"
     else

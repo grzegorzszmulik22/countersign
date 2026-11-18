@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -95,12 +96,12 @@ func probe(ctx context.Context) probeResult {
 	return res
 }
 
-func writeProbeResult(dataDir string, pr probeResult) {
+func writeProbeResult(dataDir string, pr probeResult) error {
 	data, err := json.MarshalIndent(pr, "", "  ")
 	if err != nil {
-		return
+		return fmt.Errorf("marshal probe result: %w", err)
 	}
-	_ = os.WriteFile(filepath.Join(dataDir, "probe.json"), append(data, '\n'), 0o600)
+	return os.WriteFile(filepath.Join(dataDir, "probe.json"), append(data, '\n'), 0o600)
 }
 
 // ProbeMain is `cs __probe`: it runs inside the probed namespaces and
@@ -116,7 +117,13 @@ func ProbeMain() int {
 		fmt.Fprintln(os.Stderr, "mktemp:", err)
 		return 1
 	}
-	defer func() { _ = os.RemoveAll(dir) }()
+	defer func() {
+		// The probe tmpfs mount dies with the namespace anyway;
+		// RemoveAll only releases the temp dir entry itself.
+		if err := os.RemoveAll(dir); err != nil {
+			fmt.Fprintln(os.Stderr, "probe cleanup:", err)
+		}
+	}()
 	if err := mountTmpfs(dir); err != nil {
 		fmt.Fprintln(os.Stderr, "tmpfs mount:", err)
 		return 1
@@ -126,7 +133,10 @@ func ProbeMain() int {
 		fmt.Fprintln(os.Stderr, "loopback listen:", err)
 		return 1
 	}
-	_ = ln.Close()
+	if err := ln.Close(); err != nil {
+		fmt.Fprintln(os.Stderr, "probe listener close:", err)
+		return 1
+	}
 	fmt.Println("probe ok")
 	return 0
 }
@@ -138,7 +148,9 @@ type sandboxCmd struct {
 	cmd      *exec.Cmd
 	code     int
 	waitErr  error
-	onSignal func() // enforced: forward to in-ns init
+	envErr   chan error // enforced: result of streaming ambient env to init
+	onSignal func()     // graceful interrupt: forward or group SIGINT
+	onKill   func()     // escalation: kill the pid or its whole group
 	grace    time.Duration
 }
 
@@ -148,6 +160,16 @@ func (c *sandboxCmd) wait() {
 	c.code = exitCodeOf(err)
 }
 
+// envWriteErr reports whether the ambient env stream into init
+// completed. A truncated stream would silently corrupt the boundary
+// env, so a write failure fails the run.
+func (c *sandboxCmd) envWriteErr() error {
+	if c.envErr == nil {
+		return nil
+	}
+	return <-c.envErr
+}
+
 func (c *sandboxCmd) exitCode() int { return c.code }
 
 // interrupt runs the SIGINT sequence: graceful signal first, then kill
@@ -155,8 +177,10 @@ func (c *sandboxCmd) exitCode() int { return c.code }
 func (c *sandboxCmd) interrupt(done <-chan struct{}) {
 	if c.onSignal != nil {
 		c.onSignal()
-	} else {
-		_ = c.cmd.Process.Signal(syscall.SIGINT)
+	} else if err := c.cmd.Process.Signal(syscall.SIGINT); err != nil {
+		// Already dead is the only failure worth tolerating — the
+		// escalation below still runs in case a descendant lingers.
+		fmt.Fprintf(os.Stderr, "cs: interrupt signal: %v\n", err)
 	}
 	grace := c.grace
 	if grace == 0 {
@@ -164,18 +188,33 @@ func (c *sandboxCmd) interrupt(done <-chan struct{}) {
 	}
 	select {
 	case <-done:
-		return
 	case <-time.After(grace):
 	}
-	_ = c.cmd.Process.Kill()
+	// Escalate unconditionally: the leader can die on the first
+	// signal while a descendant that ignored it lives on in the
+	// group. In enforced mode killing init collapses the pid
+	// namespace; in cooperative mode the hook kills the group.
+	if c.onKill != nil {
+		c.onKill()
+	} else if err := c.cmd.Process.Kill(); err != nil &&
+		!errors.Is(err, os.ErrProcessDone) {
+		fmt.Fprintf(os.Stderr, "cs: interrupt kill: %v\n", err)
+	}
 	<-done
 }
 
+// exitCodeOf maps Wait's result to the status the command actually
+// returned: its exit code, or 128+signal when a signal killed it —
+// the same convention shells report in $?.
 func exitCodeOf(err error) int {
 	if err == nil {
 		return 0
 	}
-	if ee, ok := err.(*exec.ExitError); ok {
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		if ws, ok := ee.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+			return 128 + int(ws.Signal())
+		}
 		return ee.ExitCode()
 	}
 	return 1

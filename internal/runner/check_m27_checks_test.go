@@ -9,10 +9,13 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
+	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -46,8 +49,9 @@ func TestC2_7_1(t *testing.T) {
 	}
 	// Every TCP/IPv6 attempt must fail; "sent" is the best a UDP probe
 	// can say — the sink log below is what proves silence. Unix sockets
-	// are out of scope: they live on the shared filesystem, not in the
-	// network namespace.
+	// are out of scope for the NET namespace: they live on the shared
+	// filesystem (credential sockets are handled by mount covers in
+	// C2.7.4).
 	for _, l := range strings.Split(out.stdout, "\n") {
 		if strings.Contains(l, " reach ") && !strings.HasPrefix(l, "unix ") {
 			t.Fatalf("escape succeeded: %s", l)
@@ -75,7 +79,9 @@ func TestC2_7_1(t *testing.T) {
 	}
 
 	// Cooperative: the same probes reach the world — observability.
-	_ = os.Remove(sinkLog)
+	if err := os.Remove(sinkLog); err != nil {
+		t.Fatal(err)
+	}
 	coop := m.run(t, nil, []string{"--cooperative"}, m.helper, "-mode", "leak",
 		"-tcp", addrs["tcp"], "-tcp6", addrs["tcp6"], "-udp", addrs["udp"],
 		"-unix", addrs["unix"], "-rundir", "%RUNDIR%")
@@ -90,6 +96,68 @@ func TestC2_7_1(t *testing.T) {
 	}
 }
 
+// TestC2_7_RelayConcurrent: the parent-side relay splices many client
+// connections at once — the race property needs a real concurrent load,
+// not sequential dials. Thirty-two simultaneous connections to the
+// relay socket must all reach the broker without a race report or a
+// crash in the cs process.
+func TestC2_7_RelayConcurrent(t *testing.T) {
+	m := newM27(t)
+	dd := filepath.Join(m.work, "ddrelay")
+	rd := filepath.Join(m.work, "rdrelay")
+	cmd := exec.Command(m.bin, "run", "--data-dir", dd, "--run-dir", rd,
+		"--policy", m.policy, "--", "/bin/sh", "-c", "sleep 10")
+	cmd.Env = m.baseEnv()
+	var se strings.Builder
+	cmd.Stderr = &se
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	sock := filepath.Join(rd, "relay.sock")
+	up := false
+	for i := 0; i < 100; i++ {
+		if _, err := os.Stat(sock); err == nil {
+			up = true
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !up {
+		// cs is still exiting; reap it before failing.
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		t.Fatalf("relay socket never appeared:\n%s", se.String())
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 32; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			c, err := net.Dial("unix", sock)
+			if err != nil {
+				return
+			}
+			// Garbage request: the broker answers 400 and closes —
+			// enough for a full splice round-trip.
+			if _, err := fmt.Fprintf(c, "GET / HTTP/1.0\r\n\r\n"); err != nil {
+				_ = c.Close()
+				return
+			}
+			_, _ = io.Copy(io.Discard, c)
+			_ = c.Close()
+		}()
+	}
+	wg.Wait()
+	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
+		t.Logf("signal cs: %v (may have exited already)", err)
+	}
+	_ = cmd.Wait()
+	if s := se.String(); strings.Contains(s, "concurrent map") ||
+		strings.Contains(s, "DATA RACE") || strings.Contains(s, "panic:") {
+		t.Fatalf("relay concurrency failure:\n%s", s)
+	}
+}
+
 // TestC2_7_2: a grandchild spawned with env -i — no proxy vars, no PATH,
 // nothing — still cannot reach anything but the broker. It recovers the
 // advertised boundary from the sandbox-visible proxy.env to prove the
@@ -100,14 +168,14 @@ func TestC2_7_2(t *testing.T) {
 	script := filepath.Join(m.work, "gc.sh")
 	writeFile(t, script, `#!/bin/sh
 # $1 is the run dir visible inside the sandbox.
-"$M27_HELPER" -mode leak -tcp "$2" -udp "$3" -rundir "$1" -spoof-target "$2"
+"`+m.helper+`" -mode leak -tcp "$2" -udp "$3" -rundir "$1" -spoof-target "$2"
 set -a
 . "$1/proxy.env"
 set +a
 curl -sf https://echo.example.com/gc-envi >/dev/null
 `)
 	out := m.run(t, nil, nil, "/usr/bin/env", "-i",
-		"M27_HELPER="+m.helper, "PATH="+os.Getenv("PATH"),
+		"PATH="+os.Getenv("PATH"),
 		"/bin/sh", script, "%RUNDIR%", m.echoAddr, "127.0.0.1:1")
 	t.Log(out.stdout, out.stderr)
 	if out.code != 0 {
@@ -127,9 +195,97 @@ curl -sf https://echo.example.com/gc-envi >/dev/null
 	}
 }
 
+// childEnv parses the helper's `-mode env` dump into name → values,
+// preserving duplicates so assertions can count them.
+type childEnv map[string][]string
+
+func parseEnvDump(t *testing.T, s string) childEnv {
+	t.Helper()
+	out := childEnv{}
+	for _, l := range strings.Split(s, "\n") {
+		if k, v, ok := strings.Cut(l, "="); ok {
+			out[k] = append(out[k], v)
+		}
+	}
+	return out
+}
+
+// assertChildEnv checks the exact env a sandbox process sees: every
+// proxy var exactly once at the broker, NO_PROXY empty, trust vars at
+// the session CA, and no hostile ambient value anywhere.
+func assertChildEnv(t *testing.T, env childEnv, caPath string) {
+	t.Helper()
+	proxyVal := ""
+	for _, v := range []string{
+		"HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy",
+		"ALL_PROXY", "all_proxy",
+	} {
+		vals := env[v]
+		if len(vals) != 1 {
+			t.Fatalf("%s present %d times in child env, want exactly 1", v, len(vals))
+		}
+		if !strings.HasPrefix(vals[0], "http://cs:") {
+			t.Fatalf("%s=%q does not name the boundary proxy", v, vals[0])
+		}
+		if proxyVal == "" {
+			proxyVal = vals[0]
+		} else if vals[0] != proxyVal {
+			t.Fatalf("%s=%q differs from other proxy vars %q", v, vals[0], proxyVal)
+		}
+	}
+	for _, v := range []string{"NO_PROXY", "no_proxy"} {
+		vals := env[v]
+		if len(vals) != 1 || vals[0] != "" {
+			t.Fatalf("%s=%v, want exactly one empty value", v, vals)
+		}
+	}
+	for _, v := range []string{
+		"SSL_CERT_FILE", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE",
+		"GIT_SSL_CAINFO", "CURL_CA_BUNDLE",
+	} {
+		vals := env[v]
+		if len(vals) != 1 || vals[0] != caPath {
+			t.Fatalf("%s=%v, want %s once", v, vals, caPath)
+		}
+	}
+	for kv := range env {
+		for _, v := range env[kv] {
+			if strings.Contains(v, "evil") {
+				t.Fatalf("hostile ambient value survived: %s=%s", kv, v)
+			}
+		}
+	}
+}
+
+// hostileAmbient builds an environment carrying hostile values for
+// every boundary-owned variable — including duplicates, since getenv
+// returns the first match — plus credential-channel variables.
+func (m *m27) hostileAmbient() []string {
+	return append(m.fixtureEnv(),
+		"PATH="+os.Getenv("PATH"),
+		"HOME="+os.Getenv("HOME"),
+		"LANG=C.UTF-8",
+		"HTTP_PROXY=http://evil.corp:8888",
+		"http_proxy=http://evil.corp:8888",
+		"HTTPS_PROXY=http://evil.corp:8888",
+		"https_proxy=http://evil.corp:8888",
+		"ALL_PROXY=socks5://evil.corp:1080",
+		"all_proxy=socks5://evil.corp:1080",
+		"NO_PROXY=*",
+		"no_proxy=*",
+		"SSL_CERT_FILE=/tmp/evil-ca.pem",
+		"GIT_SSL_CAINFO=/tmp/evil-ca.pem",
+		"GH_TOKEN=ghp_evilambienttoken",
+		"AWS_SECRET_ACCESS_KEY=evilawscred",
+		"SSH_AUTH_SOCK=/tmp/evil-agent.sock",
+		"CS_INIT_CONFIG=evil-internal",
+	)
+}
+
 // TestC2_7_3: curl, git smart HTTP, Python urllib and a Node env-aware
 // proxy client each reach the echo fixture through the broker under the
-// session CA; every observed request has a ledger record.
+// session CA; every observed request has a ledger record. The proxy
+// environment is asserted at full width separately below.
 func TestC2_7_3(t *testing.T) {
 	m := newM27(t)
 	m.obs.Reset()
@@ -138,7 +294,7 @@ func TestC2_7_3(t *testing.T) {
 set -x
 curl -sf https://echo.example.com/c-curl >/dev/null || echo "curl rc=$?"
 GIT_TERMINAL_PROMPT=0 git ls-remote https://echo.example.com/acme/widgets.git >/dev/null 2>&1 || echo "git rc=$?"
-"$M27_PY" - <<'PYEOF'
+"`+m.py+`" - <<'PYEOF'
 try:
     import requests
     print("py:", requests.get("https://echo.example.com/c-py", timeout=15).status_code)
@@ -146,10 +302,9 @@ except ImportError:
     import urllib.request
     print("py:", urllib.request.urlopen("https://echo.example.com/c-py").status)
 PYEOF
-NODE_USE_ENV_PROXY=1 "$M27_NODE" -e 'fetch("https://echo.example.com/c-node").then(r=>console.log("node:",r.status))'
+NODE_USE_ENV_PROXY=1 "`+m.node(t)+`" -e 'fetch("https://echo.example.com/c-node").then(r=>console.log("node:",r.status))'
 `)
-	out := m.run(t, []string{"M27_PY=" + m.py, "M27_NODE=" + m.node(t)}, nil,
-		"/bin/sh", script)
+	out := m.run(t, nil, nil, "/bin/sh", script)
 	t.Log(out.stdout, out.stderr)
 	if out.code != 0 {
 		t.Fatalf("clients run exited %d", out.code)
@@ -200,14 +355,146 @@ NODE_USE_ENV_PROXY=1 "$M27_NODE" -e 'fetch("https://echo.example.com/c-node").th
 	}
 }
 
-// TestC2_7_4: the canary scan finds no real credential, no signing key,
-// no session CA key inside the enforced boundary: the declared
-// credential arrives only as a csph_ placeholder, the covered data
-// directory is empty, and /proc shows only sandbox processes.
+// TestC2_7_3_ProxyEnv: inside the sandbox every proxy variable the
+// boundary owns is set exactly once — to the broker/relay — with
+// NO_PROXY and no_proxy empty, whatever the parent environment held.
+// Hostile ambient values and duplicate entries (getenv returns the
+// first) are asserted in both modes, plus the raw-dup case through
+// os.StartProcess, which unlike exec.Cmd.Env does not dedup.
+func TestC2_7_3_ProxyEnv(t *testing.T) {
+	m := newM27(t)
+	for _, mode := range []struct {
+		name string
+		opts []string
+	}{
+		{"enforced", nil},
+		{"cooperative", []string{"--cooperative"}},
+	} {
+		t.Run(mode.name, func(t *testing.T) {
+			out := m.runEnv(t, m.hostileAmbient(), mode.opts,
+				m.helper, "-mode", "env")
+			t.Log(out.stdout, out.stderr)
+			if out.code != 0 {
+				t.Fatalf("env dump run exited %d", out.code)
+			}
+			env := parseEnvDump(t, out.stdout)
+			assertChildEnv(t, env, filepath.Join(out.rd, "session-ca.pem"))
+			// The declared credential is a placeholder; the hostile
+			// ambient one never crosses.
+			gh := env["GH_TOKEN"]
+			if len(gh) != 1 || !strings.HasPrefix(gh[0], "csph_") {
+				t.Fatalf("GH_TOKEN=%v, want one csph_ placeholder", gh)
+			}
+			for _, v := range []string{"AWS_SECRET_ACCESS_KEY", "SSH_AUTH_SOCK", "CS_INIT_CONFIG"} {
+				if _, ok := env[v]; ok {
+					t.Fatalf("%s crossed the boundary: %v", v, env[v])
+				}
+			}
+			// Allowlisted vars still arrive.
+			if env["PATH"][0] != os.Getenv("PATH") {
+				t.Fatalf("PATH not passed through: %v", env["PATH"])
+			}
+		})
+	}
+
+	// Duplicates earlier in environ: exec.Cmd.Env dedups (last wins),
+	// so this case goes through os.StartProcess to hand cs an environ
+	// that really contains HTTP_PROXY twice — the first hostile.
+	t.Run("duplicates", func(t *testing.T) {
+		ambient := append(m.fixtureEnv(),
+			"PATH="+os.Getenv("PATH"),
+			"HTTP_PROXY=http://evil.corp:8888",
+			"NO_PROXY=*",
+			"HTTP_PROXY=http://also-evil.corp:9999",
+		)
+		out := m.runRaw(t, ambient, nil, m.helper, "-mode", "env")
+		t.Log(out.stdout, out.stderr)
+		if out.code != 0 {
+			t.Fatalf("env dump run exited %d", out.code)
+		}
+		assertChildEnv(t, parseEnvDump(t, out.stdout),
+			filepath.Join(out.rd, "session-ca.pem"))
+	})
+}
+
+// runRaw spawns cs via os.StartProcess — the only path that hands the
+// child an env slice verbatim, preserving duplicate entries that
+// exec.Cmd.Env would collapse.
+func (m *m27) runRaw(t *testing.T, ambient []string, opts []string, cmdline ...string) runOut {
+	t.Helper()
+	dd := filepath.Join(m.work, fmt.Sprintf("dd%d", m.seq))
+	rd := filepath.Join(m.work, fmt.Sprintf("rd%d", m.seq))
+	m.seq++
+	args := []string{"run", "--data-dir", dd, "--run-dir", rd, "--policy", m.policy}
+	args = append(args, opts...)
+	args = append(args, "--")
+	for _, a := range cmdline {
+		args = append(args, strings.ReplaceAll(a, "%RUNDIR%", rd))
+	}
+	so, err := os.Create(filepath.Join(m.work, "raw-out.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	se, err := os.Create(filepath.Join(m.work, "raw-err.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := so.Close(); err != nil {
+			t.Error(err)
+		}
+		if err := se.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	proc, err := os.StartProcess(m.bin, append([]string{m.bin}, args...), &os.ProcAttr{
+		Env:   ambient,
+		Files: []*os.File{os.Stdin, so, se},
+	})
+	if err != nil {
+		t.Fatalf("start cs: %v", err)
+	}
+	ps, werr := proc.Wait()
+	out := runOut{dd: dd, rd: rd}
+	if so2, err := os.ReadFile(so.Name()); err == nil {
+		out.stdout = string(so2)
+	} else {
+		t.Fatal(err)
+	}
+	if se2, err := os.ReadFile(se.Name()); err == nil {
+		out.stderr = string(se2)
+	} else {
+		t.Fatal(err)
+	}
+	out.code = -1
+	if werr == nil && ps.Exited() {
+		out.code = ps.ExitCode()
+	}
+	if strings.Contains(out.stderr, "WARNING: DATA RACE") {
+		t.Fatalf("data race in cs subprocess:\n%s", out.stderr)
+	}
+	for _, l := range strings.Split(out.stderr, "\n") {
+		if strings.HasPrefix(l, "cs: bundle ") {
+			out.bundle = strings.TrimSpace(strings.TrimPrefix(l, "cs: bundle "))
+		}
+		if strings.HasPrefix(l, "cs: run-dir ") {
+			out.rd = strings.TrimSpace(strings.TrimPrefix(l, "cs: run-dir "))
+		}
+	}
+	return out
+}
+
+// TestC2_7_4: no host credential channel is usable inside the enforced
+// boundary — not the declared credential (csph_ placeholder only), not
+// agent sockets (env stripped AND the socket path mount-covered), not
+// cloud credential variables or files, not the runner's keys/data dir,
+// not host /proc data. The same scan under --cooperative is reported,
+// never counted.
 func TestC2_7_4(t *testing.T) {
 	m := newM27(t)
 	cred := "CANARY_GH_3KJ7D9XQ2W8N5M4P1R6T0V2B"
 	filecan := "CANARY_FILE_9QZ8X7W6V5U4T3S2R1"
+	cloudcan := "CANARY_GCP_8F4K2M9P7Q1W3X6Y5Z0"
 
 	// Bootstrap the data dir once so its keys exist to hunt for.
 	boot := m.run(t, nil, nil, "/bin/true")
@@ -216,6 +503,32 @@ func TestC2_7_4(t *testing.T) {
 	}
 	// Plant a canary file inside the data dir; the tmpfs must hide it.
 	writeFile(t, filepath.Join(boot.dd, "keys", "planted-canary.txt"), filecan+"\n")
+
+	// A fake home full of credential files at the well-known paths,
+	// plus a cloud keyfile at an arbitrary ambient-var path and a live
+	// SSH agent socket the parent advertises.
+	home := filepath.Join(m.work, "credhome")
+	for _, p := range []string{
+		".ssh/id_ed25519", ".aws/credentials", ".netrc",
+		".config/gcloud/application_default_credentials.json",
+		".config/gh/hosts.yml", ".docker/config.json",
+		".kube/config", ".gnupg/private-keys-v1.d/k.key",
+	} {
+		writeFile(t, filepath.Join(home, p), cloudcan+"\n")
+	}
+	cloudfile := filepath.Join(m.work, "gcp-sa.json")
+	writeFile(t, cloudfile, cloudcan+"\n")
+	kubefile := filepath.Join(m.work, "extra-kube.config")
+	writeFile(t, kubefile, cloudcan+"\n")
+	agentSock := filepath.Join(m.work, "ssh-agent.sock")
+	agentLn, err := net.Listen("unix", agentSock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		// Listener teardown; a close error only means it already died.
+		_ = agentLn.Close()
+	})
 
 	var needles []string
 	keyDir := filepath.Join(boot.dd, "keys")
@@ -233,45 +546,149 @@ func TestC2_7_4(t *testing.T) {
 			needles = append(needles, base64.StdEncoding.EncodeToString(blk.Bytes))
 		}
 	}
-	needles = append(needles, cred, filecan, "PRIVATE KEY-----")
+	needles = append(needles, cred, filecan, cloudcan, "PRIVATE KEY-----")
 
-	workdir := filepath.Join(m.work, "sandbox-home")
-	_ = os.MkdirAll(workdir, 0o755)
 	// Needles travel in a file outside the scanned dirs: carrying them
 	// on the scan's own argv would be a self-inflicted hit in
 	// /proc/*/cmdline.
 	needleFile := filepath.Join(m.work, "needles.txt")
 	writeFile(t, needleFile, strings.Join(needles, "\n")+"\n")
-	scan := fmt.Sprintf(
-		`"$H" -mode env | grep '^GH_TOKEN='
-"$H" -mode scan -findfile "%s" -dir "%s,%s" -empty "%s"`,
-		needleFile, workdir, "%RUNDIR%", boot.dd)
-	out := m.run(t,
-		[]string{"GH_TOKEN=" + cred, "H=" + m.helper, "M27_HELPER=" + m.helper},
-		[]string{"--data-dir", boot.dd}, "/bin/sh", "-c", scan)
+
+	// The ambient env carries every credential channel the parent
+	// would have: the declared GH credential, cloud vars, the SSH
+	// agent socket, and pointers at the planted files.
+	ambient := append(m.fixtureEnv(),
+		"PATH="+os.Getenv("PATH"),
+		"HOME="+home,
+		"GH_TOKEN="+cred,
+		"SSH_AUTH_SOCK="+agentSock,
+		"GPG_AGENT_INFO="+agentSock+":0:1",
+		"AWS_SECRET_ACCESS_KEY="+cred,
+		"AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE",
+		"GOOGLE_APPLICATION_CREDENTIALS="+cloudfile,
+		"KUBECONFIG="+kubefile,
+		"AZURE_CLIENT_SECRET="+cred,
+		"ANTHROPIC_API_KEY="+cred,
+		"DOCKER_CONFIG="+filepath.Join(home, ".docker"),
+	)
+
+	// %RUNDIR% is substituted into the command args by runEnv. $HOME is
+	// the ambient fake home the boundary passes through; the planted
+	// credential dirs inside it must come back empty (tmpfs covers),
+	// the arbitrary-path keyfiles unreadable (/dev/null covers), and
+	// the agent socket undialable.
+	scanScript := fmt.Sprintf(`set -x
+"%s" -mode env > "%%RUNDIR%%/env.txt"
+"%s" -mode leak -unix "%s" | tee "%%RUNDIR%%/leak.txt"
+"%s" -mode scan -findfile "%s" -dir "$HOME" -empty "%s"
+test ! -s "%s"
+test ! -s "%s"
+`,
+		m.helper, m.helper, agentSock, m.helper,
+		needleFile,
+		strings.Join([]string{
+			filepath.Join(home, ".aws"),
+			filepath.Join(home, ".ssh"),
+			filepath.Join(home, ".gnupg"),
+			filepath.Join(home, ".config", "gcloud"),
+			filepath.Join(home, ".config", "gh"),
+			filepath.Join(home, ".docker"),
+			filepath.Join(home, ".kube"),
+			boot.dd,
+		}, ","),
+		cloudfile, kubefile)
+
+	out := m.runEnv(t, ambient, []string{"--data-dir", boot.dd},
+		"/bin/sh", "-c", scanScript)
 	t.Log(out.stdout, out.stderr)
 	if out.code != 0 {
 		t.Fatalf("canary scan run exited %d", out.code)
 	}
-	if !strings.Contains(out.stdout, "GH_TOKEN=csph_") {
-		t.Fatalf("credential is not a placeholder inside:\n%s", out.stdout)
-	}
-	if strings.Contains(out.stdout, cred) {
-		t.Fatalf("real credential visible inside:\n%s", out.stdout)
-	}
 	if !strings.Contains(out.stdout, "clean") {
 		t.Fatalf("canary scan found secret material inside:\n%s", out.stdout)
 	}
+	// The agent socket is a file the netns cannot hide: the mount
+	// namespace must have made it unreachable.
+	leak, err := os.ReadFile(filepath.Join(out.rd, "leak.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(leak), " reach ") {
+		t.Fatalf("host SSH agent socket reachable inside:\n%s", leak)
+	}
+	// Environment assertions: placeholder for GH_TOKEN, nothing else.
+	envDump, err := os.ReadFile(filepath.Join(out.rd, "env.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := parseEnvDump(t, string(envDump))
+	gh := env["GH_TOKEN"]
+	if len(gh) != 1 || !strings.HasPrefix(gh[0], "csph_") {
+		t.Fatalf("credential is not a placeholder inside: GH_TOKEN=%v", gh)
+	}
+	for _, v := range []string{
+		"SSH_AUTH_SOCK", "GPG_AGENT_INFO", "AWS_SECRET_ACCESS_KEY",
+		"AWS_ACCESS_KEY_ID", "GOOGLE_APPLICATION_CREDENTIALS",
+		"KUBECONFIG", "AZURE_CLIENT_SECRET", "ANTHROPIC_API_KEY",
+		"DOCKER_CONFIG",
+	} {
+		if got, ok := env[v]; ok {
+			t.Fatalf("credential channel %s crossed the boundary: %v", v, got)
+		}
+	}
+	assertChildEnv(t, env, filepath.Join(out.rd, "session-ca.pem"))
 
 	// The same scan under --cooperative is reported, not counted: with
-	// no mount namespace the data dir is genuinely visible inside.
-	cscan := fmt.Sprintf(`"$H" -mode scan -findfile "%s" -dir "%s,%s"`,
-		needleFile, workdir, "%RUNDIR%")
-	coop := m.run(t,
-		[]string{"GH_TOKEN=" + cred, "H=" + m.helper, "M27_HELPER=" + m.helper},
+	// no mount namespace the filesystem channels genuinely stay open.
+	cscan := fmt.Sprintf(`"%s" -mode env; "%s" -mode leak -unix "%s"`,
+		m.helper, m.helper, agentSock)
+	coop := m.runEnv(t, ambient,
 		[]string{"--cooperative", "--data-dir", boot.dd},
 		"/bin/sh", "-c", cscan)
-	t.Logf("cooperative scan (informational): %s", coop.stdout)
+	t.Logf("cooperative scan (informational):\n%s", coop.stdout)
+	if strings.Contains(coop.stdout, "SSH_AUTH_SOCK=") ||
+		strings.Contains(coop.stdout, "AWS_SECRET_ACCESS_KEY=") {
+		t.Fatalf("cooperative child saw host credential channels:\n%s", coop.stdout)
+	}
+}
+
+// TestC2_7_ExitStatus: cs run's exit status is the command's own,
+// unchanged — plain codes and the shell's 128+signal convention — in
+// both boundary modes. The seal of a normally-exited session records
+// the command-exit reason.
+func TestC2_7_ExitStatus(t *testing.T) {
+	m := newM27(t)
+	cases := []struct {
+		name   string
+		script string
+		want   int
+	}{
+		{"zero", "exit 0", 0},
+		{"one", "exit 1", 1},
+		{"three", "exit 3", 3},
+		{"forty-two", "exit 42", 42},
+		{"sigterm", "kill -TERM $$", 143},
+	}
+	for _, mode := range []struct {
+		name string
+		opts []string
+	}{
+		{"enforced", nil},
+		{"cooperative", []string{"--cooperative"}},
+	} {
+		t.Run(mode.name, func(t *testing.T) {
+			for _, c := range cases {
+				out := m.run(t, nil, mode.opts, "/bin/sh", "-c", c.script)
+				if out.code != c.want {
+					t.Fatalf("%s: exit %d, want %d (script %q)\nstderr: %s",
+						c.name, out.code, c.want, c.script, out.stderr)
+				}
+			}
+		})
+	}
+	// A normally-exited run records the exit reason in its seal.
+	out := m.run(t, nil, nil, "/bin/true")
+	m.assertCleanSeal(t, out.bundle, "command-exit")
 }
 
 // TestC2_7_5: with the namespace probe forced to fail, enforced mode
@@ -317,11 +734,28 @@ func TestC2_7_5(t *testing.T) {
 	}
 }
 
-// TestC2_7_6: SIGINT terminates the command and its descendants — a
-// trapped SIGINT marker fires, a heartbeat stops, a setsid stray inside
-// the pid namespace dies with it — then the session seals into a bundle
-// both verifiers accept.
+// TestC2_7_6: SIGINT terminates the command and every descendant in
+// both modes — a trapped-SIGINT marker fires, a heartbeat stops, a
+// grandchild that ignores SIGTERM (and even SIGINT) dies to the kill
+// escalation, a setsid stray inside the pid namespace dies with it —
+// then the session seals with reason "signal" into a bundle both
+// verifiers accept.
 func TestC2_7_6(t *testing.T) {
+	for _, mode := range []struct {
+		name string
+		opts []string
+		want string
+	}{
+		{"enforced", nil, "enforced"},
+		{"cooperative", []string{"--cooperative"}, "cooperative"},
+	} {
+		t.Run(mode.name, func(t *testing.T) {
+			sigintRun(t, mode.opts, mode.name == "enforced", mode.want)
+		})
+	}
+}
+
+func sigintRun(t *testing.T, opts []string, enforced bool, wantBoundary string) {
 	m := newM27(t)
 	heart := filepath.Join(m.work, "heart")
 	stray := filepath.Join(m.work, "stray")
@@ -329,15 +763,29 @@ func TestC2_7_6(t *testing.T) {
 	dd := filepath.Join(m.work, "ddsig")
 	rd := filepath.Join(m.work, "rdsig")
 
+	// The agent: an INT trap marker, a heartbeat child in its own
+	// process group, and a stray grandchild that ignores SIGTERM and
+	// SIGINT — only the kill escalation can reap it. In enforced mode
+	// a second stray also escapes via setsid; only the pid namespace
+	// catches that one.
+	strayCmd := fmt.Sprintf(
+		`sh -c 'trap "" TERM INT; while :; do echo s >> %q; sleep 0.2; done'`,
+		stray)
+	if enforced {
+		strayCmd = "setsid " + strayCmd
+	}
 	agent := filepath.Join(m.work, "agent.sh")
-	writeFile(t, agent, `#!/bin/sh
-trap 'echo seen >> "'`+intm+`'"' INT
-{ while :; do echo b >> "`+heart+`"; sleep 0.2; done; } &
-setsid sh -c 'while :; do echo s >> "`+stray+`"; sleep 0.2; done' &
+	writeFile(t, agent, fmt.Sprintf(`#!/bin/sh
+trap 'echo seen >> %q' INT
+{ while :; do echo b >> %q; sleep 0.2; done; } &
+%s &
 wait
-`)
+`, intm, heart, strayCmd))
+
 	args := []string{"run", "--data-dir", dd, "--run-dir", rd,
-		"--policy", m.policy, "--", "/bin/sh", agent}
+		"--policy", m.policy}
+	args = append(args, opts...)
+	args = append(args, "--", "/bin/sh", agent)
 	cmd := exec.Command(m.bin, args...)
 	cmd.Env = m.baseEnv()
 	var se strings.Builder
@@ -355,6 +803,7 @@ wait
 		time.Sleep(100 * time.Millisecond)
 	}
 	if !alive {
+		// The agent never got going; nothing to interrupt.
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
 		t.Fatalf("agent heartbeats never started:\n%s", se.String())
@@ -380,8 +829,12 @@ wait
 		t.Fatalf("descendants still running: %d→%d %d→%d", s1a, s2a, s1b, s2b)
 	}
 
-	// The interrupted session sealed into a verifiable bundle.
+	// The interrupted session sealed with reason signal into a
+	// verifiable bundle.
 	stderr := se.String()
+	if strings.Contains(stderr, "WARNING: DATA RACE") {
+		t.Fatalf("data race in cs subprocess:\n%s", stderr)
+	}
 	bundle := ""
 	for _, l := range strings.Split(stderr, "\n") {
 		if strings.HasPrefix(l, "cs: bundle ") {
@@ -391,21 +844,13 @@ wait
 	if bundle == "" {
 		t.Fatalf("no bundle reported:\n%s", stderr)
 	}
-	var sealed bool
-	for _, r := range m.records(t, bundle) {
-		if r.Type == "session.seal" {
-			sealed = true
-		}
-	}
-	if !sealed {
-		t.Fatal("interrupted session never sealed")
-	}
+	m.assertCleanSeal(t, bundle, "signal")
 	res := m.verify(t, bundle, "")
 	if res["verdict"] != "CLEAN" && res["verdict"] != "CLEAN_WITH_DENIALS" {
 		t.Fatalf("verdict %v\n%s", res["verdict"], stderr)
 	}
-	if res["boundary"] != "enforced" {
-		t.Fatalf("boundary %v", res["boundary"])
+	if res["boundary"] != wantBoundary {
+		t.Fatalf("boundary %v, want %s", res["boundary"], wantBoundary)
 	}
 	m.refcheck(t, bundle)
 }

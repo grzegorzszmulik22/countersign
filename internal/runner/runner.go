@@ -99,7 +99,11 @@ func Run(ctx context.Context, opt Options) (*Result, error) {
 	boundary := boundaryCooperative
 	if !opt.Cooperative {
 		pr := probe(ctx)
-		writeProbeResult(dataDir, pr)
+		if err := writeProbeResult(dataDir, pr); err != nil {
+			// probe.json is evidence, not a control input — a write
+			// failure must not stop the run, but it is logged.
+			logf("probe.json: %v", err)
+		}
 		if !pr.OK {
 			return nil, fmt.Errorf("unprivileged user namespaces unavailable on this host (%s); re-run with --cooperative to run without the enforced boundary", pr.Detail)
 		}

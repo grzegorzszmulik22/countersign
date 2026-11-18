@@ -5,11 +5,14 @@
 
 package runner_test
 
-// M2.7 check suite. These tests orchestrate the real binaries built by
-// test/checks/check-M2.7.sh: cs (the runner), csverify, m27helper and
-// the pinned python. Fixtures (echo TLS) run in-process; the cs
-// subprocess reaches them through CS_FIXTURE_RESOLVE / CS_FIXTURE_CA,
-// exactly the env wiring the broker's fixtures build already supports.
+// M2.7 check suite. These tests orchestrate the real binaries: cs (the
+// runner), csverify, m27helper and the pinned python. When M27_BIN is
+// unset (plain `go test`), TestMain builds them first — with -race on
+// cs when the test binary itself is race-enabled, so `go test -race
+// -tags fixtures ./internal/runner` covers the runner end to end.
+// Fixtures (echo TLS) run in-process; the cs subprocess reaches them
+// through CS_FIXTURE_RESOLVE / CS_FIXTURE_CA, exactly the env wiring
+// the broker's fixtures build already supports.
 
 import (
 	"bufio"
@@ -32,6 +35,69 @@ import (
 	"github.com/countersign/countersign/test/fixtures/fxlib"
 )
 
+func TestMain(m *testing.M) {
+	if os.Getenv("M27_BIN") != "" {
+		os.Exit(m.Run())
+	}
+	dir, err := os.MkdirTemp("", "m27bin-")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "mktemp:", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := os.RemoveAll(dir); err != nil {
+			fmt.Fprintln(os.Stderr, "cleanup:", err)
+		}
+	}()
+	if err := buildBins(dir); err != nil {
+		fmt.Fprintln(os.Stderr, "build:", err)
+		os.Exit(1)
+	}
+	if err := os.Setenv("M27_BIN", dir); err != nil {
+		fmt.Fprintln(os.Stderr, "M27_BIN:", err)
+		os.Exit(1)
+	}
+	os.Exit(m.Run())
+}
+
+// buildBins compiles the binaries the suite needs into dir. cs is
+// built -race when the test binary is, so the spawned runner process
+// reports its own data races on stderr (run() then fails the test).
+func buildBins(dir string) error {
+	gob, err := exec.LookPath("go")
+	if err != nil {
+		return fmt.Errorf("go toolchain: %w", err)
+	}
+	builds := []struct{ out, pkg string }{
+		{"cs", "./cmd/cs"},
+		{"csverify", "./cmd/csverify"},
+		{"m27helper", "./test/runner/m27helper"},
+	}
+	for _, b := range builds {
+		args := []string{"build", "-tags", "fixtures"}
+		if b.out == "cs" && raceEnabled {
+			args = append(args, "-race")
+		}
+		args = append(args, "-o", filepath.Join(dir, b.out), b.pkg)
+		cmd := exec.Command(gob, args...)
+		cmd.Dir = repoRoot()
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("go %s: %v\n%s", strings.Join(args, " "), err, out)
+		}
+	}
+	return nil
+}
+
+func repoRoot() string {
+	if root := os.Getenv("M27_ROOT"); root != "" {
+		if abs, err := filepath.Abs(root); err == nil {
+			return abs
+		}
+	}
+	root, _ := filepath.Abs("../..")
+	return root
+}
+
 type m27 struct {
 	t        *testing.T
 	bin      string // cs binary
@@ -52,12 +118,9 @@ func newM27(t *testing.T) *m27 {
 	t.Helper()
 	bindir := os.Getenv("M27_BIN")
 	if bindir == "" {
-		t.Fatal("M27_BIN not set (run via test/checks/check-M2.7.sh)")
+		t.Fatal("M27_BIN not set (TestMain builds it; run via test/checks/check-M2.7.sh)")
 	}
-	root, err := filepath.Abs(os.Getenv("M27_ROOT"))
-	if err != nil || root == "" {
-		root, _ = filepath.Abs("../..")
-	}
+	root := repoRoot()
 	m := &m27{t: t, work: t.TempDir()}
 	m.bin = filepath.Join(bindir, "cs")
 	m.ver = filepath.Join(bindir, "csverify")
@@ -113,13 +176,19 @@ spec:
 	return m
 }
 
-// baseEnv is the environment every `cs run` subprocess gets: ambient
-// plus the fixture resolver wiring.
+// fixtureEnv is the broker-side fixture wiring: the cs process's
+// resolver and CA, never meant to cross into the sandbox.
+func (m *m27) fixtureEnv() []string {
+	return []string{
+		"CS_FIXTURE_RESOLVE=echo.example.com=" + m.echoAddr + ",httpbin.org=" + m.echoAddr,
+		"CS_FIXTURE_CA=" + m.caFile,
+	}
+}
+
+// baseEnv is the environment every `cs run` subprocess gets: the test
+// process's ambient env plus the fixture resolver wiring.
 func (m *m27) baseEnv() []string {
-	return append(os.Environ(),
-		"CS_FIXTURE_RESOLVE=echo.example.com="+m.echoAddr+",httpbin.org="+m.echoAddr,
-		"CS_FIXTURE_CA="+m.caFile,
-		"M27_HELPER="+m.helper)
+	return append(os.Environ(), m.fixtureEnv()...)
 }
 
 type runOut struct {
@@ -129,10 +198,19 @@ type runOut struct {
 	dd              string
 }
 
-// run executes `cs run -- <cmdline>` and returns captured output plus
-// the runner's reported session fields. A nonzero command status is NOT
-// a test failure here; callers assert what they need.
+// run executes `cs run -- <cmdline>` under baseEnv()+extraEnv and
+// returns captured output plus the runner's reported session fields.
+// A nonzero command status is NOT a test failure here; callers assert
+// what they need. A race warning from an instrumented cs is.
 func (m *m27) run(t *testing.T, extraEnv []string, opts []string, cmdline ...string) runOut {
+	t.Helper()
+	return m.runEnv(t, append(m.baseEnv(), extraEnv...), opts, cmdline...)
+}
+
+// runEnv is run with a fully test-controlled environment — the ambient
+// list goes to cs verbatim, so duplicates and hostile values survive to
+// exercise the boundary's env construction.
+func (m *m27) runEnv(t *testing.T, ambient []string, opts []string, cmdline ...string) runOut {
 	t.Helper()
 	dd := filepath.Join(m.work, fmt.Sprintf("dd%d", m.seq))
 	rd := filepath.Join(m.work, fmt.Sprintf("rd%d", m.seq))
@@ -144,12 +222,15 @@ func (m *m27) run(t *testing.T, extraEnv []string, opts []string, cmdline ...str
 		args = append(args, strings.ReplaceAll(a, "%RUNDIR%", rd))
 	}
 	cmd := exec.Command(m.bin, args...)
-	cmd.Env = append(m.baseEnv(), extraEnv...)
+	cmd.Env = ambient
 	var so, se bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &so, &se
 	err := cmd.Run()
 	out := runOut{stdout: so.String(), stderr: se.String(), dd: dd, rd: rd}
 	out.code = exitOf(err)
+	if strings.Contains(out.stderr, "WARNING: DATA RACE") {
+		t.Fatalf("data race in cs subprocess:\n%s", out.stderr)
+	}
 	for _, l := range strings.Split(out.stderr, "\n") {
 		switch {
 		case strings.HasPrefix(l, "cs: session "):
@@ -215,6 +296,51 @@ func (m *m27) records(t *testing.T, bundle string) []*evidence.Record {
 	return recs
 }
 
+// sealBody returns the bundle's session.seal body.
+func (m *m27) sealBody(t *testing.T, bundle string) *evidence.SessionSealBody {
+	t.Helper()
+	for _, r := range m.records(t, bundle) {
+		if r.Type == "session.seal" {
+			if b, ok := r.Body.(*evidence.SessionSealBody); ok {
+				return b
+			}
+			t.Fatalf("session.seal body is %T", r.Body)
+		}
+	}
+	t.Fatal("no session.seal record")
+	return nil
+}
+
+// assertCleanSeal checks a seal's recorded fields against the session's
+// emitters: a reason, all three emitter heads named, each clean.
+func (m *m27) assertCleanSeal(t *testing.T, bundle, wantReason string) {
+	t.Helper()
+	seal := m.sealBody(t, bundle)
+	if seal.Reason != wantReason {
+		t.Fatalf("seal reason %q, want %q", seal.Reason, wantReason)
+	}
+	if len(seal.Emitters) != 3 {
+		t.Fatalf("seal lists %d emitters, want 3", len(seal.Emitters))
+	}
+	seen := map[string]bool{}
+	for _, e := range seal.Emitters {
+		role, _, _ := strings.Cut(e.Emitter, "/")
+		seen[role] = true
+		if e.HeadHash == "" || e.HeadHash == evidence.ZeroHash {
+			t.Fatalf("emitter %s sealed with empty head %q", e.Emitter, e.HeadHash)
+		}
+		if !e.Clean {
+			t.Fatalf("emitter %s recorded unclean", e.Emitter)
+		}
+	}
+	for _, want := range []string{"controller", "broker", "world"} {
+		if !seen[want] {
+			t.Fatalf("seal missing emitter %s", want)
+		}
+	}
+	t.Logf("seal: reason=%s emitters=%v counts=%+v", seal.Reason, seen, seal.Counts)
+}
+
 func (m *m27) refcheck(t *testing.T, bundle string) {
 	t.Helper()
 	keys := filepath.Join(filepath.Dir(filepath.Dir(bundle)), "keys.json")
@@ -241,7 +367,9 @@ func (m *m27) sink(t *testing.T, log string) (addrs map[string]string, stop func
 	}
 	addrs = map[string]string{}
 	if f, ok := stdout.(*os.File); ok {
-		_ = f.SetReadDeadline(time.Now().Add(8 * time.Second))
+		if err := f.SetReadDeadline(time.Now().Add(8 * time.Second)); err != nil {
+			t.Fatal(err)
+		}
 	}
 	scan := bufio.NewScanner(stdout)
 	for len(addrs) < 4 && scan.Scan() {
@@ -251,10 +379,17 @@ func (m *m27) sink(t *testing.T, log string) (addrs map[string]string, stop func
 		}
 	}
 	if len(addrs) < 4 {
+		// The sink is being abandoned; kill errors just mean it
+		// already exited.
 		_ = cmd.Process.Kill()
 		t.Fatalf("sink did not bind all listeners: got %v", addrs)
 	}
-	return addrs, func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }
+	return addrs, func() {
+		// Teardown: ESRCH is fine, anything else leaves a stray
+		// listener only the process itself can release.
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	}
 }
 
 // node returns the pinned node binary.
