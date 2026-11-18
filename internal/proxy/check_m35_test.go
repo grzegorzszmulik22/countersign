@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -31,6 +32,10 @@ const m35Grants = `  grants:
     - id: lim
       match: {hosts: [api.anthropic.com], paths: [/lim/**]}
       limits: {maxRequestBodyBytes: 100, maxUrlBytes: 96, requestsPerMinute: 60}
+    - id: lim-h2
+      match: {hosts: [h2.anthropic.example], paths: [/lim/**]}
+      bufferLimit: 1Ki
+      limits: {maxRequestBodyBytes: 4096}
     - id: lim2
       match: {hosts: [api.anthropic.com], paths: [/lim2/**]}
       limits: {requestsPerMinute: 60}
@@ -183,63 +188,164 @@ func TestC352RateScope(t *testing.T) {
 }
 
 // --- C3.5.3 -------------------------------------------------------------
-// The body cap holds while streaming, at the exact boundary: a deferred
-// (chunked, >buffer) body of exactly maxRequestBodyBytes arrives
-// complete; one byte over aborts the wire write with at most the limit
-// delivered upstream and result.error "limit-body".
+// The streamed body cap holds under every framing and timing (04 §1): a
+// deferred body of exactly maxRequestBodyBytes arrives complete; one byte
+// over is denied mid-write with at most the cap delivered upstream and
+// result.error "limit-body". Upstream bytes are attributed per request —
+// a denied request's accounting lands only when the aborted connection
+// unblocks the upstream's ReadAll, so a cumulative counter delta can
+// borrow bytes that belong to a neighbour request.
 func TestC353StreamingBodyCap(t *testing.T) {
 	ce := startCredEnv(t, m35Grants, nil)
 	e := ce.env
-	client := e.proxyClient(t, "tok-one", e.combinedPool(t, "s1"), "http/1.1")
+	h1c := e.proxyClient(t, "tok-one", e.combinedPool(t, "s1"), "http/1.1")
+	h2c := e.proxyClient(t, "tok-one", e.combinedPool(t, "s1"))
+	s2c := e.proxyClient(t, "tok-two", e.combinedPool(t, "s2"), "http/1.1")
 
-	// stream sends a chunked POST of n zero bytes to the lim-stream
-	// grant (buffer 1 KiB — always deferred — cap 4 KiB) and returns the
-	// response and how many body bytes upstream actually got.
-	stream := func(n int64) (*http.Response, int64) {
+	// stream POSTs n zero bytes to url through cl — chunked when
+	// declared < 0, a declared Content-Length otherwise — and returns
+	// the response plus the request's slot in sink's ledger, so its body
+	// count is attributed to this request and no other.
+	stream := func(cl *http.Client, sink *headerSink, url string, n, declared int64) (*http.Response, int) {
 		t.Helper()
-		before := ce.anthro.bodyBytes()
-		req, err := http.NewRequest("POST", "https://api.anthropic.com/lim/stream",
-			io.NopCloser(io.LimitReader(zeroReader{}, n)))
+		c0 := sink.count()
+		req, err := http.NewRequest("POST", url, io.NopCloser(io.LimitReader(zeroReader{}, n)))
 		if err != nil {
 			t.Fatal(err)
 		}
-		req.ContentLength = -1
-		req.TransferEncoding = []string{"chunked"}
-		res, err := client.Do(req)
+		req.ContentLength = declared
+		if declared < 0 {
+			req.TransferEncoding = []string{"chunked"}
+		}
+		res, err := cl.Do(req)
 		if err != nil {
 			t.Fatalf("stream request: %v", err)
 		}
 		_ = res.Body.Close()
-		return res, ce.anthro.bodyBytes() - before
+		return res, c0
+	}
+	// delivered returns the body bytes upstream attributed to request i;
+	// a mid-write denial's entry lands when the conn abort unblocks the
+	// upstream's ReadAll, which can lag the client's 403.
+	delivered := func(sink *headerSink, i int) int64 {
+		t.Helper()
+		sink.waitSeen(i, 3*time.Second)
+		return sink.bodyLenAt(i)
 	}
 
-	// Exactly at the cap: allowed, and complete upstream — an off-by-one
-	// that rejects or truncates the last byte fails here.
-	res, got := stream(4096)
+	// 1.1 chunked, exactly at the cap: allowed and complete upstream.
+	res, i := stream(h1c, ce.anthro, "https://api.anthropic.com/lim/stream", 4096, -1)
 	if res.StatusCode != 200 {
-		t.Fatalf("at-limit streamed body denied: status=%d reason=%q", res.StatusCode, denyReason(res))
+		t.Fatalf("at-limit chunked denied: status=%d reason=%q", res.StatusCode, denyReason(res))
 	}
-	if got != 4096 {
-		t.Fatalf("at-limit streamed body incomplete: upstream got %d of 4096", got)
+	if got := delivered(ce.anthro, i); got != 4096 {
+		t.Fatalf("at-limit chunked incomplete: upstream got %d of 4096", got)
+	}
+	// Over the cap: denied mid-write, at most the cap delivered.
+	for _, n := range []int64{4097, 8192} {
+		res, i = stream(h1c, ce.anthro, "https://api.anthropic.com/lim/stream", n, -1)
+		if res.StatusCode != http.StatusForbidden || denyReason(res) != "LIMIT_BODY" {
+			t.Fatalf("chunked %d over limit: status=%d reason=%q", n, res.StatusCode, denyReason(res))
+		}
+		if got := delivered(ce.anthro, i); got > 4096 {
+			t.Fatalf("chunked %d: upstream received %d bytes, cap is 4096", n, got)
+		}
 	}
 
-	// One byte over and well over: denied mid-write, at most the cap
-	// delivered, result.error=limit-body.
-	for _, n := range []int64{4097, 8192} {
-		res, got := stream(n)
-		if res.StatusCode != http.StatusForbidden || denyReason(res) != "LIMIT_BODY" {
-			t.Fatalf("streamed %d over limit: status=%d reason=%q", n, res.StatusCode, denyReason(res))
+	// 1.1 declared Content-Length, deferred (> bufferLimit): at cap
+	// complete; one over is denied pre-wire — no upstream request.
+	res, i = stream(h1c, ce.anthro, "https://api.anthropic.com/lim/stream", 4096, 4096)
+	if res.StatusCode != 200 {
+		t.Fatalf("at-limit declared denied: status=%d reason=%q", res.StatusCode, denyReason(res))
+	}
+	if got := delivered(ce.anthro, i); got != 4096 {
+		t.Fatalf("at-limit declared incomplete: upstream got %d of 4096", got)
+	}
+	res, i = stream(h1c, ce.anthro, "https://api.anthropic.com/lim/stream", 4097, 4097)
+	if res.StatusCode != http.StatusForbidden || denyReason(res) != "LIMIT_BODY" {
+		t.Fatalf("declared 4097: status=%d reason=%q", res.StatusCode, denyReason(res))
+	}
+	if ce.anthro.count() != i {
+		t.Fatal("declared over-limit reached upstream")
+	}
+
+	// h2 DATA frames end to end (both legs h2 on h2.anthropic.example):
+	// same boundary — at cap complete, over cap ≤ cap upstream.
+	res, i = stream(h2c, ce.h2, "https://h2.anthropic.example/lim/stream", 4096, -1)
+	if res.StatusCode != 200 {
+		t.Fatalf("at-limit h2 denied: status=%d reason=%q", res.StatusCode, denyReason(res))
+	}
+	if got := delivered(ce.h2, i); got != 4096 {
+		t.Fatalf("at-limit h2 incomplete: upstream got %d of 4096", got)
+	}
+	res, i = stream(h2c, ce.h2, "https://h2.anthropic.example/lim/stream", 8192, -1)
+	if res.StatusCode != http.StatusForbidden || denyReason(res) != "LIMIT_BODY" {
+		t.Fatalf("h2 8192 over limit: status=%d reason=%q", res.StatusCode, denyReason(res))
+	}
+	if got := delivered(ce.h2, i); got > 4096 {
+		t.Fatalf("h2 8192: upstream received %d bytes, cap is 4096", got)
+	}
+
+	// Concurrency: two sessions streaming over the cap simultaneously —
+	// each request's own delivery is still ≤ cap.
+	c0 := ce.anthro.count()
+	resCh := make(chan *http.Response, 2)
+	var wg sync.WaitGroup
+	for _, cl := range []*http.Client{h1c, s2c} {
+		wg.Add(1)
+		go func(c *http.Client) {
+			defer wg.Done()
+			req, err := http.NewRequest("POST", "https://api.anthropic.com/lim/stream",
+				io.NopCloser(io.LimitReader(zeroReader{}, 8192)))
+			if err != nil {
+				resCh <- nil
+				return
+			}
+			req.ContentLength = -1
+			req.TransferEncoding = []string{"chunked"}
+			res, err := c.Do(req)
+			if err != nil {
+				resCh <- nil
+				return
+			}
+			resCh <- res
+		}(cl)
+	}
+	wg.Wait()
+	close(resCh)
+	nres := 0
+	for res := range resCh {
+		nres++
+		if res == nil {
+			t.Fatal("concurrent stream request failed")
 		}
-		if got > 4096 {
-			t.Fatalf("streamed %d: upstream received %d bytes, cap is 4096", n, got)
+		if res.StatusCode != http.StatusForbidden || denyReason(res) != "LIMIT_BODY" {
+			t.Fatalf("concurrent over-limit: status=%d reason=%q", res.StatusCode, denyReason(res))
+		}
+		_ = res.Body.Close()
+	}
+	if nres != 2 {
+		t.Fatalf("concurrent streams: %d responses, want 2", nres)
+	}
+	if !ce.anthro.waitSeen(c0+1, 3*time.Second) {
+		t.Fatal("concurrent over-limit requests never reached upstream")
+	}
+	for j := c0; j <= c0+1; j++ {
+		if got := ce.anthro.bodyLenAt(j); got > 4096 || got < 0 {
+			t.Fatalf("concurrent stream %d: upstream received %d bytes, cap is 4096", j, got)
 		}
 	}
+
 	// The result record lands in the handler's defer — poll briefly.
 	var resErr string
 	for i := 0; i < 50; i++ {
 		recs := recordsOfType[ResultBody](t, e.readSessionRecords(t, "s1"), "effect.http.result")
-		if len(recs) > 0 {
-			resErr = recs[len(recs)-1].Error
+		for j := len(recs) - 1; j >= 0; j-- {
+			if recs[j].Error == "limit-body" {
+				resErr = recs[j].Error
+			}
+		}
+		if resErr != "" {
 			break
 		}
 		time.Sleep(40 * time.Millisecond)

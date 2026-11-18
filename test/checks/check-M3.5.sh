@@ -40,8 +40,21 @@ job_C3.5.1() { gotest "$1" ./internal/proxy '^TestC351LimitBoundaries$'; }
 job_C3.5.2() { gotest "$1" ./internal/proxy '^TestC352RateScope$'; }
 
 # C3.5.3 — the body cap holds while streaming: upstream sees at most the
-# limit, the write aborts, result.error = "limit-body".
-job_C3.5.3() { gotest "$1" ./internal/proxy '^TestC353StreamingBodyCap$'; }
+# limit, the write aborts, result.error = "limit-body". -race -count=200:
+# the mid-write denial's accounting lands asynchronously — repetitions
+# are what catch timing-dependent escapes.
+job_C3.5.3() {
+    if ! [ -x "$GO" ]; then
+        echo "go toolchain missing: run make tools"
+        return 1
+    fi
+    if "$GO" test -tags fixtures -race -count=200 -run '^TestC353StreamingBodyCap$' \
+        ./internal/proxy >"$WORK/$1.full.log" 2>&1; then
+        return 0
+    fi
+    tail -8 "$WORK/$1.full.log"
+    return 1
+}
 
 # C3.5.4 — the broker never follows redirects; a 3xx reaches the client
 # and the follow-up is evaluated on its own grant (no credential hops).

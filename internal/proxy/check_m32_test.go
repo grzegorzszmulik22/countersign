@@ -92,7 +92,8 @@ type headerSink struct {
 	mu           sync.Mutex
 	seen         []http.Header
 	bodies       int64
-	secretInResp string // when set, the response body carries it (leak oracle)
+	lens         []int64 // per-request body bytes, parallel to seen
+	secretInResp string  // when set, the response body carries it (leak oracle)
 }
 
 func (h *headerSink) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -111,6 +112,7 @@ func (h *headerSink) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.mu.Lock()
 	h.seen = append(h.seen, hdr)
 	h.bodies += int64(len(body))
+	h.lens = append(h.lens, int64(len(body)))
 	h.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
 	resp := map[string]any{"ok": true}
@@ -144,6 +146,7 @@ func (h *headerSink) scrubEP(w http.ResponseWriter, r *http.Request) {
 	h.mu.Lock()
 	h.seen = append(h.seen, hdr)
 	h.bodies += int64(len(k))
+	h.lens = append(h.lens, int64(len(k)))
 	h.mu.Unlock()
 	switch {
 	case r.URL.Path == "/scrub/raw":
@@ -280,6 +283,31 @@ func (h *headerSink) bodyBytes() int64 {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.bodies
+}
+
+// bodyLenAt returns the body bytes the i-th upstream request carried.
+// Per-request attribution: a cumulative counter can't tell which request
+// owned bytes that were still in flight when measured (C3.5.3).
+func (h *headerSink) bodyLenAt(i int) int64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if i < 0 || i >= len(h.lens) {
+		return -1
+	}
+	return h.lens[i]
+}
+
+// waitSeen polls until the i-th upstream request's handler has landed
+// (seen and lens grow under the same lock), so its body count is final.
+func (h *headerSink) waitSeen(i int, d time.Duration) bool {
+	deadline := time.Now().Add(d)
+	for time.Now().Before(deadline) {
+		if h.count() > i {
+			return true
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	return h.count() > i
 }
 
 // credEnv is the shared M3 test rig: one credentialed session, fakehub on

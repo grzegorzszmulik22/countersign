@@ -1,0 +1,19 @@
+diff --git a/internal/proxy/limits.go b/internal/proxy/limits.go
+index ee2a96d..510260a 100644
+--- a/internal/proxy/limits.go
++++ b/internal/proxy/limits.go
+@@ -77,11 +77,11 @@ func (c *capBody) Read(b []byte) (int, error) {
+ 			}
+ 		}
+ 	}
+-	if int64(len(b)) > c.max-c.count {
+-		b = b[:c.max-c.count]
+-	}
+ 	n, err := c.r.Read(b)
+ 	c.count += int64(n)
++	if c.count > c.max {
++		c.over = true
++	}
+ 	return n, err
+ }
+ 
