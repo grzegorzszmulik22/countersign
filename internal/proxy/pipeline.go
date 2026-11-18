@@ -15,6 +15,7 @@ import (
 	"net/http/httptrace"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/countersign/countersign/internal/creds"
@@ -32,12 +33,20 @@ func (s *Server) handlePlain(w http.ResponseWriter, r *http.Request) {
 	}
 	env.sess = sess
 
+	// Pipelined requests skip conn-level head inspection; re-apply the
+	// parsed-layer smuggling rules before the grant is consulted.
+	if deny := parsedHeadDeny(r); deny != nil {
+		p, q, _ := wirePathQuery(r)
+		s.denyRequest(w, r, env, deny.reason, "http", plainAuthority(r), p, q, "")
+		return
+	}
+
 	authority := plainAuthority(r)
 	host, port := splitHostPort(authority)
 	if port == 0 {
 		port = 80
 	}
-	path, rawQuery := plainPathQuery(r)
+	path, rawQuery, forceQ := wirePathQuery(r)
 	res := sess.Policy.Match(policyRequest(r, "http", host, port, path, rawQuery, "", ""))
 	if res.Reason != "" {
 		s.denyRequest(w, r, env, res.Reason, "http", authority, path, rawQuery, res.Grant)
@@ -50,6 +59,7 @@ func (s *Server) handlePlain(w http.ResponseWriter, r *http.Request) {
 		port:      port,
 		path:      path,
 		rawQuery:  rawQuery,
+		forceQ:    forceQ,
 	}, res)
 }
 
@@ -62,16 +72,25 @@ func plainAuthority(r *http.Request) string {
 	return r.Host
 }
 
-// plainPathQuery returns the raw path and query exactly as received.
-func plainPathQuery(r *http.Request) (path, rawQuery string) {
-	if r.URL != nil {
-		path = r.URL.EscapedPath()
-		if path == "" {
-			path = "/"
+// wirePathQuery returns the request target's path and query exactly as
+// the wire carried them (B2-03): r.RequestURI is the unmodified target.
+// For absolute-form requests the scheme+authority prefix is stripped.
+// forceQ marks a trailing "?" with an empty query, preserved verbatim.
+func wirePathQuery(r *http.Request) (path, rawQuery string, forceQ bool) {
+	target := r.RequestURI
+	if r.URL != nil && r.URL.IsAbs() && strings.HasPrefix(target, r.URL.Scheme+"://") {
+		rest := target[len(r.URL.Scheme)+3:]
+		i := strings.IndexAny(rest, "/?")
+		if i < 0 {
+			return "/", "", false
 		}
-		return path, r.URL.RawQuery
+		target = rest[i:]
 	}
-	return "/", ""
+	p, q, hasQ := strings.Cut(target, "?")
+	if p == "" {
+		p = "/"
+	}
+	return p, q, hasQ
 }
 
 // policyRequest adapts an inbound request to a policy.Request (04 §2).
@@ -129,7 +148,7 @@ func (s *Server) recordDenyEffect(env *forwardEnv, r *http.Request, scheme, auth
 		Budget:      BudgetRecord{},
 		Inspect:     "none",
 	}
-	if err := s.appendRecord(env.sess, "effect.http", body); err != nil {
+	if err := s.appendRecordBound(env.sess, "effect.http", body); err != nil {
 		s.Logf("record write failed for deny: %v", err)
 	}
 }
@@ -140,8 +159,9 @@ type forwardTarget struct {
 	authority string // host[:port] exactly as the client named it
 	host      string
 	port      int
-	path      string // raw path as received
-	rawQuery  string
+	path      string // request-target path, wire-exact (B2-03)
+	rawQuery  string // query bytes, wire-exact
+	forceQ    bool   // the wire target ended in a bare "?"
 }
 
 // forward runs the pipeline: 04 §2 step 4 limits -> body buffer/defer ->
@@ -165,6 +185,18 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
 	if grant != nil && grant.Limits != nil && grant.Limits.RequestsPerMinute != nil &&
 		!sess.rate.take(mres.Grant, *grant.Limits.RequestsPerMinute) {
 		s.denyRequest(w, r, env, "LIMIT_RATE", tgt.scheme, tgt.authority, tgt.path, tgt.rawQuery, mres.Grant)
+		return
+	}
+
+	// WebSocket upgrade (04 §2 step 5, M2.5): the matched grant must name
+	// "websocket" in its upgrade list — otherwise the request can never
+	// become a tunnel (the response crosses as a plain HTTP relay).
+	if isWSUpgrade(r) {
+		if grant == nil || !grantUpgrade(grant, "websocket") {
+			s.denyRequest(w, r, env, "PROTOCOL_DENIED", tgt.scheme, tgt.authority, tgt.path, tgt.rawQuery, mres.Grant)
+			return
+		}
+		s.wsForward(w, r, env, tgt, grant, mres)
 		return
 	}
 
@@ -275,8 +307,8 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
 	// Write-ahead: the effect.http record is durable before the first byte
 	// goes upstream — and before the credential materializes (02 §6:
 	// evidence first, then secrets touch the wire). Sink failure fails
-	// closed.
-	if err := s.appendRecord(sess, "effect.http", effect); err != nil {
+	// closed, and the append itself is bounded (M2.4's write-ahead window).
+	if err := s.appendRecordBound(sess, "effect.http", effect); err != nil {
 		s.Logf("record append failed: %v", err)
 		w.Header().Set("X-Countersign-Reason", "LEDGER_UNAVAILABLE")
 		http.Error(w, "evidence store unavailable", http.StatusBadGateway)
@@ -307,24 +339,36 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
 	// folded the same way (case, trailing root dot) so an authority
 	// accepted as equal cannot fail resolution on the cosmetic
 	// difference; the client's Host header still crosses verbatim.
+	// Opaque carries the request-target's raw path bytes so the wire gets
+	// them exactly — no re-escaping, no decoding (B2-03).
 	dialAuthority := net.JoinHostPort(normName(tgt.host), strconv.Itoa(tgt.port))
-	upURL := &url.URL{Scheme: tgt.scheme, Host: dialAuthority, Path: tgt.path, RawPath: tgt.path, RawQuery: tgt.rawQuery}
-	upReq, err := http.NewRequestWithContext(r.Context(), r.Method, upURL.String(), bodyReader)
-	if err != nil {
-		result.Error = "request-build"
-		w.Header().Set("X-Countersign-Reason", "UPSTREAM_BLOCKED")
-		http.Error(w, "bad request", http.StatusBadGateway)
-		return
+	upReq := &http.Request{
+		Method: r.Method,
+		URL: &url.URL{
+			Scheme:     tgt.scheme,
+			Host:       dialAuthority,
+			Opaque:     tgt.path,
+			RawQuery:   tgt.rawQuery,
+			ForceQuery: tgt.forceQ,
+		},
+		Proto:      "HTTP/1.1",
+		ProtoMajor: 1,
+		ProtoMinor: 1,
+		Host:       tgt.authority,
+		Header:     outHdr,
 	}
-	upReq.Host = tgt.authority
-	upReq.Header = outHdr
+	if bodyReader != nil {
+		upReq.Body = io.NopCloser(bodyReader)
+	}
+	if bodyLen >= 0 {
+		upReq.ContentLength = bodyLen
+	} else {
+		upReq.ContentLength = -1
+	}
 	if plan.injected {
 		// 04 §4.5: credentialed requests offer exactly gzip or identity so
 		// every response arrives in an encoding the broker can scan.
 		upReq.Header.Set("Accept-Encoding", "gzip, identity")
-	}
-	if bodyLen >= 0 {
-		upReq.ContentLength = bodyLen
 	}
 	upInfo := &UpstreamRecord{}
 	gotFirstByte := make(chan struct{})
@@ -338,7 +382,10 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
 		},
 		GotFirstResponseByte: func() { close(gotFirstByte) },
 	}
-	upReq = upReq.WithContext(httptrace.WithClientTrace(upReq.Context(), trace))
+	// Resolve-once needs the session (dial budget) and the grant (network
+	// opt-in) inside the transport's dial hook.
+	ctx := httptrace.WithClientTrace(withDial(r.Context(), sess, grant), trace)
+	upReq = upReq.WithContext(ctx)
 
 	res, err := s.transport.RoundTrip(upReq)
 	if err != nil {
@@ -548,6 +595,10 @@ func upstreamErrorReason(err error) string {
 	var ute *upstreamTLSError
 	if errors.As(err, &ute) {
 		return "UPSTREAM_TLS"
+	}
+	var ub *errUpstreamBlocked
+	if errors.As(err, &ub) {
+		return "UPSTREAM_BLOCKED"
 	}
 	return "UPSTREAM"
 }

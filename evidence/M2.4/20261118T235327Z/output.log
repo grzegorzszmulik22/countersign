@@ -1,0 +1,8 @@
+CHECK C2.4.1 PASS
+CHECK C2.4.2 PASS
+CHECK C2.4.3 PASS
+CHECK C2.4.4 PASS
+CHECK C2.4.5 PASS
+CHECK C2.4.6 PASS
+CHECK lint.proxy FAIL —                  ^ 17 issues: * errcheck: 3 * gofmt: 3 * staticcheck: 8 * unused: 3 
+M2.4 suite: FAILURES

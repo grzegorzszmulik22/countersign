@@ -106,6 +106,20 @@ func DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
 	return nil, fmt.Errorf("fxres: %s is not a fixture host name", addr)
 }
 
+// DialKey dials the registered local address for a fixture key directly —
+// the broker's fixtures-build dialer reaches it after resolve-once has
+// already turned the host name into a synthetic IP.
+func DialKey(ctx context.Context, network, key string) (net.Conn, error) {
+	mu.RLock()
+	addr := local[key]
+	mu.RUnlock()
+	if addr == "" {
+		return nil, fmt.Errorf("fxres: no local address for fixture key %q", key)
+	}
+	var d net.Dialer
+	return d.DialContext(ctx, network, addr)
+}
+
 // Transport returns an http.Transport that resolves fixture host names
 // locally and trusts the test root CA. Unmapped names fail.
 func Transport() *http.Transport {

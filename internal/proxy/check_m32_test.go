@@ -964,7 +964,7 @@ func TestC326InjectAfterAck(t *testing.T) {
 	defer func() { injectHook = prev }()
 
 	ce := startCredEnv(t, m3Grants, func(dir string) RecordSink {
-		inner, err := NewFileRecordSink(filepath.Join(dir, "records"))
+		inner, err := NewFileRecordSink(filepath.Join(dir, "records"), "broker/test")
 		if err != nil {
 			t.Fatal(err)
 		}

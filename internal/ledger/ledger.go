@@ -47,8 +47,11 @@ type Ledger struct {
 	origin string
 	signer keys.Signer
 
-	entries *os.File
-	hashes  *os.File
+	entries  *os.File
+	hashes   *os.File
+	entriesR *os.File // read side of entries.jsonl for Line
+	lineOff  []int64  // byte offset of each line's start
+	writeOff int64    // offset the next appended line lands at
 
 	mu      sync.Mutex
 	cond    *sync.Cond
@@ -86,6 +89,11 @@ func Open(dir, origin string, signer keys.Signer) (*Ledger, error) {
 	var err error
 	l.entries, err = os.OpenFile(filepath.Join(dir, entriesFile), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
 	if err != nil {
+		return nil, err
+	}
+	l.entriesR, err = os.Open(filepath.Join(dir, entriesFile))
+	if err != nil {
+		_ = l.entries.Close()
 		return nil, err
 	}
 	l.hashes, err = os.OpenFile(filepath.Join(dir, hashesFile), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
@@ -165,6 +173,7 @@ func (l *Ledger) Append(line []byte) (uint64, error) {
 		return 0, errors.New("ledger closed")
 	}
 	idx := l.tree.AppendLeaf(line)
+	l.lineOff = append(l.lineOff, l.writeOff)
 	if _, err := l.entries.Write(line); err != nil {
 		l.mu.Unlock()
 		return 0, err
@@ -173,6 +182,7 @@ func (l *Ledger) Append(line []byte) (uint64, error) {
 		l.mu.Unlock()
 		return 0, err
 	}
+	l.writeOff += int64(len(line)) + 1
 	if _, err := l.hashes.Write(leaf[:]); err != nil {
 		l.mu.Unlock()
 		return 0, err
@@ -284,32 +294,27 @@ func (l *Ledger) SessionIndices(session string) ([]uint64, error) {
 }
 
 // Line returns the stored line at log index i (no trailing newline).
+// Line offsets are indexed at recover/append time, so a scan of the whole
+// log is O(log bytes) — not the O(n²) single-byte reads the naive walk cost.
 func (l *Ledger) Line(i uint64) ([]byte, error) {
-	f, err := os.Open(filepath.Join(l.dir, entriesFile))
-	if err != nil {
-		return nil, err
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if i >= uint64(len(l.lineOff)) {
+		return nil, fmt.Errorf("log index %d not found", i)
 	}
-	defer func() { _ = f.Close() }()
-	var cur uint64
-	buf := make([]byte, 0, 4096)
-	one := make([]byte, 1)
-	for {
-		n, err := f.Read(one)
-		if n == 1 {
-			if one[0] == '\n' {
-				if cur == i {
-					return append([]byte(nil), buf...), nil
-				}
-				cur++
-				buf = buf[:0]
-				continue
-			}
-			buf = append(buf, one[0])
-		}
-		if err != nil {
-			return nil, fmt.Errorf("log index %d not found", i)
-		}
+	start := l.lineOff[i]
+	end := l.writeOff
+	if i+1 < uint64(len(l.lineOff)) {
+		end = l.lineOff[i+1]
 	}
+	if end < start+1 {
+		return nil, fmt.Errorf("log index %d not found", i)
+	}
+	buf := make([]byte, end-start-1)
+	if _, err := l.entriesR.ReadAt(buf, start); err != nil {
+		return nil, fmt.Errorf("log index %d read: %w", i, err)
+	}
+	return buf, nil
 }
 
 // Close syncs and closes all files.
@@ -326,5 +331,8 @@ func (l *Ledger) Close() error {
 	l.sessMu.Unlock()
 	err1 := l.entries.Close()
 	err2 := l.hashes.Close()
+	if l.entriesR != nil {
+		err1 = errors.Join(err1, l.entriesR.Close())
+	}
 	return errors.Join(err1, err2)
 }

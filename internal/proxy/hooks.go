@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/x509"
 	"net"
+	"net/netip"
 )
 
 // defaultDialContext is the upstream dialer when Config.DialContext is nil:
@@ -15,6 +16,23 @@ import (
 var defaultDialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
 	var d net.Dialer
 	return d.DialContext(ctx, network, addr)
+}
+
+// resolveHost is the name resolver when Config.Resolve is nil: system DNS
+// in release builds; the fixture table (with its synthetic public IPs,
+// 02 §8) under the fixtures build tag.
+var resolveHost = func(ctx context.Context, host string) ([]netip.Addr, error) {
+	addrs, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]netip.Addr, 0, len(addrs))
+	for _, a := range addrs {
+		if ip, ok := netip.AddrFromSlice(a); ok {
+			out = append(out, ip)
+		}
+	}
+	return out, nil
 }
 
 // defaultRootCAs is the upstream trust store when Config.RootCAs is nil:

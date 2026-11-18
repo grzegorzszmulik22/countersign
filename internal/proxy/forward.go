@@ -49,12 +49,11 @@ type rawConn struct {
 // upstreamTransport builds the broker's upstream RoundTripper. HTTPS dials
 // go through DialTLSContext so the broker performs the upstream handshake
 // itself: system roots (+ test root in fixtures builds), TLS >= 1.2, and an
-// ALPN offer independent of the client's (M2.2).
+// ALPN offer independent of the client's (M2.2). Both dial hooks resolve
+// the host once, check the range policy and dial the checked address
+// (B2-04/B2-06); the name stays in TLS ServerName while the socket and the
+// record carry the IP.
 func (s *Server) upstreamTransport() *http.Transport {
-	dial := s.cfg.DialContext
-	if dial == nil {
-		dial = defaultDialContext
-	}
 	tr := &http.Transport{
 		ForceAttemptHTTP2:     true,
 		MaxIdleConns:          200,
@@ -65,27 +64,24 @@ func (s *Server) upstreamTransport() *http.Transport {
 		// byte-exact (M2.3).
 		DisableCompression: true,
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			c, err := dial(ctx, network, addr)
+			c, info, err := s.dialResolved(ctx, network, addr)
 			if err != nil {
 				return nil, err
 			}
-			host, port := splitHostPort(addr)
-			return &rawConn{Conn: c, info: UpstreamRecord{IP: host, Port: port}}, nil
+			return &rawConn{Conn: c, info: info}, nil
 		},
 		DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			raw, err := dial(ctx, network, addr)
+			raw, info, err := s.dialResolved(ctx, network, addr)
 			if err != nil {
 				return nil, err
 			}
-			host, port := splitHostPort(addr)
-			serverName := host
-			if ip := net.ParseIP(host); ip != nil {
-				serverName = host
-			}
+			// ServerName is the name the client asked for — the resolved
+			// IP rides only in the socket and the record.
+			host, _ := splitHostPort(addr)
 			cfg := &tls.Config{
 				RootCAs:    s.upstreamRoots(),
 				MinVersion: tls.VersionTLS12,
-				ServerName: serverName,
+				ServerName: host,
 				NextProtos: []string{"h2", "http/1.1"},
 			}
 			tc := tls.Client(raw, cfg)
@@ -96,7 +92,8 @@ func (s *Server) upstreamTransport() *http.Transport {
 				return nil, &upstreamTLSError{err: err}
 			}
 			st := tc.ConnectionState()
-			info := UpstreamRecord{IP: host, Port: port, TLSVersion: tlsVersionName(st.Version), ALPN: st.NegotiatedProtocol}
+			info.TLSVersion = tlsVersionName(st.Version)
+			info.ALPN = st.NegotiatedProtocol
 			if len(st.PeerCertificates) > 0 {
 				sum := sha256.Sum256(st.PeerCertificates[0].Raw)
 				info.CertSHA256 = hex.EncodeToString(sum[:])

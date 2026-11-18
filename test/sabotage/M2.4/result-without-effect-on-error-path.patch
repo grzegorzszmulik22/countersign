@@ -1,0 +1,31 @@
+diff --git a/internal/proxy/pipeline.go b/internal/proxy/pipeline.go
+--- a/internal/proxy/pipeline.go
++++ b/internal/proxy/pipeline.go
+@@ -308,12 +308,6 @@
+ 	// goes upstream — and before the credential materializes (02 §6:
+ 	// evidence first, then secrets touch the wire). Sink failure fails
+ 	// closed, and the append itself is bounded (M2.4's write-ahead window).
+-	if err := s.appendRecordBound(sess, "effect.http", effect); err != nil {
+-		s.Logf("record append failed: %v", err)
+-		w.Header().Set("X-Countersign-Reason", "LEDGER_UNAVAILABLE")
+-		http.Error(w, "evidence store unavailable", http.StatusBadGateway)
+-		return
+-	}
+ 	if plan.spec != nil {
+ 		plan.spec.Apply(outHdr)
+ 		plan.injected = true
+@@ -402,6 +396,14 @@
+ 		http.Error(w, "upstream failed", http.StatusBadGateway)
+ 		return
+ 	}
++	// Sabotage: the effect record waits for a successful round trip —
++	// an errored attempt leaves a result with no effect behind it.
++	if err := s.appendRecordBound(sess, "effect.http", effect); err != nil {
++		s.Logf("record append failed: %v", err)
++		w.Header().Set("X-Countersign-Reason", "LEDGER_UNAVAILABLE")
++		http.Error(w, "evidence store unavailable", http.StatusBadGateway)
++		return
++	}
+ 	// Best effort: the upstream body is drained or abandoned; a close
+ 	// error only repeats an already-recorded failure mode.
+ 	defer func() { _ = res.Body.Close() }()

@@ -1,0 +1,17 @@
+diff --git a/internal/proxy/upstream.go b/internal/proxy/upstream.go
+--- a/internal/proxy/upstream.go
++++ b/internal/proxy/upstream.go
+@@ -107,6 +107,11 @@ func (s *Server) dialUpstream(ctx context.Context, sess *Session, grant *policy.
+ 		}
+ 		allowed = true
+ 		if err := sess.acquireDial(ctx); err != nil {
+ 			return nil, UpstreamRecord{}, err
+ 		}
++		// Sabotage: re-resolve at connect time — the dial can land on an
++		// address that was never checked (rebinding, B2-04).
++		if fresh, rerr := s.resolveOnce(ctx, host); rerr == nil && len(fresh) > 0 {
++			ip = fresh[0]
++		}
+ 		c, err := s.dial(ctx, network, net.JoinHostPort(ip.String(), strconv.Itoa(port)))
+ 		sess.releaseDial()
+ 		if err != nil {

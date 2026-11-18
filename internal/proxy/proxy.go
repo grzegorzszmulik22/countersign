@@ -16,6 +16,7 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -24,10 +25,13 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/countersign/countersign/internal/keys"
 )
 
 // Config configures a broker Server.
@@ -37,31 +41,60 @@ type Config struct {
 	// RecordsDir receives the broker's records (per-session JSONL plus
 	// broker.log). Required.
 	RecordsDir string
+	// LedgerDir, when set, makes the record sink a real ledger
+	// (internal/ledger DSSE+Merkle) at this directory — the production
+	// path of M2.4. Requires BrokerSigner.
+	LedgerDir string
+	// LedgerOrigin names the ledger's origin (default
+	// "countersign/broker").
+	LedgerOrigin string
+	// BrokerSigner signs the per-session emitter's records on the
+	// LedgerDir path; LogSigner signs checkpoints (may be nil).
+	BrokerSigner keys.Signer
+	LogSigner    keys.Signer
 	// DialContext dials upstream addresses. nil uses the default dialer
-	// (the fixture resolver under the fixtures build tag, 02 §8).
+	// (the fixture resolver under the fixtures build tag, 02 §8). It
+	// always receives an already-resolved IP literal, never a name.
 	DialContext func(ctx context.Context, network, addr string) (net.Conn, error)
+	// Resolve resolves an upstream host to its address list once per
+	// dial (B2-04). nil uses resolveHost (fixture table under the
+	// fixtures tag, DNS otherwise).
+	Resolve resolveFunc
 	// RootCAs verifies upstream certificates. nil uses the system pool
 	// (plus the test root under the fixtures tag).
 	RootCAs *x509.CertPool
 	// Keys stores session CA keys; nil uses a MemoryKeyStore.
 	Keys SessionKeyStore
-	// Sink appends records; nil uses a FileRecordSink under RecordsDir.
-	// Tests inject failing sinks to prove append failures surface.
+	// Sink appends records; nil uses LedgerSink under LedgerDir or a
+	// FileRecordSink under RecordsDir. Tests inject failing sinks to
+	// prove append failures surface.
 	Sink RecordSink
 	// Logf receives broker log lines (also mirrored to broker.log).
 	// nil logs to stderr.
 	Logf func(format string, args ...any)
 }
 
+// maxAppend is the bounded write-ahead window of M2.4: a record append
+// that cannot commit within it fails closed.
+const maxAppend = 500 * time.Millisecond
+
+// M2.5 per-session isolation limits (spec/milestones/M2).
+const (
+	maxSessionConns = 256
+	maxSessionDials = 64
+	maxGlobalConns  = 256
+	idleTunnelMax   = 120 * time.Second
+)
+
 // Server is one broker instance.
 type Server struct {
-	cfg       Config
-	sessions  map[string]*Session // by token
-	sink      RecordSink
-	keys      SessionKeyStore
-	emitter   string
-	logf      func(format string, args ...any)
-	brokerLog *os.File
+	cfg          Config
+	sessions     map[string]*Session // by token
+	sessionsByID []*Session          // sorted by session ID (stable slot order)
+	sink         RecordSink
+	keys         SessionKeyStore
+	logf         func(format string, args ...any)
+	brokerLog    *os.File
 
 	http      *http.Server
 	transport *http.Transport
@@ -73,6 +106,8 @@ type Server struct {
 	closed    chan struct{}
 	closeOnce sync.Once
 	wg        sync.WaitGroup
+	// anonSem bounds connections no admitting session has a slot for.
+	anonSem chan struct{}
 	// reqs counts request handlers (plain listener and every tunnel's
 	// inner server). Close waits for them before closing the record sink:
 	// an HTTP/2 handler outlives its tunnel's Serve, and a result record
@@ -99,8 +134,18 @@ func NewServer(cfg Config) (*Server, error) {
 	}
 	sink := cfg.Sink
 	if sink == nil {
-		var err error
-		sink, err = NewFileRecordSink(cfg.RecordsDir)
+		if cfg.LedgerDir != "" {
+			if cfg.BrokerSigner == nil {
+				return nil, errors.New("proxy: LedgerDir requires BrokerSigner")
+			}
+			origin := cfg.LedgerOrigin
+			if origin == "" {
+				origin = "countersign/broker"
+			}
+			sink, err = NewLedgerSink(cfg.LedgerDir, origin, cfg.LogSigner, cfg.BrokerSigner)
+		} else {
+			sink, err = NewFileRecordSink(cfg.RecordsDir, "broker/"+newULID())
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -110,14 +155,26 @@ func NewServer(cfg Config) (*Server, error) {
 		sessions: sessions,
 		sink:     sink,
 		keys:     keys,
-		emitter:  "broker/" + newULID(),
 		tlsSrv:   map[*http.Server]bool{},
 		conns:    map[net.Conn]struct{}{},
 		closed:   make(chan struct{}),
+		anonSem:  make(chan struct{}, maxGlobalConns),
 	}
+	for _, sess := range sessions {
+		s.sessionsByID = append(s.sessionsByID, sess)
+	}
+	sort.Slice(s.sessionsByID, func(i, j int) bool { return s.sessionsByID[i].ID < s.sessionsByID[j].ID })
 	s.logf = cfg.Logf
 	if s.logf == nil {
 		s.logf = log.Printf
+	}
+	if pending, err := sink.PendingEffects(); err != nil {
+		s.Logf("restart dangling-effects scan failed: %v", err)
+	} else if len(pending) > 0 {
+		s.Logf("restart scan: %d dangling effect(s) from a previous run", len(pending))
+		for _, p := range pending {
+			s.Logf("dangling effect: session %s type %s id %s (no terminal record)", p.Session, p.Type, p.EffectID)
+		}
 	}
 	blog, err := os.OpenFile(filepath.Join(cfg.RecordsDir, "broker.log"),
 		os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o644)
@@ -132,9 +189,21 @@ func NewServer(cfg Config) (*Server, error) {
 		Handler:           s.admit(http.HandlerFunc(s.route)),
 		ReadHeaderTimeout: 30 * time.Second,
 		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
-			return context.WithValue(ctx, connKey{}, newULID())
+			id := newULID()
+			if ic, ok := c.(*inspectedConn); ok {
+				id = ic.cID
+			}
+			return context.WithValue(ctx, connKey{}, id)
 		},
 	}
+	// One request per conn for HTTP/1.1: net/http normalizes a pipelined
+	// head before any handler sees it (a pipelined CL+TE parses into a
+	// clean chunked request — undetectable post-parse), and the conn
+	// inspector can only bound the first head without duplicating the
+	// server's body-framing state machine. Refusing keep-alive means
+	// every h1 head is conn-level inspected (B2-05). h2 is unaffected:
+	// its streams multiplex under the h2 parser plus parsedHeadDeny.
+	s.http.SetKeepAlivesEnabled(false)
 	s.transport = s.upstreamTransport()
 	return s, nil
 }
@@ -166,6 +235,7 @@ func (s *Server) Serve(ctx context.Context, addr string) (net.Addr, error) {
 	if err != nil {
 		return nil, err
 	}
+	ln = &inspectListener{Listener: ln, srv: s}
 	s.mu.Lock()
 	s.ln = ln
 	s.mu.Unlock()
@@ -367,15 +437,61 @@ func (s *Server) recordDenied(sess *Session, r *http.Request, authority, reason,
 	}
 }
 
-// appendRecord serializes and durably appends one record on the session chain.
-func (s *Server) appendRecord(sess *Session, rtype string, body any) error {
-	sess.chainMu.Lock()
-	rec, err := sess.chain.next(rtype, body, s.emitter, sess.ID)
-	sess.chainMu.Unlock()
-	if err != nil {
-		return err
+// inspectListener wraps the broker listener: every accepted conn is
+// charged to a session's conn budget (or the unattributed pool) and
+// wrapped in the raw request-head inspector before net/http sees it.
+type inspectListener struct {
+	net.Listener
+	srv *Server
+}
+
+func (l *inspectListener) Accept() (net.Conn, error) {
+	for {
+		c, err := l.Listener.Accept()
+		if err != nil {
+			return nil, err
+		}
+		slot := l.srv.connSlotFor(c)
+		if slot == nil {
+			// Session conn budget and the unattributed pool are both
+			// exhausted: refuse before a byte is read (M2.5 isolation).
+			l.srv.Logf("conn from %s refused: connection budget exhausted", c.RemoteAddr())
+			_ = c.Close()
+			continue
+		}
+		return l.srv.newInspectedConn(c, nil, newULID(), slot), nil
 	}
-	return s.sink.Append(sess.ID, rec)
+}
+
+// appendRecord serializes and durably appends one record on the session's
+// evidence chain. It is the write-ahead boundary: the caller MUST wait for
+// a nil error before producing any upstream effect.
+func (s *Server) appendRecord(sess *Session, rtype string, body any) error {
+	raw, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("record marshal: %w", err)
+	}
+	return s.sink.Append(sess.ID, &Record{Type: rtype, Body: raw})
+}
+
+// appendRecordBound bounds one append to maxAppend: the append runs under
+// the session's appendMu so a slow sink cannot serialize sequence state
+// beyond the bound. A timeout fails closed — the record may or may not
+// have committed, so the caller must not produce an upstream effect.
+func (s *Server) appendRecordBound(sess *Session, rtype string, body any) error {
+	type res struct{ err error }
+	done := make(chan res, 1)
+	go func() {
+		sess.appendMu.Lock()
+		defer sess.appendMu.Unlock()
+		done <- res{err: s.appendRecord(sess, rtype, body)}
+	}()
+	select {
+	case r := <-done:
+		return r.err
+	case <-time.After(maxAppend):
+		return fmt.Errorf("record append exceeded %s bound", maxAppend)
+	}
 }
 
 // connID scopes effects to the connection that carried them.

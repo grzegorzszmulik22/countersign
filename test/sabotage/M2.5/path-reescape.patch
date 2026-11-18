@@ -1,0 +1,19 @@
+diff --git a/internal/proxy/pipeline.go b/internal/proxy/pipeline.go
+--- a/internal/proxy/pipeline.go
++++ b/internal/proxy/pipeline.go
+@@ -344,10 +344,12 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
+ 	// Opaque carries the request-target's raw path bytes so the wire gets
+ 	// them exactly — no re-escaping, no decoding (B2-03).
+ 	dialAuthority := net.JoinHostPort(normName(tgt.host), strconv.Itoa(tgt.port))
++	// Sabotage: drop Opaque — the raw path lands in Path, where Go's URL
++	// machinery re-escapes it before the wire (B2-03 violation).
+ 	upReq := &http.Request{
+ 		Method: r.Method,
+ 		URL: &url.URL{
+ 			Scheme:     tgt.scheme,
+ 			Host:       dialAuthority,
+-			Opaque:     tgt.path,
++			Path:       tgt.path,
+ 			RawQuery:   tgt.rawQuery,
+ 			ForceQuery: tgt.forceQ,
+ 		},

@@ -1,0 +1,14 @@
+diff --git a/internal/proxy/headscan.go b/internal/proxy/headscan.go
+--- a/internal/proxy/headscan.go
++++ b/internal/proxy/headscan.go
+@@ -366,9 +366,7 @@ func checkHead(head []byte, inner bool) (*headInfo, *headDeny) {
+ 	}
+ 	// Transfer-Encoding: exactly "chunked", once, and never beside CL.
+ 	if len(teVals) > 0 {
+-		if len(clSet) > 0 {
+-			return info, &headDeny{"SMUGGLING_SUSPECT", "Content-Length with Transfer-Encoding"}
+-		}
++		// Sabotage: CL+TE is allowed — TE wins, the CL rides along.
+ 		var teList []string
+ 		for _, v := range teVals {
+ 			for _, e := range strings.Split(v, ",") {

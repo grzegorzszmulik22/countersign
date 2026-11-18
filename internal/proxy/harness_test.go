@@ -21,6 +21,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -76,6 +77,13 @@ func newTestEnvRoots(t *testing.T, entries []SessionEntry, routes map[string]str
 // dir/records).
 func newTestEnvFull(t *testing.T, dir string, entries []SessionEntry, routes map[string]string, extraCA *miniCA, sink RecordSink) *testEnv {
 	t.Helper()
+	return newTestEnvMut(t, dir, entries, routes, extraCA, sink, nil)
+}
+
+// newTestEnvMut is newTestEnvFull plus a Config mutator (M2.4 needs
+// LedgerDir/signers the standard builder does not set).
+func newTestEnvMut(t *testing.T, dir string, entries []SessionEntry, routes map[string]string, extraCA *miniCA, sink RecordSink, mutate func(*Config)) *testEnv {
+	t.Helper()
 	testSeq.mu.Lock()
 	testSeq.n++
 	testSeq.mu.Unlock()
@@ -102,29 +110,70 @@ func newTestEnvFull(t *testing.T, dir string, entries []SessionEntry, routes map
 	if err := os.WriteFile(sessFile, []byte(b.String()), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// NewServer opens broker.log inside RecordsDir even when the sink is
+	// injected — the dir must exist regardless.
+	if err := os.MkdirAll(records, 0o755); err != nil {
+		t.Fatal(err)
+	}
 
-	srv, err := NewServer(Config{
+	// Resolve-once (B2-04) splits name resolution from dialing: routes
+	// become synthetic TEST-NET-2 IPs the range check admits; the dial
+	// maps them back to the route target. fxres names resolve through
+	// the fixtures resolveHost (its own synthetic-IP table).
+	var routeMu sync.Mutex
+	routeIP := map[string]string{}
+	routeName := map[string]netip.Addr{}
+	routeNext := netip.MustParseAddr("198.51.100.200")
+	routeResolve := func(ctx context.Context, host string) ([]netip.Addr, error) {
+		h := strings.ToLower(host)
+		routeMu.Lock()
+		if ip, ok := routeName[h]; ok {
+			routeMu.Unlock()
+			return []netip.Addr{ip}, nil
+		}
+		real, ok := routes[h]
+		if !ok {
+			real, ok = routes["*"]
+		}
+		if ok {
+			ip := routeNext
+			b := ip.As4()
+			b[3]++
+			routeNext = netip.AddrFrom4(b)
+			routeName[h] = ip
+			routeIP[ip.String()] = real
+			routeMu.Unlock()
+			return []netip.Addr{ip}, nil
+		}
+		routeMu.Unlock()
+		return resolveHost(ctx, h)
+	}
+	cfg := Config{
 		SessionsFile: sessFile,
 		RecordsDir:   records,
 		RootCAs:      roots,
 		Sink:         sink,
+		Resolve:      routeResolve,
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			host := addr
 			if h, _, err := net.SplitHostPort(addr); err == nil {
 				host = h
 			}
-			real, ok := routes[strings.ToLower(host)]
-			if !ok {
-				real, ok = routes["*"]
-			}
+			routeMu.Lock()
+			real, ok := routeIP[host]
+			routeMu.Unlock()
 			if ok {
 				var d net.Dialer
 				return d.DialContext(ctx, network, real)
 			}
-			return fxres.DialContext(ctx, network, addr)
+			return defaultDialContext(ctx, network, addr)
 		},
 		Logf: func(format string, args ...any) { t.Logf("broker: "+format, args...) },
-	})
+	}
+	if mutate != nil {
+		mutate(&cfg)
+	}
+	srv, err := NewServer(cfg)
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
 	}
@@ -537,6 +586,10 @@ func (s *failableSink) Append(session string, rec *Record) error {
 		return errors.New("record sink unavailable")
 	}
 	return s.inner.Append(session, rec)
+}
+
+func (s *failableSink) PendingEffects() ([]PendingEffect, error) {
+	return s.inner.PendingEffects()
 }
 
 func (s *failableSink) Close() error { return s.inner.Close() }

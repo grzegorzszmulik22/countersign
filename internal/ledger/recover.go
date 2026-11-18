@@ -60,6 +60,15 @@ func (l *Ledger) recover() error {
 		l.tree.AppendLeaf(lines[kept])
 	}
 
+	// Index the kept lines' byte offsets so Line is an O(1) ReadAt.
+	l.lineOff = make([]int64, kept)
+	var off int64
+	for i := uint64(0); i < kept; i++ {
+		l.lineOff[i] = off
+		off += int64(len(lines[i])) + 1
+	}
+	l.writeOff = off
+
 	// Truncate the torn tail: entries past the kept prefix, hash bytes past
 	// kept*32. Nothing else is ever rewritten.
 	if lastNL < len(raw)-1 || kept < uint64(len(lines)) {

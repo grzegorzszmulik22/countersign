@@ -1,0 +1,38 @@
+diff --git a/internal/proxy/records.go b/internal/proxy/records.go
+--- a/internal/proxy/records.go
++++ b/internal/proxy/records.go
+@@ -221,6 +221,22 @@
+ // pre-append offset and restores the chain, so a failed append neither
+ // consumes an eseq nor leaves a torn line behind.
+ func (s *FileRecordSink) Append(session string, rec *Record) error {
++	// Sabotage: chain assignment in its own critical section — a second
++	// append can claim the next eseq and write first (B2-02).
++	s.mu.Lock()
++	ch0 := s.chains[session]
++	if ch0 == nil {
++		ch0 = &sessionChain{eprev: zeroHash}
++		s.chains[session] = ch0
++	}
++	if err := ch0.fill(rec, s.emitter, session); err != nil {
++		s.mu.Unlock()
++		return err
++	}
++	eseq, eprev := ch0.eseq, ch0.eprev
++	s.mu.Unlock()
++	time.Sleep(time.Millisecond)
++
+ 	s.mu.Lock()
+ 	defer s.mu.Unlock()
+ 	f, ok := s.files[session]
+@@ -243,10 +259,7 @@
+ 		return fmt.Errorf("record stat: %w", err)
+ 	}
+ 	off := fi.Size()
+-	eseq, eprev := ch.eseq, ch.eprev
+-	if err := ch.fill(rec, s.emitter, session); err != nil {
+-		return err
+-	}
++	_ = ch
+ 	fail := func(err error) error {
+ 		// Best effort: the file position after a partial write is
+ 		// already accounted in off; truncate drops whatever landed.

@@ -1,0 +1,13 @@
+diff --git a/internal/proxy/pipeline.go b/internal/proxy/pipeline.go
+--- a/internal/proxy/pipeline.go
++++ b/internal/proxy/pipeline.go
+@@ -192,7 +192,8 @@
+ 	// "websocket" in its upgrade list — otherwise the request can never
+ 	// become a tunnel (the response crosses as a plain HTTP relay).
+ 	if isWSUpgrade(r) {
+-		if grant == nil || !grantUpgrade(grant, "websocket") {
++		// Sabotage: any request may upgrade — grants don't gate tunnels.
++		if false {
+ 			s.denyRequest(w, r, env, "PROTOCOL_DENIED", tgt.scheme, tgt.authority, tgt.path, tgt.rawQuery, mres.Grant)
+ 			return
+ 		}

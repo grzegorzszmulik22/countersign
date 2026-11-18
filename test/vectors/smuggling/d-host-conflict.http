@@ -1,0 +1,4 @@
+GET http://a.com/x HTTP/1.1
+Host: b.com
+Proxy-Authorization: Basic Y3M6dG9rLW9uZQ==
+

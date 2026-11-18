@@ -1,0 +1,14 @@
+diff --git a/internal/proxy/upstream.go b/internal/proxy/upstream.go
+--- a/internal/proxy/upstream.go
++++ b/internal/proxy/upstream.go
+@@ -126,7 +126,9 @@
+ 			lastErr = err
+ 			continue
+ 		}
+-		info := UpstreamRecord{IP: ip.String(), Port: port}
++		// Sabotage: record the name that resolved, not the address that
++		// was dialled (B2-06 violation).
++		info := UpstreamRecord{IP: host, Port: port}
+ 		return &dialledConn{Conn: c, addr: &net.TCPAddr{IP: net.ParseIP(ip.String()), Port: port}}, info, nil
+ 	}
+ 	if !allowed && len(ips) > 0 {

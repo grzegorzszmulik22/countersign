@@ -1,0 +1,5 @@
+GET http://up.test/x HTTP/1.1
+Host: up.test
+Proxy-Authorization: Basic Y3M6dG9rLW9uZQ==
+Host: up.test
+

@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/x509"
 	"flag"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/countersign/countersign/internal/keys"
 	"github.com/countersign/countersign/internal/proxy"
 )
 
@@ -23,6 +25,8 @@ func main() {
 	local := flag.Bool("local", false, "local mode: session table from a file (required until cluster mode)")
 	sessionsFile := flag.String("sessions", "", "session table YAML (local mode)")
 	recordsDir := flag.String("records-dir", "", "directory for broker records and broker.log (required)")
+	ledgerDir := flag.String("ledger-dir", "", "evidence ledger directory (M2.4; signs records with --broker-key)")
+	brokerKey := flag.String("broker-key", "", "ed25519 key file for ledger record signing (created if absent; required with --ledger-dir)")
 	upstreamCA := flag.String("upstream-ca", "", "PEM file appended to upstream trust roots")
 	flag.Parse()
 
@@ -53,9 +57,38 @@ func main() {
 		roots = pool
 	}
 
+	var signer keys.Signer
+	if *ledgerDir != "" {
+		if *brokerKey == "" {
+			fmt.Fprintln(os.Stderr, "csbroker: --ledger-dir requires --broker-key")
+			os.Exit(2)
+		}
+		s, err := keys.LoadSigner(*brokerKey)
+		signer = s
+		if os.IsNotExist(err) {
+			var seed [32]byte
+			if _, err := rand.Read(seed[:]); err != nil {
+				fmt.Fprintln(os.Stderr, "csbroker: key seed:", err)
+				os.Exit(1)
+			}
+			signer = keys.NewSigner(seed[:])
+			if err := keys.SaveSigner(signer, *brokerKey); err != nil {
+				fmt.Fprintln(os.Stderr, "csbroker: save broker key:", err)
+				os.Exit(1)
+			}
+		}
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "csbroker: --broker-key:", err)
+			os.Exit(1)
+		}
+	}
+
 	srv, err := proxy.NewServer(proxy.Config{
 		SessionsFile: *sessionsFile,
 		RecordsDir:   *recordsDir,
+		LedgerDir:    *ledgerDir,
+		BrokerSigner: signer,
+		LogSigner:    signer,
 		RootCAs:      roots,
 	})
 	if err != nil {

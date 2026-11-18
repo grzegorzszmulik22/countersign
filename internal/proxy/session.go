@@ -58,8 +58,14 @@ type Session struct {
 	caCert *x509.Certificate
 	caKey  *ecdsa.PrivateKey
 
-	chainMu sync.Mutex
-	chain   sessionChain
+	// appendMu serializes record appends for this session: the sink's
+	// chain assignment and the durable write run under it (B2-02).
+	appendMu sync.Mutex
+
+	// connSem bounds concurrent client connections (M2.5: 256/session);
+	// dialSem bounds in-flight upstream dials (64/session).
+	connSem chan struct{}
+	dialSem chan struct{}
 
 	leafMu    sync.Mutex
 	leafCache map[string]*tls.Certificate
@@ -119,6 +125,8 @@ func loadSessions(path string, keys SessionKeyStore) (map[string]*Session, error
 			Policy:       pol,
 			placeholders: map[string]string{},
 			rate:         newRateTable(),
+			connSem:      make(chan struct{}, maxSessionConns),
+			dialSem:      make(chan struct{}, maxSessionDials),
 			leafCache:    map[string]*tls.Certificate{},
 		}
 		// Credential store + placeholders (04 §4, M3.2): a credentialed
@@ -154,7 +162,6 @@ func loadSessions(path string, keys SessionKeyStore) (map[string]*Session, error
 				s.placeholders[g.ID] = creds.NewPlaceholder(e.ID, g.ID)
 			}
 		}
-		s.chain.eprev = zeroHash
 		if err := s.mintCA(); err != nil {
 			return nil, fmt.Errorf("session table: session %q CA: %w", e.ID, err)
 		}

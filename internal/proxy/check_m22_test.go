@@ -430,7 +430,7 @@ func TestC224SNICrossCheck(t *testing.T) {
 	// A denial whose record append fails must surface as a broker error:
 	// a denial that is not recorded breaks the evidence record.
 	dir2 := t.TempDir()
-	inner, err := NewFileRecordSink(filepath.Join(dir2, "records"))
+	inner, err := NewFileRecordSink(filepath.Join(dir2, "records"), "broker/test")
 	if err != nil {
 		t.Fatal(err)
 	}

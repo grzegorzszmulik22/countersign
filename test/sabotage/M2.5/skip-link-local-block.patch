@@ -1,0 +1,13 @@
+diff --git a/internal/proxy/upstream.go b/internal/proxy/upstream.go
+--- a/internal/proxy/upstream.go
++++ b/internal/proxy/upstream.go
+@@ -84,7 +84,8 @@
+ // deployment ranges (a cluster grant must not open the metadata path).
+ func upstreamIPOK(ip netip.Addr, g *policy.Grant) bool {
+ 	ip = ip.Unmap()
+-	if ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() ||
++	// Sabotage: link-local ranges are routable enough for us.
++	if ip.IsLoopback() || ip.IsUnspecified() ||
+ 		ip.IsLinkLocalMulticast() || ip.IsMulticast() || ip.IsInterfaceLocalMulticast() {
+ 		return false
+ 	}

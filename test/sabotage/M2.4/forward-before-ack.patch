@@ -1,0 +1,23 @@
+diff --git a/internal/proxy/pipeline.go b/internal/proxy/pipeline.go
+--- a/internal/proxy/pipeline.go
++++ b/internal/proxy/pipeline.go
+@@ -308,12 +308,13 @@
+ 	// goes upstream — and before the credential materializes (02 §6:
+ 	// evidence first, then secrets touch the wire). Sink failure fails
+ 	// closed, and the append itself is bounded (M2.4's write-ahead window).
+-	if err := s.appendRecordBound(sess, "effect.http", effect); err != nil {
+-		s.Logf("record append failed: %v", err)
+-		w.Header().Set("X-Countersign-Reason", "LEDGER_UNAVAILABLE")
+-		http.Error(w, "evidence store unavailable", http.StatusBadGateway)
+-		return
+-	}
++	// Sabotage: forward before the append completes — the request races
++	// ahead of its evidence.
++	go func() {
++		if err := s.appendRecordBound(sess, "effect.http", effect); err != nil {
++			s.Logf("record append failed: %v", err)
++		}
++	}()
+ 	if plan.spec != nil {
+ 		plan.spec.Apply(outHdr)
+ 		plan.injected = true

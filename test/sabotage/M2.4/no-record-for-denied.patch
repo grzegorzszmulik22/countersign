@@ -1,0 +1,13 @@
+diff --git a/internal/proxy/pipeline.go b/internal/proxy/pipeline.go
+--- a/internal/proxy/pipeline.go
++++ b/internal/proxy/pipeline.go
+@@ -114,7 +114,8 @@
+ 	if reason == "LEDGER_UNAVAILABLE" || reason == "CREDENTIAL_UNAVAILABLE" {
+ 		status = http.StatusBadGateway
+ 	}
+-	s.recordDenyEffect(env, r, scheme, authority, path, rawQuery, grantID, reason)
++	// Sabotage: denials happen but are never recorded.
++	_ = env
+ 	w.Header().Set("X-Countersign-Reason", reason)
+ 	http.Error(w, "request denied: "+reason, status)
+ }

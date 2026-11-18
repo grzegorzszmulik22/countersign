@@ -45,6 +45,11 @@ func (b *bridgeSink) Append(session string, rec *proxy.Record) error {
 
 func (b *bridgeSink) Close() error { return nil }
 
+// PendingEffects runs the restart dangling scan on the runner ledger.
+func (b *bridgeSink) PendingEffects() ([]proxy.PendingEffect, error) {
+	return proxy.PendingInLedger(b.em.led)
+}
+
 func (b *bridgeSink) err() error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -123,6 +128,30 @@ func bridgeBody(rtype string, raw json.RawMessage) (any, error) {
 			Timing:      evidence.Timing{TotalMS: p.Timing.TotalMS, TTFBMS: p.Timing.TTFBMS},
 			Scrubbed:    uint64(p.Scrubbed),
 			Error:       strp(p.Error),
+		}, nil
+	case "effect.tunnel":
+		var p proxy.TunnelBody
+		if err := json.Unmarshal(raw, &p); err != nil {
+			return nil, err
+		}
+		return &evidence.EffectTunnelBody{
+			EffectID:  p.EffectID,
+			Authority: p.Authority,
+			SNI:       strp(p.SNI),
+			Kind:      p.Kind,
+			Decision:  bridgeDecision(p.Decision),
+		}, nil
+	case "effect.tunnel.result":
+		var p proxy.TunnelResultBody
+		if err := json.Unmarshal(raw, &p); err != nil {
+			return nil, err
+		}
+		return &evidence.EffectTunnelResultBody{
+			EffectID:   p.EffectID,
+			BytesUp:    uint64(p.BytesUp),
+			BytesDown:  uint64(p.BytesDown),
+			DurationMS: p.DurationMS,
+			Error:      strp(p.Error),
 		}, nil
 	case "effect.denied":
 		var p proxy.DeniedBody
