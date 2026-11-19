@@ -373,21 +373,29 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
 	upInfo := &UpstreamRecord{}
 	gotFirstByte := make(chan struct{})
 	trace := &httptrace.ClientTrace{
-		GotConn: func(info httptrace.GotConnInfo) {
-			if uc, ok := info.Conn.(*outConn); ok {
-				*upInfo = uc.info
-			} else if rc, ok := info.Conn.(*rawConn); ok {
-				*upInfo = rc.info
-			}
-		},
 		GotFirstResponseByte: func() { close(gotFirstByte) },
 	}
-	// Resolve-once needs the session (dial budget) and the grant (network
-	// opt-in) inside the transport's dial hook.
-	ctx := httptrace.WithClientTrace(withDial(r.Context(), sess, grant), trace)
+	// B2-01: the upstream attempt runs on a dedicated ClientConn — one
+	// conn, one request, never pooled, so no transport retry path (h1
+	// reused-conn or h2 REFUSED/GOAWAY) can fire: a second attempt could
+	// never be recorded, so none may happen. Resolve-once needs the
+	// session (dial budget) and the grant (network opt-in) inside the
+	// transport's dial hook; upInfo comes back through the same carrier.
+	cc, err := s.transport.NewClientConn(withDial(r.Context(), sess, grant, upInfo),
+		tgt.scheme, dialAuthority)
+	if err != nil {
+		result.Error = upstreamErrorReason(err)
+		result.Upstream = nonNil(upInfo)
+		s.Logf("upstream %s %s: %v", r.Method, tgt.authority, err)
+		w.Header().Set("X-Countersign-Reason", result.Error)
+		http.Error(w, "upstream failed", http.StatusBadGateway)
+		return
+	}
+	defer func() { _ = cc.Close() }()
+	ctx := httptrace.WithClientTrace(r.Context(), trace)
 	upReq = upReq.WithContext(ctx)
 
-	res, err := s.transport.RoundTrip(upReq)
+	res, err := cc.RoundTrip(upReq)
 	if err != nil {
 		if errors.Is(err, errBodyLimit) {
 			result.Error = "limit-body"

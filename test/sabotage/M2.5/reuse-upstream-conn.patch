@@ -1,12 +1,26 @@
-diff --git a/internal/proxy/forward.go b/internal/proxy/forward.go
---- a/internal/proxy/forward.go
-+++ b/internal/proxy/forward.go
-@@ -68,7 +68,7 @@
- 		// its h2 layer retries REFUSED streams: a second attempt the
- 		// effect records never covered. One fresh conn per attempt makes
- 		// retry unreachable and every dial accountable to its effect.
--		DisableKeepAlives: true,
-+		DisableKeepAlives: false,
- 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
- 			c, info, err := s.dialResolved(ctx, network, addr)
- 			if err != nil {
+--- a/internal/proxy/pipeline.go	2026-11-19 03:40:57.361938845 +0000
++++ b/internal/proxy/pipeline.go	2026-11-19 03:40:59.413943728 +0000
+@@ -381,21 +381,9 @@
+ 	// never be recorded, so none may happen. Resolve-once needs the
+ 	// session (dial budget) and the grant (network opt-in) inside the
+ 	// transport's dial hook; upInfo comes back through the same carrier.
+-	cc, err := s.transport.NewClientConn(withDial(r.Context(), sess, grant, upInfo),
+-		tgt.scheme, dialAuthority)
+-	if err != nil {
+-		result.Error = upstreamErrorReason(err)
+-		result.Upstream = nonNil(upInfo)
+-		s.Logf("upstream %s %s: %v", r.Method, tgt.authority, err)
+-		w.Header().Set("X-Countersign-Reason", result.Error)
+-		http.Error(w, "upstream failed", http.StatusBadGateway)
+-		return
+-	}
+-	defer func() { _ = cc.Close() }()
+-	ctx := httptrace.WithClientTrace(r.Context(), trace)
++	ctx := httptrace.WithClientTrace(withDial(r.Context(), sess, grant, upInfo), trace)
+ 	upReq = upReq.WithContext(ctx)
+-
+-	res, err := cc.RoundTrip(upReq)
++	res, err := s.transport.RoundTrip(upReq)
+ 	if err != nil {
+ 		if errors.Is(err, errBodyLimit) {
+ 			result.Error = "limit-body"

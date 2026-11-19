@@ -31,19 +31,13 @@ type forwardEnv struct {
 	tlsClient bool // inner requests arrive over the intercepted TLS conn
 }
 
-// outConn is the wrapped upstream connection: it surfaces the TLS state the
-// transport negotiated so the result record can name ip/port/tls_version/
-// cert_sha256 (03 §4.2).
-type outConn struct {
-	*tls.Conn
-	info UpstreamRecord
-}
-
-func (c *outConn) ConnectionState() tls.ConnectionState { return c.Conn.ConnectionState() }
-
-type rawConn struct {
-	net.Conn
-	info UpstreamRecord
+// publishDialInfo hands the completed upstream record (dialled address
+// plus, for HTTPS, the negotiated TLS state) to the result accumulator
+// the request's dial carrier installed (B2-06).
+func publishDialInfo(ctx context.Context, info UpstreamRecord) {
+	if d, _ := ctx.Value(ctxDialKey{}).(*ctxDial); d != nil && d.info != nil {
+		*d.info = info
+	}
 }
 
 // upstreamTransport builds the broker's upstream RoundTripper. HTTPS dials
@@ -63,18 +57,19 @@ func (s *Server) upstreamTransport() *http.Transport {
 		// decoded inside the scrubber (04 §4.5), and plain ones cross
 		// byte-exact (M2.3).
 		DisableCompression: true,
-		// B2-01: no upstream retries — http.Transport retries an
-		// idempotent request whose write failed on a *reused* conn, and
-		// its h2 layer retries REFUSED streams: a second attempt the
-		// effect records never covered. One fresh conn per attempt makes
-		// retry unreachable and every dial accountable to its effect.
-		DisableKeepAlives: true,
+		// B2-01: upstream requests run through Transport.NewClientConn —
+		// a pooled-exempt conn whose RoundTrip makes exactly one attempt
+		// (h1 persistConn and h2 ClientConn alike). The pool is never
+		// consulted, so neither the reused-conn idempotent retry nor the
+		// h2 REFUSED/GOAWAY stream retry can ever produce an upstream
+		// attempt the effect records did not cover.
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			c, info, err := s.dialResolved(ctx, network, addr)
 			if err != nil {
 				return nil, err
 			}
-			return &rawConn{Conn: c, info: info}, nil
+			publishDialInfo(ctx, info)
+			return c, nil
 		},
 		DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			raw, info, err := s.dialResolved(ctx, network, addr)
@@ -104,7 +99,8 @@ func (s *Server) upstreamTransport() *http.Transport {
 				sum := sha256.Sum256(st.PeerCertificates[0].Raw)
 				info.CertSHA256 = hex.EncodeToString(sum[:])
 			}
-			return &outConn{Conn: tc, info: info}, nil
+			publishDialInfo(ctx, info)
+			return tc, nil
 		},
 	}
 	return tr

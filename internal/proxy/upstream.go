@@ -35,12 +35,14 @@ func (e *errUpstreamBlocked) Error() string {
 }
 
 // ctxDial carries the per-request context the transport's dial functions
-// need: the session (dial budget) and the grant (network opt-in).
+// need: the session (dial budget) and the grant (network opt-in). info,
+// when non-nil, receives the dialled address for the result record.
 type ctxDialKey struct{}
 
 type ctxDial struct {
 	sess  *Session
 	grant *policy.Grant
+	info  *UpstreamRecord
 }
 
 // resolveFunc is the host-to-addresses resolver Config.Resolve installs;

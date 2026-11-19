@@ -54,9 +54,11 @@ func grantUpgrade(g *policy.Grant, u string) bool {
 }
 
 // withDial installs the resolve-once carrier the transport's dial hooks
-// need: the session's dial budget and the grant's network opt-in.
-func withDial(ctx context.Context, sess *Session, grant *policy.Grant) context.Context {
-	return context.WithValue(ctx, ctxDialKey{}, &ctxDial{sess: sess, grant: grant})
+// need: the session's dial budget and the grant's network opt-in. info,
+// when non-nil, receives the dialled upstream address for the result
+// record (B2-06).
+func withDial(ctx context.Context, sess *Session, grant *policy.Grant, info *UpstreamRecord) context.Context {
+	return context.WithValue(ctx, ctxDialKey{}, &ctxDial{sess: sess, grant: grant, info: info})
 }
 
 // wsForward carries a granted WebSocket upgrade: write-ahead
@@ -116,9 +118,22 @@ func (s *Server) wsForward(w http.ResponseWriter, r *http.Request, env *forwardE
 		Header:     outHdr,
 		Body:       http.NoBody,
 	}
-	upReq = upReq.WithContext(withDial(r.Context(), sess, grant))
+	// B2-01: the upgrade attempt runs on a dedicated ClientConn — one
+	// conn, one request, never pooled; no transport retry path can
+	// produce an attempt the effect.tunnel record did not cover. The
+	// conn stays open for the tunnel's whole relay.
+	cc, err := s.transport.NewClientConn(withDial(r.Context(), sess, grant, nil),
+		tgt.scheme, dialAuthority)
+	if err != nil {
+		result.Error = upstreamErrorReason(err)
+		w.Header().Set("X-Countersign-Reason", result.Error)
+		http.Error(w, "upstream failed", http.StatusBadGateway)
+		return
+	}
+	defer func() { _ = cc.Close() }()
+	upReq = upReq.WithContext(r.Context())
 
-	res, err := s.transport.RoundTrip(upReq)
+	res, err := cc.RoundTrip(upReq)
 	if err != nil {
 		result.Error = upstreamErrorReason(err)
 		w.Header().Set("X-Countersign-Reason", result.Error)
