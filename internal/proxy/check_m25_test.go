@@ -533,6 +533,57 @@ func TestC253UpstreamAddrCheck(t *testing.T) {
 		}
 	})
 
+	// Same no-reuse invariant over HTTP/2: a pooled h2 conn would serve
+	// every request on one dial and could hide a same-conn stream retry —
+	// the broker must dial once per upstream attempt instead (B2-01).
+	t.Run("no-reuse-h2", func(t *testing.T) {
+		dir := t.TempDir()
+		pol := writePolicy(t, dir, "p", `  mode: enforce
+  grants:
+    - id: h2up
+      action: allow
+      match: {hosts: [h2up.example], ports: [443]}
+`)
+		routes := map[string]string{}
+		var dialCalls atomic.Int64
+		e := newTestEnvMut(t, dir,
+			[]SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)},
+			routes, nil, nil, func(c *Config) {
+				inner := c.DialContext
+				c.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+					dialCalls.Add(1)
+					return inner(ctx, network, addr)
+				}
+			})
+		var hits atomic.Int64
+		h2addr, closeH2 := startTLSUpstream(t, e.ca, []string{"h2up.example"}, []string{"h2"},
+			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				hits.Add(1)
+				w.WriteHeader(200)
+			}))
+		defer closeH2()
+		routes["h2up.example"] = h2addr
+
+		cli := e.proxyClient(t, "tok-one", e.combinedPool(t, "s1"))
+		const reqs = 3
+		for i := 0; i < reqs; i++ {
+			res, err := cli.Get("https://h2up.example/x")
+			if err != nil {
+				t.Fatalf("request %d: %v", i, err)
+			}
+			_ = res.Body.Close()
+			if res.StatusCode != 200 {
+				t.Fatalf("request %d: status %d", i, res.StatusCode)
+			}
+		}
+		if got := hits.Load(); got != reqs {
+			t.Fatalf("upstream saw %d requests for %d sent — a retry reached the wire", got, reqs)
+		}
+		if got := dialCalls.Load(); got != reqs {
+			t.Fatalf("dials %d for %d requests — a reused conn served a request", got, reqs)
+		}
+	})
+
 	// network:cluster admits private ranges a default grant blocks.
 	t.Run("cluster-allowed", func(t *testing.T) {
 		dir := t.TempDir()
