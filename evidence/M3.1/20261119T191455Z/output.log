@@ -1,0 +1,22 @@
+=== RUN   TestDecisionTable
+--- PASS: TestDecisionTable (0.19s)
+=== RUN   TestSchemaConformance
+--- PASS: TestSchemaConformance (0.52s)
+=== RUN   TestPropertyVsPython
+--- PASS: TestPropertyVsPython (60.50s)
+=== RUN   TestInvalidPolicies
+--- PASS: TestInvalidPolicies (0.05s)
+=== RUN   TestPolicyDigest
+--- PASS: TestPolicyDigest (0.09s)
+PASS
+ok  	github.com/countersign/countersign/internal/policy	61.569s
+CHECK C3.1.1 PASS
+CHECK C3.1.2 PASS
+CHECK C3.1.3 PASS
+CHECK C3.1.4 PASS
+CHECK C3.1.6 PASS
+fuzz: elapsed: 10m6s, execs: 3268225 (0/sec), new interesting: 1 (total: 2164)
+PASS
+ok  	github.com/countersign/countersign/internal/policy	606.370s
+CHECK C3.1.5 PASS
+M3.1 suite: all checks passed
