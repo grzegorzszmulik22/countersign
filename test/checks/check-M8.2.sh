@@ -22,7 +22,10 @@ bad() { say "$1" FAIL "$2"; fail=1; }
 run() {
   local id=$1; shift
   echo "--- $id: go test $*"
-  if "$GO" test "$@" 2>&1 | tail -15; then
+  local out rc
+  out=$("$GO" test "$@" 2>&1); rc=$?
+  echo "$out" | tail -15
+  if [ "$rc" -eq 0 ]; then
     pass "$id"
   else
     bad "$id" "go test failed"

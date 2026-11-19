@@ -12,12 +12,9 @@ package proxy
 
 import (
 	"bytes"
-	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -677,26 +674,45 @@ func TestM8E2E_Privacy(t *testing.T) {
 // the difference. Ordinary frames keep p99 ≤ 2 ms; the frame completing
 // the tool-use block carries one ledger commit (≤ 6 ms).
 func TestM8E2E_Latency(t *testing.T) {
-	const events = 120
+	const events = 240
+	const blocks = 40
 	dir := t.TempDir()
-	e, routes := m8Env(t, "s8m", "tok-8m", m8Policy(t, dir, "p8m", nil, nil, ""))
+	// Two sessions on one broker: the inspected arm (inspect: inference)
+	// and the plain arm (no inspect) — identical requests through the
+	// same relay path, so the difference is exactly the cost inspection
+	// adds (parse + the hold-point ledger commit).
+	polInsp := m8Policy(t, dir, "p8m", nil, nil, "")
+	polPlain := writePolicy(t, dir, "p8n", `  grants:
+    - id: any
+      match: {hosts: ["llm.example"], methods: ["POST"]}
+`)
+	routes := map[string]string{}
+	e := newTestEnv(t, []SessionEntry{
+		sessionEntry("s8m", "tok-8m", "127.0.0.1", polInsp),
+		sessionEntry("s8n", "tok-8n", "127.0.0.1", polPlain),
+	}, routes)
 
-	// The paced stream: text_delta frames, then a tool_use block
-	// (start, one delta, stop — the stop is the hold point), then the
-	// message end. Comment lines carry seq and send time.
-	frames := make([][]byte, 0, events+8)
-	push := func(payload string) {
+	// The paced stream: ordinary text_delta frames interleaved with
+	// tool_use blocks; each block's content_block_stop is a hold point
+	// (one ledger commit). Comment lines carry seq and send time.
+	frames := make([][]byte, 0, events+3*blocks+4)
+	var holds []int
+	push := func(payload string) int {
 		frames = append(frames, []byte(payload))
+		return len(frames) - 1
 	}
 	push("event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"m\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"m\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}}\n\n")
 	push("event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n")
-	for i := 0; i < events; i++ {
-		push(fmt.Sprintf("event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"x%d\"}}\n\n", i))
+	for b := 0; b < blocks; b++ {
+		for i := 0; i < events/blocks; i++ {
+			push(fmt.Sprintf("event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"x%d_%d\"}}\n\n", b, i))
+		}
+		idx := 2*b + 1
+		push(fmt.Sprintf("event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":%d,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_lat_%d\",\"name\":\"Bash\",\"input\":{}}}\n\n", idx, b))
+		push(fmt.Sprintf("event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":%d,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"cmd\\\":\\\"x\\\"}\"}}\n\n", idx))
+		holds = append(holds, push(fmt.Sprintf("event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":%d}\n\n", idx)))
 	}
 	push("event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n")
-	push("event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_lat_1\",\"name\":\"Bash\",\"input\":{}}}\n\n")
-	push("event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"cmd\\\":\\\"x\\\"}\"}}\n\n")
-	push("event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":1}\n\n")
 	push("event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":9}}\n\n")
 	push("event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
 
@@ -705,16 +721,9 @@ func TestM8E2E_Latency(t *testing.T) {
 	defer closeUp()
 	routes["llm.example"] = addr
 
-	direct := &http.Client{Transport: &http.Transport{
-		ForceAttemptHTTP2: false,
-		TLSClientConfig:   &tls.Config{RootCAs: e.ca.Pool(), NextProtos: []string{"http/1.1"}},
-		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
-			var d net.Dialer
-			return d.DialContext(ctx, network, addr)
-		},
-	}, Timeout: 90 * time.Second}
-	proxied := e.proxyClient(t, "tok-8m", e.combinedPool(t, "s8m"), "http/1.1")
-	proxied.Timeout = 90 * time.Second
+	inspected := e.proxyClient(t, "tok-8m", e.combinedPool(t, "s8m"), "http/1.1")
+	plain := e.proxyClient(t, "tok-8n", e.combinedPool(t, "s8n"), "http/1.1")
+	inspected.Timeout, plain.Timeout = 90*time.Second, 90*time.Second
 
 	readDelays := func(cli *http.Client) ([]float64, error) {
 		req, err := http.NewRequest("POST", "https://llm.example/v1/messages",
@@ -769,33 +778,42 @@ func TestM8E2E_Latency(t *testing.T) {
 	}
 	hub.Kick()
 	pch, dch := make(chan out, 1), make(chan out, 1)
-	go func() { d, err := readDelays(proxied); pch <- out{d, err} }()
-	go func() { d, err := readDelays(direct); dch <- out{d, err} }()
+	go func() { d, err := readDelays(inspected); pch <- out{d, err} }()
+	go func() { d, err := readDelays(plain); dch <- out{d, err} }()
 	p, dc := <-pch, <-dch
 	if p.err != nil {
-		t.Fatalf("proxied: %v", p.err)
+		t.Fatalf("inspected arm: %v", p.err)
 	}
 	if dc.err != nil {
-		t.Fatalf("direct: %v", dc.err)
+		t.Fatalf("plain arm: %v", dc.err)
 	}
-	// added[i] = proxied - direct per frame; the block-stop frame is the
-	// hold point (index events+3 in the reordered stream).
-	added := make([]float64, len(frames))
+	// added[i] = inspected - plain per frame; hold frames carry the one
+	// ledger commit the spec allows to cost more.
+	isHold := map[int]bool{}
+	for _, h := range holds {
+		isHold[h] = true
+	}
+	var ordinary, holdD []float64
 	for i := range frames {
-		added[i] = p.d[i] - dc.d[i]
+		d := p.d[i] - dc.d[i]
+		if isHold[i] {
+			holdD = append(holdD, d)
+		} else {
+			ordinary = append(ordinary, d)
+		}
 	}
-	stopIdx := len(frames) - 3 // message_delta, message_stop follow it
-	ordinary := append([]float64{}, added[:stopIdx]...)
-	ordinary = append(ordinary, added[stopIdx+1:]...)
 	sort.Float64s(ordinary)
+	sort.Float64s(holdD)
 	p99 := ordinary[int(0.99*float64(len(ordinary)-1))]
+	h99 := holdD[int(0.99*float64(len(holdD)-1))]
 	if p99 > 2.0 {
 		t.Errorf("p99 added delay %.3f ms > 2 ms (MM8.3)", p99)
 	}
-	if added[stopIdx] > 6.0 {
-		t.Errorf("tool-block completion added %.3f ms > 6 ms (MM8.3)", added[stopIdx])
+	if h99 > 6.0 {
+		t.Errorf("p99 tool-block completion added %.3f ms > 6 ms (MM8.3)", h99)
 	}
-	t.Logf("MM8.3: p99 added %.3f ms; completion frame added %.3f ms", p99, added[stopIdx])
+	t.Logf("MM8.3: p99 added %.3f ms over %d frames; p99 hold added %.3f ms over %d blocks",
+		p99, len(ordinary), h99, len(holdD))
 }
 
 // m8Hub broadcasts one prebuilt frame list, each frame stamped with the
