@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("\"0\ndata:{\"tYpe\":\"content_block_start\",\"Content_BloCk\":{\"tYpe\":\"tool_use\",\"id\":\"0\\b0\"}}\n\ndata:{\"tYpe\":\"content_block_stop\"}\n\n")

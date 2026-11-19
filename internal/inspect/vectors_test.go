@@ -436,12 +436,15 @@ func checkComps(t *testing.T, p ResponseParser, chunk, wire []byte, norm string)
 }
 
 // idInWire reports whether id could have been parsed out of wire. Every
-// intent ID arrives as a JSON string value, so the check decodes every
-// well-formed string token in the wire and looks for the ID inside one
-// — checking the ID's re-encoded form instead would miss characters Go
-// HTML-escapes (&, <, >) that wires legitimately carry unescaped. The
-// raw wire is tried first as a fast path (also covers UTF-8
-// sanitization, since norm is the ToValidUTF8 view of the wire).
+// intent ID arrives as a JSON string value, so the check tries every
+// quote as an opener, decodes the span up to the next unescaped quote,
+// and looks for the ID inside — checking the ID's re-encoded form
+// instead would miss characters Go HTML-escapes (&, <, >) that wires
+// legitimately carry unescaped, and skipping ahead after a span would
+// misalign pairings on wires that contain stray quotes (each real
+// opener must get its own try). The raw wire is tried first as a fast
+// path (also covers UTF-8 sanitization, since norm is the ToValidUTF8
+// view of the wire).
 func idInWire(id string, wire []byte, norm string) bool {
 	if strings.Contains(norm, id) {
 		return true
@@ -465,7 +468,6 @@ func idInWire(id string, wire []byte, norm string) bool {
 		if json.Unmarshal(wire[i:j+1], &s) == nil && strings.Contains(s, id) {
 			return true
 		}
-		i = j
 	}
 	return false
 }
