@@ -1,0 +1,36 @@
+make[1]: Entering directory '/home/opc/src/cs-intent/.check-work/sabotage-M8.3-context-records-all-blocks-every-turn'
+--- C8.3.1: go test -tags fixtures ./internal/proxy/ -count=1 -run ^TestM8E2E_TrackingCorpus$ -v
+=== RUN   TestM8E2E_TrackingCorpus/unknown-result
+    harness_test.go:126: broker: tool result for unknown intent toolu_unk_GHOST (session s8t-unknown-result, effect 01M7S50MYJ00MV4KTM37VPTB8E)
+    check_m8_test.go:692: context step 1 = count 5 sha f98a195c81f443e5db128c55ca3e6f7b8878ae86aff376d6fa89978f45546737 new 5, want 5 f98a195c81f443e5db128c55ca3e6f7b8878ae86aff376d6fa89978f45546737 4
+    harness_test.go:126: broker: tunnel 01M7S50MV300HEGRXVWSMME9DC inner serve: listener closed (conn err: read tcp 127.0.0.1:43605->127.0.0.1:50504: use of closed network connection)
+--- FAIL: TestM8E2E_TrackingCorpus (22.67s)
+    --- FAIL: TestM8E2E_TrackingCorpus/fifty-turn (17.31s)
+    --- FAIL: TestM8E2E_TrackingCorpus/interleaved-conversations (0.71s)
+    --- FAIL: TestM8E2E_TrackingCorpus/parallel-outoforder (0.63s)
+    --- FAIL: TestM8E2E_TrackingCorpus/resend-result (0.73s)
+    --- FAIL: TestM8E2E_TrackingCorpus/sequential (0.45s)
+    --- PASS: TestM8E2E_TrackingCorpus/timeout (2.58s)
+    --- FAIL: TestM8E2E_TrackingCorpus/unknown-result (0.26s)
+FAIL
+FAIL	github.com/countersign/countersign/internal/proxy	22.691s
+FAIL
+CHECK C8.3.1 FAIL — go test failed
+--- C8.3.2: go test -tags fixtures ./internal/proxy/ -count=1 -run ^TestM8E2E_TrackingCorpus$ -v
+=== RUN   TestM8E2E_TrackingCorpus/unknown-result
+    harness_test.go:126: broker: tool result for unknown intent toolu_unk_GHOST (session s8t-unknown-result, effect 01M7S58M0M00N677RQPWJ5J1CD)
+    check_m8_test.go:692: context step 1 = count 5 sha f98a195c81f443e5db128c55ca3e6f7b8878ae86aff376d6fa89978f45546737 new 5, want 5 f98a195c81f443e5db128c55ca3e6f7b8878ae86aff376d6fa89978f45546737 4
+    harness_test.go:126: broker: tunnel 01M7S58KZX00S1YXNP7JCWS2M9 inner serve: listener closed (conn err: read tcp 127.0.0.1:32939->127.0.0.1:52548: use of closed network connection)
+--- FAIL: TestM8E2E_TrackingCorpus (25.30s)
+    --- FAIL: TestM8E2E_TrackingCorpus/fifty-turn (16.98s)
+    --- FAIL: TestM8E2E_TrackingCorpus/interleaved-conversations (0.99s)
+    --- FAIL: TestM8E2E_TrackingCorpus/parallel-outoforder (0.55s)
+    --- FAIL: TestM8E2E_TrackingCorpus/resend-result (0.51s)
+    --- FAIL: TestM8E2E_TrackingCorpus/sequential (1.59s)
+    --- PASS: TestM8E2E_TrackingCorpus/timeout (3.26s)
+    --- FAIL: TestM8E2E_TrackingCorpus/unknown-result (0.99s)
+FAIL
+FAIL	github.com/countersign/countersign/internal/proxy	25.339s
+FAIL
+CHECK C8.3.2 FAIL — go test failed
+--- C8.3.3: go test ./internal/inspect/ -count=1 -run ^TestTracker -v

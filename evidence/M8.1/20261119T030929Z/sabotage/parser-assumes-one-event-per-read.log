@@ -58,3 +58,23 @@ FAIL
 FAIL	github.com/countersign/countersign/internal/proxy	1.001s
 FAIL
 CHECK C8.1.5 FAIL — go test failed
+fuzz: elapsed: 5m4s, execs: 3415 (0/sec), new interesting: 10 (total: 46)
+fuzz: elapsed: 5m7s, execs: 3415 (0/sec), new interesting: 10 (total: 46)
+fuzz: elapsed: 5m9s, execs: 3415 (0/sec), new interesting: 11 (total: 47)
+fuzz: minimizing 1817-byte failing input file
+fuzz: elapsed: 5m11s, minimizing
+--- FAIL: FuzzResponseParser (311.82s)
+    --- FAIL: FuzzResponseParser (0.00s)
+        vectors_test.go:442: fabricated intent id "&0"
+    
+    Failing input written to testdata/fuzz/FuzzResponseParser/c13299da1caffd72
+    To re-run:
+    go test -run=FuzzResponseParser/c13299da1caffd72
+FAIL
+exit status 1
+FAIL	github.com/countersign/countersign/internal/inspect	312.431s
+CHECK C8.1.6 FAIL — go test failed
+M8.1 suite: FAILURES
+check-M8.1: FAIL (exit 1, evidence: evidence/M8.1/20261119T041931Z)
+make[1]: *** [Makefile:37: check-M8.1] Error 1
+make[1]: Leaving directory '/home/opc/src/cs-intent/.check-work/sabotage-M8.1-parser-assumes-one-event-per-read'

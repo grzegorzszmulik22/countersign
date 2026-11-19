@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -995,48 +996,78 @@ func TestM8E2E_Latency(t *testing.T) {
 		at  []int64
 		err error
 	}
-	hub.Kick()
-	pch, dch := make(chan out, 1), make(chan out, 1)
-	go func() { a, err := readDelays(inspected); pch <- out{a, err} }()
-	go func() { a, err := readDelays(plain); dch <- out{a, err} }()
-	p, dc := <-pch, <-dch
-	if p.err != nil {
-		t.Fatalf("inspected arm: %v", p.err)
-	}
-	if dc.err != nil {
-		t.Fatalf("plain arm: %v", dc.err)
-	}
-	// added[i] is the marginal per-event delay: the inspected arm's
-	// frame-to-frame gap minus the plain arm's gap for the same pair.
-	// Both arms share the hub's send stamps, so the send interval cancels
-	// exactly and a one-time stall cannot accumulate into later frames —
-	// each event's added delay is charged where it happened. Hold frames
-	// carry the one ledger commit the spec allows to cost more.
 	isHold := map[int]bool{}
 	for _, h := range holds {
 		isHold[h] = true
 	}
+	// spec/06 §12: minimum 5 paired runs, raw samples and the median with
+	// its coefficient of variation reported. added[i] is the marginal
+	// per-event delay: the inspected arm's frame-to-frame gap minus the
+	// plain arm's gap for the same pair. Both arms share the hub's send
+	// stamps, so the send interval cancels exactly and a one-time stall
+	// cannot accumulate into later frames — each event's added delay is
+	// charged where it happened. Hold frames carry the one ledger commit
+	// the spec allows to cost more.
+	const runs = 5
 	var ordinary, holdD []float64
-	for i := 1; i < len(frames); i++ {
-		d := float64(p.at[i]-p.at[i-1]-(dc.at[i]-dc.at[i-1])) / 1e6
-		if isHold[i] {
-			holdD = append(holdD, d)
-		} else {
-			ordinary = append(ordinary, d)
+	var runP99, runH99 []float64
+	for rep := 0; rep < runs; rep++ {
+		hub.Kick()
+		pch, dch := make(chan out, 1), make(chan out, 1)
+		go func() { a, err := readDelays(inspected); pch <- out{a, err} }()
+		go func() { a, err := readDelays(plain); dch <- out{a, err} }()
+		p, dc := <-pch, <-dch
+		if p.err != nil {
+			t.Fatalf("run %d inspected arm: %v", rep, p.err)
 		}
+		if dc.err != nil {
+			t.Fatalf("run %d plain arm: %v", rep, dc.err)
+		}
+		var o, h []float64
+		for i := 1; i < len(frames); i++ {
+			d := float64(p.at[i]-p.at[i-1]-(dc.at[i]-dc.at[i-1])) / 1e6
+			if isHold[i] {
+				h = append(h, d)
+			} else {
+				o = append(o, d)
+			}
+		}
+		sort.Float64s(o)
+		sort.Float64s(h)
+		rp, rh := o[int(0.99*float64(len(o)-1))], h[int(0.99*float64(len(h)-1))]
+		runP99, runH99 = append(runP99, rp), append(runH99, rh)
+		ordinary, holdD = append(ordinary, o...), append(holdD, h...)
+		t.Logf("MM8.3 run %d: p99 ordinary %.3f ms, p99 hold %.3f ms", rep, rp, rh)
 	}
 	sort.Float64s(ordinary)
 	sort.Float64s(holdD)
 	p99 := ordinary[int(0.99*float64(len(ordinary)-1))]
 	h99 := holdD[int(0.99*float64(len(holdD)-1))]
+	sort.Float64s(runP99)
+	sort.Float64s(runH99)
+	medO, medH := runP99[len(runP99)/2], runH99[len(runH99)/2]
+	cv := func(samples []float64) float64 {
+		var m, sd float64
+		for _, s := range samples {
+			m += s
+		}
+		m /= float64(len(samples))
+		for _, s := range samples {
+			sd += (s - m) * (s - m)
+		}
+		if m == 0 {
+			return 0
+		}
+		return math.Sqrt(sd/float64(len(samples))) / m * 100
+	}
+	t.Logf("MM8.3: %d runs, per-run p99 ordinary %v, hold %v; pooled p99 %.3f/%.3f ms; median %.3f/%.3f; CV %.1f%%/%.1f%%",
+		runs, runP99, runH99, p99, h99, medO, medH, cv(runP99), cv(runH99))
 	if p99 > 2.0 {
 		t.Errorf("p99 added delay %.3f ms > 2 ms (MM8.3)", p99)
 	}
 	if h99 > 6.0 {
 		t.Errorf("p99 tool-block completion added %.3f ms > 6 ms (MM8.3)", h99)
 	}
-	t.Logf("MM8.3: p99 added %.3f ms over %d frames; p99 hold added %.3f ms over %d blocks",
-		p99, len(ordinary), h99, len(holdD))
 }
 
 // m8Hub broadcasts one prebuilt frame list, each frame stamped with the
@@ -1063,9 +1094,13 @@ func (h *m8Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // Kick fans the frames out once `want` subscribers registered, so both
-// arms connect before generation begins and share send timestamps.
+// arms connect before generation begins and share send timestamps. The
+// subs channel persists across Kicks so a subscriber that arrives early
+// for the next run simply queues.
 func (h *m8Hub) Kick() {
-	h.subs = make(chan chan []byte, h.want+1)
+	if h.subs == nil {
+		h.subs = make(chan chan []byte, 64)
+	}
 	go func() {
 		subs := []chan []byte{}
 		for len(subs) < h.want {
