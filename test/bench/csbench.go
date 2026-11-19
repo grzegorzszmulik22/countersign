@@ -23,6 +23,7 @@
 //	csbench verify   <bundle.tar> <keys.json> <runs>
 //	csbench append   <dir> <records.jsonl> <n> <workers> <runs>
 //	csbench latency  <dir> <records.jsonl> <rate/s> <n> <workers>
+//	csbench fscal    <file> <n> <pace_ms>
 //	csbench calibrate
 package main
 
@@ -340,9 +341,62 @@ func benchLatency(dir, linesPath string, rate, n, workers int) {
 	})
 }
 
+// MM1.3 calibration (CR-003) — the disk's own fsync p99 on the same file
+// system as the ledger under test: n single 300-byte records appended to
+// an O_APPEND file, each followed by fsync, with >= pace ms between the
+// starts of successive samples. Every sample is emitted along with the
+// file's device, the pacing and the measured wall time, so the harness
+// can verify the calibration really ran in this run on the right file
+// system — it is never supplied, cached or estimated.
+func benchFscal(path string, n, paceMs int) {
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		fatalf("%v", err)
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	if err != nil {
+		fatalf("%v", err)
+	}
+	var st syscall.Stat_t
+	if err := syscall.Stat(path, &st); err != nil {
+		fatalf("%v", err)
+	}
+	rec := bytes.Repeat([]byte{0x5a}, 300)
+	samples := make([]float64, n)
+	pace := time.Duration(paceMs) * time.Millisecond
+	t0 := time.Now()
+	next := t0
+	for i := 0; i < n; i++ {
+		if d := time.Until(next); d > 0 {
+			time.Sleep(d)
+		}
+		s := time.Now()
+		if _, err := f.Write(rec); err != nil {
+			fatalf("%v", err)
+		}
+		if err := f.Sync(); err != nil {
+			fatalf("%v", err)
+		}
+		samples[i] = float64(time.Since(s).Microseconds()) / 1000.0
+		next = s.Add(pace)
+	}
+	wall := time.Since(t0).Seconds()
+	if err := f.Close(); err != nil {
+		fatalf("%v", err)
+	}
+	sorted := append([]float64(nil), samples...)
+	sort.Float64s(sorted)
+	emit(map[string]any{
+		"metric": "MM1.3-calib", "source": "measured-in-run",
+		"path": path, "st_dev": st.Dev, "n": n,
+		"record_bytes": len(rec), "pace_ms": paceMs,
+		"wall_s": wall, "samples": samples,
+		"fsync_p99_ms": sorted[int(0.99*float64(n-1))],
+	})
+}
+
 func main() {
 	if len(os.Args) < 2 {
-		fatalf("usage: csbench verify|append|latency|calibrate ...")
+		fatalf("usage: csbench verify|append|latency|fscal|calibrate ...")
 	}
 	atoi := func(s string) int {
 		v, err := strconv.Atoi(s)
@@ -369,6 +423,11 @@ func main() {
 		}
 		benchLatency(os.Args[2], os.Args[3],
 			atoi(os.Args[4]), atoi(os.Args[5]), atoi(os.Args[6]))
+	case "fscal":
+		if len(os.Args) != 5 {
+			fatalf("usage: csbench fscal <file> <n> <pace_ms>")
+		}
+		benchFscal(os.Args[2], atoi(os.Args[3]), atoi(os.Args[4]))
 	case "calibrate":
 		if len(os.Args) != 2 {
 			fatalf("usage: csbench calibrate")

@@ -1,0 +1,13 @@
+--- a/test/mutgen/measure.py
++++ b/test/mutgen/measure.py
+@@ -236,10 +236,6 @@
+         dev = os.stat(ledger_dir).st_dev
+     except OSError as e:
+         return False, f"cannot stat calibration/ledger: {e}"
+-    if cst.st_dev != dev or calib.get("st_dev") != dev:
+-        return False, (f"calibration on device {cst.st_dev} (recorded "
+-                       f"{calib.get('st_dev')}), ledger on {dev} — "
+-                       "different file system")
+     if since is not None and cst.st_mtime < since - 1.0:
+         return False, ("calibration file predates this run — a cached "
+                        "result was supplied")

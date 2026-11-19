@@ -18,15 +18,16 @@ running every mutant through **both** verifiers (`csverify` and
 - `run_suite.py` — C1.6.1 (200 clean bundles) + C1.6.2 (≥1,000 mutants,
   ≥100/class) differential driver.
 - `measure.py` — C1.6.3 measurements MM1.1–MM1.5 per `06` §12, targets as
-  restated by `spec/CHANGE_REQUESTS/002` (accepted).
+  restated by `spec/CHANGE_REQUESTS/002` and `003` (accepted).
 - `test/bench/csbench.go` — Go-side timing for MM1.1–MM1.3 (verify
-  throughput, durable-append throughput, append latency).
+  throughput, durable-append throughput, append latency, fsync
+  calibration).
 - `selftest.py` — C1.6.4 harness negative tests: feeds every enforced
   property a wrong input through the same judgment functions the suite
   uses and requires rejection. `check-M1.6` runs it first — a harness
   that cannot flag bad input produces a green suite that proves nothing.
 
-## Measurement rules (CR-002)
+## Measurement rules (CR-002, CR-003)
 
 - Rates are per **CPU-second** (process user+sys via `getrusage`), so an
   oversubscribed host does not depress the number being judged; wall
@@ -53,7 +54,19 @@ running every mutant through **both** verifiers (`csverify` and
   not judged (`load-gate-accepts-high` sabotage). If no run qualifies
   the metric reports `not judged: host contended` (open for gate G1).
   Runs without samples are a harness integrity failure
-  (`load-samples-missing` sabotage).
+  (`load-samples-missing` sabotage). The bound is host-referenced
+  (CR-003): append p99 ≤ the same disk's fsync p99 + 5 ms, where the
+  fsync p99 is measured in the same run on the same file system as the
+  ledger under test — `csbench fscal` writes ≥ 400 single 300-byte
+  records to an `O_APPEND` file, each followed by `fsync`, paced ≥ 5 ms
+  apart, and every sample is recorded. A missing, cached, supplied or
+  estimated calibration fails C1.6.3 — the harness checks the record's
+  source marker, sample count and pacing, that the command's observed
+  wall time and the file's mtime prove it ran in this run, and that the
+  file's device matches the ledger directory's (`calib-accepts-supplied`,
+  `calib-estimated-ok`, `calib-any-filesystem` sabotages). The judged
+  bound must be exactly that measured p99 + 5 ms — a fixed bound or a
+  pass computed any other way fails (`bound-not-calibrated` sabotage).
 - Every metric must report ≥ 5 runs with each run's samples complete —
   dropped runs or samples fail the metric (`runs-not-counted` sabotage).
 

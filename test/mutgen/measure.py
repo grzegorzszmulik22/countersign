@@ -15,10 +15,15 @@ test/bench/csbench with the pinned Go toolchain, then runs:
          fsync() calls on log/entries.jsonl — one per commit. Without
          strace the fsync bound is not judged; the bench's in-process
          return-cohort estimate is recorded beside it, never judged.
-- MM1.3  append p99 <= 5 ms at 1,000/s, judged only on runs whose
-         per-second 1-minute load samples all stayed <= core count;
-         every run is recorded. If none qualifies the result is
-         "not judged: host contended" — allowed by CR-002, open for G1.
+- MM1.3  append p99 <= the disk's fsync p99 + 5 ms at 1,000/s (CR-003),
+         judged only on runs whose per-second 1-minute load samples all
+         stayed <= core count; every run is recorded. The fsync p99 is
+         calibrated in this run on the same file system as the ledger
+         under test (>= 400 single 300-byte O_APPEND write+fsync
+         samples paced >= 5 ms apart, every sample recorded) — a
+         missing, cached, supplied or estimated calibration fails. If
+         no run qualifies the result is "not judged: host contended" —
+         allowed by CR-002, open for G1.
 - MM1.4/MM1.5  from run_suite.py's mutations.json.
 
 Every metric reports: command, machine description (make sysinfo), the
@@ -35,6 +40,7 @@ import os
 import statistics
 import subprocess
 import sys
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
@@ -51,7 +57,10 @@ CORES = os.cpu_count() or 1
 
 MM12_RATE = 5000.0        # records per CPU-second of the writer
 MM12_FSYNC = 0.10         # group commits per record
-MM13_P99 = 5.0            # ms
+MM13_SLACK_MS = 5.0       # append p99 may exceed the measured fsync p99 by
+MM13_ABS_MS = 5.0         # the absolute figure shown at G1 (CR-003)
+MM13_CALIB_MIN = 400      # write+fsync calibration samples
+MM13_CALIB_PACE_MS = 5.0  # minimum ms between calibration sample starts
 RUNS = 5
 
 
@@ -173,7 +182,109 @@ def mm13_classify(load1_samples, cores):
     return "qualified" if max(load1_samples) <= cores else "unqualified"
 
 
-def validate_metric(name, res, want_runs):
+def mm13_calib_p99(calib):
+    """The disk's fsync p99, recomputed from the calibration's own
+    recorded samples — the claimed summary field is never trusted."""
+    s = sorted(float(x) for x in calib["samples"])
+    return s[int(0.99 * (len(s) - 1))]
+
+
+def fsync_calib_ok(calib, ledger_dir, observed_wall_s=None, since=None):
+    """CR-003: MM1.3's bound is the same disk's fsync p99 + 5 ms, and the
+    calibration must be measured in THIS run on the SAME file system as
+    the ledger under test. A missing, cached, supplied or estimated
+    calibration fails; so does one on a different file system or one
+    whose record could not have been produced by a real paced run.
+
+    observed_wall_s is how long the harness watched the calibration
+    command run (a fabricated record returns instantly); since is the
+    epoch time just before it started, used to prove the calibration
+    file was written in this run. Both are supplied in production and
+    may be omitted only by tests exercising the data checks alone."""
+    if not isinstance(calib, dict):
+        return False, "missing calibration"
+    if calib.get("source") != "measured-in-run":
+        return False, (f"source {calib.get('source')!r} — the calibration "
+                       "must be measured in this run, never supplied, "
+                       "cached or estimated")
+    samples = calib.get("samples")
+    n = len(samples) if isinstance(samples, list) else 0
+    if n < MM13_CALIB_MIN:
+        return False, f"{n} samples, need >= {MM13_CALIB_MIN}"
+    if calib.get("n") != n:
+        return False, f"recorded n {calib.get('n')} != {n} samples"
+    if not all(isinstance(x, (int, float)) and x > 0 for x in samples):
+        return False, "non-numeric or non-positive sample"
+    pace = calib.get("pace_ms")
+    if not isinstance(pace, (int, float)) or pace < MM13_CALIB_PACE_MS:
+        return False, f"pace {pace!r} ms < {MM13_CALIB_PACE_MS} ms"
+    floor = (n - 1) * pace / 1000.0
+    wall = calib.get("wall_s")
+    if not isinstance(wall, (int, float)) or wall < floor:
+        return False, (f"reported wall {wall!r}s cannot contain {n} "
+                       f"samples paced {pace} ms — record is estimated, "
+                       "not measured")
+    if observed_wall_s is not None and observed_wall_s < floor * 0.9:
+        return False, (f"calibration command returned in "
+                       f"{observed_wall_s:.2f}s but {n} samples paced "
+                       f"{pace} ms need >= {floor:.2f}s — record was "
+                       "supplied, not run")
+    if not isinstance(calib.get("path"), str):
+        return False, "calibration file path not recorded"
+    try:
+        cst = os.stat(calib["path"])
+        dev = os.stat(ledger_dir).st_dev
+    except OSError as e:
+        return False, f"cannot stat calibration/ledger: {e}"
+    if cst.st_dev != dev or calib.get("st_dev") != dev:
+        return False, (f"calibration on device {cst.st_dev} (recorded "
+                       f"{calib.get('st_dev')}), ledger on {dev} — "
+                       "different file system")
+    if since is not None and cst.st_mtime < since - 1.0:
+        return False, ("calibration file predates this run — a cached "
+                       "result was supplied")
+    claimed = calib.get("fsync_p99_ms")
+    recomputed = mm13_calib_p99(calib)
+    if (not isinstance(claimed, (int, float)) or
+            abs(claimed - recomputed) > max(0.01, recomputed * 0.01)):
+        return False, (f"claimed p99 {claimed!r} != samples-derived "
+                       f"{recomputed:.3f}")
+    return True, "ok"
+
+
+def mm13_res_ok(res, ctx):
+    """MM1.3 (CR-003): a judged metric's bound must BE the in-run
+    calibration — target equals the samples-derived fsync p99 + 5 ms and
+    pass/fail follows it, with the absolute p99 recorded beside. Any
+    other bound fails C1.6.3, and so does a bad calibration even when no
+    run qualified."""
+    calib = res.get("calibration")
+    ok, why = fsync_calib_ok(calib, ctx["ledger_dir"],
+                             ctx.get("observed_wall_s"), ctx.get("since"))
+    if not ok:
+        return [f"MM1.3 calibration: {why}"]
+    if res.get("judgment") == "not judged: host contended":
+        return []
+    if res.get("judgment") != "judged":
+        return [f"MM1.3: judgment {res.get('judgment')!r} not recognized"]
+    bound = mm13_calib_p99(calib) + MM13_SLACK_MS
+    problems = []
+    if abs(res.get("target", -1) - bound) > 1e-6:
+        problems.append(f"MM1.3: target {res.get('target')} is not the "
+                        f"measured fsync p99 + {MM13_SLACK_MS} ms "
+                        f"({bound:.3f})")
+    expect = isinstance(res.get("median"), (int, float)) and \
+        res["median"] <= bound
+    if res.get("pass") != expect:
+        problems.append("MM1.3: pass flag does not follow the "
+                        "calibrated bound")
+    if res.get("absolute_p99_ms") != res.get("median"):
+        problems.append("MM1.3: absolute p99 not recorded beside the "
+                        "calibrated bound")
+    return problems
+
+
+def validate_metric(name, res, want_runs, calib_ctx=None):
     """06 §12: every run reported, none dropped. Checks the recorded run
     count and that each per-run sample list is complete; returns a list of
     problems (empty when the metric is complete)."""
@@ -206,6 +317,8 @@ def validate_metric(name, res, want_runs):
         if empty:
             problems.append(f"{name}: empty load samples in run(s) "
                             f"{empty[:5]}")
+    if name == "MM1.3" and calib_ctx is not None:
+        problems += mm13_res_ok(res, calib_ctx)
     return problems
 
 
@@ -394,14 +507,36 @@ def main() -> int:
                          "bound missed target")
 
     # ------------------------- MM1.3 ----------------------------------
+    # CR-003 calibration first: the disk's own fsync p99, measured in
+    # THIS run on the same file system as the ledger under test. The
+    # harness times the command itself — a record that came back without
+    # taking the pacing time was supplied, not measured.
+    ledger_dir = os.path.join(WORK, "ledger-b")
+    os.makedirs(ledger_dir, exist_ok=True)
+    calib_path = os.path.join(WORK, "fscal-calib.dat")
+    calib_cmd = [bench, "fscal", calib_path,
+                 str(MM13_CALIB_MIN), str(int(MM13_CALIB_PACE_MS))]
+    calib_t0 = time.time()
+    calib_r = sh(calib_cmd)
+    calib_wall = time.time() - calib_t0
+    calib = None
+    if calib_r.returncode == 0:
+        calib = next((s for s in samples_from(calib_r.stdout)
+                      if s.get("metric") == "MM1.3-calib"), None)
+    calib_ctx = {"ledger_dir": ledger_dir,
+                 "observed_wall_s": calib_wall, "since": calib_t0}
+    ok, why = fsync_calib_ok(calib, ledger_dir, calib_wall, calib_t0)
+    if not ok:
+        fails.append(f"MM1.3: fsync calibration rejected ({why})")
+        calib = None
+
     # One csbench invocation per run (each carries its own per-second
     # load1 samples). A run qualifies for judgment only when every sample
     # stayed <= cores; runs without samples cannot be classified and are
     # a harness integrity failure, not a disqualification.
     lat_rows = []
     for i in range(args.runs):
-        cmd = [bench, "latency", os.path.join(WORK, "ledger-b"),
-               rp, "1000", "20000", "8"]
+        cmd = [bench, "latency", ledger_dir, rp, "1000", "20000", "8"]
         r = sh(cmd)
         if r.returncode != 0:
             fails.append(f"MM1.3 run {i}: bench failed: {r.stderr[-200:]}")
@@ -424,10 +559,13 @@ def main() -> int:
         fails.append(f"MM1.3: {len(lat_rows)} run rows emitted, "
                      f"need >= {args.runs}")
     judged = qualified
+    bound = mm13_calib_p99(calib) + MM13_SLACK_MS if calib else None
     if lat_rows:
         res = {
-            "command": f"{bench} latency {WORK}/ledger-b {rp} 1000 20000 8 "
+            "command": f"{bench} latency {ledger_dir} {rp} 1000 20000 8 "
                        f"(x{len(lat_rows)})",
+            "calibration": calib,
+            "calibration_command": " ".join(calib_cmd),
             "cores": CORES,
             "runs": len(lat_rows),
             "qualified_runs": len(qualified),
@@ -438,30 +576,44 @@ def main() -> int:
                 "load1_max": s.get("load1_max"),
                 "load1_samples": s.get("load1_samples")}
                 for s in lat_rows],
-            "target": MM13_P99,
+            "target": bound,
+            "absolute_target_ms": MM13_ABS_MS,
         }
-        if judged:
+        if judged and calib is not None:
             s99 = summarize([s["p99_ms"] for s in judged],
-                            target=MM13_P99, lower_better=True)
+                            target=bound, lower_better=True)
             res.update({"judged_samples": s99["samples"],
                         "median": s99["median"], "cv": s99["cv"],
                         "unstable": s99["unstable"],
-                        "pass": s99["pass"], "judgment": "judged"})
+                        "pass": s99["pass"], "judgment": "judged",
+                        "absolute_p99_ms": s99["median"]})
+        elif judged:
+            res.update({"median": statistics.median(
+                            [s["p99_ms"] for s in judged]),
+                        "judgment": "judged", "pass": False,
+                        "absolute_p99_ms": statistics.median(
+                            [s["p99_ms"] for s in judged])})
         else:
             res.update({"median": statistics.median(res["samples"]),
                         "judgment": "not judged: host contended",
                         "pass": True,
+                        "absolute_p99_ms": statistics.median(
+                            res["samples"]),
                         "note": "no run had every 1s load1 sample <= "
                                 f"{CORES} cores; open for gate G1"})
         results["metrics"]["MM1.3"] = res
-        fails += validate_metric("MM1.3", res, args.runs)
+        fails += validate_metric("MM1.3", res, args.runs, calib_ctx)
         if res["judgment"] == "judged":
             status = "PASS" if res["pass"] else "FAIL"
+            tgt = (f" vs fsync p99 {bound - MM13_SLACK_MS:.1f} + "
+                   f"{MM13_SLACK_MS} ms = {bound:.1f} ms"
+                   if bound is not None else " (no calibration)")
             print(f"MM1.3: median p99 {res['median']:.1f} ms on "
-                  f"{len(judged)} qualified runs {status}")
+                  f"{len(judged)} qualified runs{tgt} {status}")
             if not res["pass"]:
                 fails.append(f"MM1.3: p99 {res['median']:.1f} ms over "
-                             "5 ms on qualified runs")
+                             f"calibrated bound {bound} ms on "
+                             "qualified runs")
         else:
             print(f"MM1.3: {res['judgment']} — {len(unqualified)} runs "
                   "recorded, p99s "

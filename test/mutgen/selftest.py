@@ -16,6 +16,8 @@ Usage: selftest.py — exits 0 when every property rejects its wrong input.
 """
 import os
 import sys
+import tempfile
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -218,6 +220,117 @@ def t_fsync_bound_needs_exact_count():
     return True, "estimates never judge; exact counts do"
 
 
+def _calib(tmpdir, samples=400, pace=5.0, wall=4.0, dev_off=0,
+           claimed=None, mtime_age=0.0):
+    """A plausible MM1.3 fsync-calibration record: `samples` write+fsync
+    latencies (8 ms each) on a real file inside tmpdir."""
+    path = os.path.join(tmpdir, "fscal-calib.dat")
+    with open(path, "wb") as f:
+        f.write(b"x" * 300)
+    dev = os.stat(path).st_dev
+    if mtime_age:
+        old = time.time() - mtime_age
+        os.utime(path, (old, old))
+    vals = samples if isinstance(samples, list) else [8.0] * samples
+    rec = {"metric": "MM1.3-calib", "source": "measured-in-run",
+           "path": path, "st_dev": dev + dev_off, "n": len(vals),
+           "record_bytes": 300, "pace_ms": pace, "wall_s": wall,
+           "samples": vals}
+    rec["fsync_p99_ms"] = (claimed if claimed is not None
+                           else ME.mm13_calib_p99(rec))
+    return rec
+
+
+def t_mm13_calib_measured_in_run():
+    """CR-003: the calibration must be measured in THIS run — missing,
+    cached, supplied or estimated records all fail C1.6.3."""
+    with tempfile.TemporaryDirectory() as d:
+        if ME.fsync_calib_ok(None, d)[0]:
+            return False, "missing calibration accepted"
+        for src in ("cached", "supplied", "estimated", "earlier-run"):
+            c = _calib(d)
+            c["source"] = src
+            if ME.fsync_calib_ok(c, d)[0]:
+                return False, f"source {src!r} accepted"
+        c = _calib(d, samples=40)  # n matches len, just too few
+        if ME.fsync_calib_ok(c, d)[0]:
+            return False, "40-sample calibration accepted"
+        c = _calib(d, pace=2.0)
+        if ME.fsync_calib_ok(c, d)[0]:
+            return False, "2 ms pacing accepted"
+        c = _calib(d, wall=0.05)  # record claims impossible duration
+        if ME.fsync_calib_ok(c, d)[0]:
+            return False, "wall too short for the pacing accepted"
+        # Harness-observed wall: the command returned in 50 ms but 400
+        # paced samples need >= 2 s — the record was supplied, not run.
+        c = _calib(d)
+        if ME.fsync_calib_ok(c, d, observed_wall_s=0.05)[0]:
+            return False, "instant-return calibration accepted"
+        # A file written before this run is a cached result.
+        c = _calib(d, mtime_age=3600)
+        if ME.fsync_calib_ok(c, d, since=time.time())[0]:
+            return False, "stale calibration file accepted"
+        c = _calib(d, claimed=1.0)  # claimed p99 not from the samples
+        if ME.fsync_calib_ok(c, d)[0]:
+            return False, "claimed p99 != samples-derived accepted"
+        c = _calib(d)
+        ok, why = ME.fsync_calib_ok(c, d, observed_wall_s=10.0,
+                                    since=time.time() - 10)
+        if not ok:
+            return False, f"honest calibration rejected: {why}"
+        return True, "missing/cached/estimated/forged calibrations rejected"
+
+
+def t_mm13_calib_same_filesystem():
+    """CR-003: the calibration must be on the same file system as the
+    ledger under test — a record from another device cannot stand in."""
+    with tempfile.TemporaryDirectory() as d:
+        c = _calib(d, dev_off=999)
+        if ME.fsync_calib_ok(c, d)[0]:
+            return False, "different-device calibration accepted"
+        c = _calib(d)
+        ok, why = ME.fsync_calib_ok(c, d)
+        if not ok:
+            return False, f"same-device calibration rejected: {why}"
+        return True, "foreign-device calibration rejected"
+
+
+def t_mm13_bound_uses_calibration():
+    """CR-003: the judged bound must BE the calibration — target equals
+    the samples-derived fsync p99 + 5 ms and pass follows it. A fixed
+    5 ms bound or a pass computed any other way fails."""
+    with tempfile.TemporaryDirectory() as d:
+        ctx = {"ledger_dir": d}
+        calib = _calib(d)          # p99 8.0 -> bound 13.0
+        base = {"runs": 5, "samples": [12.0] * 5, "judgment": "judged",
+                "calibration": calib, "median": 12.0, "pass": True,
+                "target": 13.0, "absolute_p99_ms": 12.0}
+        fixed = {**base, "target": 5.0}
+        if not ME.mm13_res_ok(fixed, ctx):
+            return False, "fixed 5 ms bound accepted as calibrated"
+        wrong_pass = {**base, "pass": False}  # 12 <= 13 must pass
+        if not ME.mm13_res_ok(wrong_pass, ctx):
+            return False, "pass flag not following the bound accepted"
+        no_abs = dict(base)
+        del no_abs["absolute_p99_ms"]
+        if not ME.mm13_res_ok(no_abs, ctx):
+            return False, "absolute p99 not recorded accepted"
+        no_cal = dict(base)
+        del no_cal["calibration"]
+        if not ME.mm13_res_ok(no_cal, ctx):
+            return False, "judged metric without calibration accepted"
+        over = {**base, "median": 14.0, "pass": False,
+                "absolute_p99_ms": 14.0}  # 14 > 13 must fail
+        if ME.mm13_res_ok(over, ctx):
+            return False, "median over the calibrated bound passed"
+        nj = dict(base, judgment="not judged: host contended")
+        if ME.mm13_res_ok(nj, ctx):
+            return False, "honest not-judged metric flagged"
+        if ME.mm13_res_ok(base, ctx):
+            return False, "honest judged metric flagged"
+        return True, "fixed bounds, wrong pass and missing records rejected"
+
+
 CASES = [
     ("denied: first error outside the class expected set is not detected",
      t_detected_needs_expected_error),
@@ -235,12 +348,18 @@ CASES = [
      t_summarize_enforces_target),
     ("mm1.2 fsync bound judges only on exact (strace) counts",
      t_fsync_bound_needs_exact_count),
+    ("mm1.3: calibration measured in-run, never cached/supplied/estimated",
+     t_mm13_calib_measured_in_run),
+    ("mm1.3: calibration must be on the ledger's file system",
+     t_mm13_calib_same_filesystem),
+    ("mm1.3: judged bound is the measured fsync p99 + 5 ms",
+     t_mm13_bound_uses_calibration),
 ]
 
 
 def main():
-    if len(CASES) != 8:
-        print(f"selftest: {len(CASES)} cases registered, need 8 — the "
+    if len(CASES) != 11:
+        print(f"selftest: {len(CASES)} cases registered, need 11 — the "
               "negative-test set itself was tampered with")
         return 1
     print(f"harness negative tests ({len(CASES)} properties):")

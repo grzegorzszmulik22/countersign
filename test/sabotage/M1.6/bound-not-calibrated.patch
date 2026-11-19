@@ -1,0 +1,13 @@
+--- a/test/mutgen/measure.py
++++ b/test/mutgen/measure.py
+@@ -269,10 +269,6 @@
+         return [f"MM1.3: judgment {res.get('judgment')!r} not recognized"]
+     bound = mm13_calib_p99(calib) + MM13_SLACK_MS
+     problems = []
+-    if abs(res.get("target", -1) - bound) > 1e-6:
+-        problems.append(f"MM1.3: target {res.get('target')} is not the "
+-                        f"measured fsync p99 + {MM13_SLACK_MS} ms "
+-                        f"({bound:.3f})")
+     expect = isinstance(res.get("median"), (int, float)) and \
+         res["median"] <= bound
+     if res.get("pass") != expect:
