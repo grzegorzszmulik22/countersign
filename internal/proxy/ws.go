@@ -118,28 +118,20 @@ func (s *Server) wsForward(w http.ResponseWriter, r *http.Request, env *forwardE
 		Header:     outHdr,
 		Body:       http.NoBody,
 	}
-	// B2-01: the upgrade attempt runs on a dedicated ClientConn — one
-	// conn, one request, never pooled; no transport retry path can
-	// produce an attempt the effect.tunnel record did not cover. The
-	// conn stays open for the tunnel's whole relay.
-	cc, err := s.transport.NewClientConn(withDial(r.Context(), sess, grant, nil),
-		tgt.scheme, dialAuthority)
+	// B2-01: the upgrade attempt runs on one dedicated conn — the
+	// synchronous h1 path or a pooled-exempt ClientConn for h2 — never
+	// pooled; no transport retry path can produce an attempt the
+	// effect.tunnel record did not cover. The conn stays open for the
+	// tunnel's whole relay.
+	res, closeUpstream, err := s.upstreamRoundTrip(withDial(r.Context(), sess, grant, nil),
+		r.Context(), tgt, dialAuthority, upReq, nil, nil)
 	if err != nil {
 		result.Error = upstreamErrorReason(err)
 		w.Header().Set("X-Countersign-Reason", result.Error)
 		http.Error(w, "upstream failed", http.StatusBadGateway)
 		return
 	}
-	defer func() { _ = cc.Close() }()
-	upReq = upReq.WithContext(r.Context())
-
-	res, err := cc.RoundTrip(upReq)
-	if err != nil {
-		result.Error = upstreamErrorReason(err)
-		w.Header().Set("X-Countersign-Reason", result.Error)
-		http.Error(w, "upstream failed", http.StatusBadGateway)
-		return
-	}
+	defer closeUpstream()
 	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode != http.StatusSwitchingProtocols {

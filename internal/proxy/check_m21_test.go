@@ -90,7 +90,7 @@ func (e *testEnv) rawConnect(t *testing.T, token, authority string) (int, net.Co
 // user): 407, reason NO_SESSION. Unattributable failures land in the broker
 // log; the attributable one (valid token, wrong IP) lands an effect.denied.
 func TestC211SessionAuth(t *testing.T) {
-	dir := t.TempDir()
+	dir := shmTempDir(t)
 	pol := writePolicy(t, dir, "p", m21Grants)
 	e := newTestEnv(t, []SessionEntry{
 		sessionEntry("s1", "tok-one", "127.0.0.1", pol),
@@ -159,7 +159,7 @@ func TestC211SessionAuth(t *testing.T) {
 // Valid session, host not in the test policy: 403 NO_GRANT plus an
 // effect.http record with decision.action deny.
 func TestC212NoGrant(t *testing.T) {
-	dir := t.TempDir()
+	dir := shmTempDir(t)
 	pol := writePolicy(t, dir, "p", m21Grants)
 	e := newTestEnv(t, []SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)}, nil)
 	e.startEcho(t)
@@ -204,7 +204,7 @@ func TestC212NoGrant(t *testing.T) {
 // Proxy-Authorization and the hop-by-hop set never reach the upstream, on
 // the plain listener and inside a CONNECT tunnel.
 func TestC213HopByHop(t *testing.T) {
-	dir := t.TempDir()
+	dir := shmTempDir(t)
 	pol := writePolicy(t, dir, "p", m21Grants)
 	routes := map[string]string{}
 	e := newTestEnv(t, []SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)}, routes)
@@ -271,7 +271,7 @@ func TestC213HopByHop(t *testing.T) {
 // CONNECT to a port the grant does not list: PROTOCOL_DENIED. A host no
 // grant lists at all: NO_GRANT.
 func TestC214ConnectPort(t *testing.T) {
-	dir := t.TempDir()
+	dir := shmTempDir(t)
 	pol := writePolicy(t, dir, "p", m21Grants)
 	e := newTestEnv(t, []SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)}, nil)
 	e.startEcho(t)
@@ -315,7 +315,7 @@ func TestC214ConnectPort(t *testing.T) {
 // --- C2.1.5 ---------------------------------------------------------------
 // Plain-HTTP requests forward only where the grant has scheme: http.
 func TestC215PlainHTTPScheme(t *testing.T) {
-	dir := t.TempDir()
+	dir := shmTempDir(t)
 	pol := writePolicy(t, dir, "p", m21Grants)
 	routes := map[string]string{}
 	e := newTestEnv(t, []SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)}, routes)

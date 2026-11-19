@@ -1,0 +1,9 @@
+CHECK C2.5.1 PASS
+CHECK C2.5.2 PASS
+CHECK C2.5.3 PASS
+CHECK C2.5.4 PASS
+CHECK C2.5.5 PASS
+CHECK C2.5.6 FAIL — --- FAIL: TestC256Isolation (3.41s)     check_m25_test.go:984: session B p99 263.017825ms under flood, baseline 42.14894ms — isolation failed FAIL FAIL	github.com/countersign/countersign/internal/proxy	3.512s FAIL 
+CHECK C2.5.7 PASS
+CHECK lint.proxy PASS
+M2.5 suite: FAILURES

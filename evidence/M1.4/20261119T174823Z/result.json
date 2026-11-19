@@ -1,0 +1,9 @@
+{
+  "chunk": "M1.4",
+  "command": "make check-M1.4 (test/checks/check-M1.4.sh)",
+  "started_utc": "20261119T174823Z",
+  "duration_ms": 751506,
+  "exit_code": 0,
+  "git_commit": "44e93f446b8fec64db10bdc8d4d86d5d00434ae4",
+  "git_dirty": "yes"
+}

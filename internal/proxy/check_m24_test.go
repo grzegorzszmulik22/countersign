@@ -68,7 +68,7 @@ func fastDir(t *testing.T, name string) string {
 			return d
 		}
 	}
-	return t.TempDir()
+	return shmTempDir(t)
 }
 
 // --- upstream first-byte instrumentation -----------------------------------
@@ -621,7 +621,7 @@ func (s *delaySink) Close() error                             { return s.inner.C
 // the broker cannot write at all. Every request 502s with
 // LEDGER_UNAVAILABLE and nothing reaches upstream.
 func TestC243FailClosed(t *testing.T) {
-	dir := t.TempDir()
+	dir := shmTempDir(t)
 	pol := writePolicy(t, dir, "p", m24Grants)
 
 	var hits atomic.Int64
@@ -727,7 +727,7 @@ func TestC243FailClosed(t *testing.T) {
 // policy-denied request, a CONNECT to an ungranted host and a conn-level
 // smuggling denial — and asserts each produces exactly one record.
 func TestC244DeniedCounted(t *testing.T) {
-	dir := t.TempDir()
+	dir := shmTempDir(t)
 	pol := writePolicy(t, dir, "p", m24Grants)
 	var hits atomic.Int64
 	upAddr, upClose := startUpstream(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

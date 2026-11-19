@@ -255,13 +255,15 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
 	// body limit denies before upstream; a deferred body is capped on the
 	// wire — the connection dies mid-write and the result carries
 	// error: limit-body (C3.5.3).
+	var capped *capBody
 	if mb := maxBody(grant); mb > 0 {
 		if int64(len(buf)) > mb {
 			s.denyRequest(w, r, env, "LIMIT_BODY", tgt.scheme, tgt.authority, tgt.path, tgt.rawQuery, mres.Grant)
 			return
 		}
 		if bodyReader != nil {
-			bodyReader = &capBody{r: bodyReader, max: mb}
+			capped = &capBody{r: bodyReader, max: mb}
+			bodyReader = capped
 		}
 	}
 	reqRec := RequestRecord{
@@ -375,29 +377,21 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
 	trace := &httptrace.ClientTrace{
 		GotFirstResponseByte: func() { close(gotFirstByte) },
 	}
-	// B2-01: the upstream attempt runs on a dedicated ClientConn — one
-	// conn, one request, never pooled, so no transport retry path (h1
-	// reused-conn or h2 REFUSED/GOAWAY) can fire: a second attempt could
-	// never be recorded, so none may happen. Resolve-once needs the
-	// session (dial budget) and the grant (network opt-in) inside the
-	// transport's dial hook; upInfo comes back through the same carrier.
-	cc, err := s.transport.NewClientConn(withDial(r.Context(), sess, grant, upInfo),
-		tgt.scheme, dialAuthority)
-	if err != nil {
-		result.Error = upstreamErrorReason(err)
-		result.Upstream = nonNil(upInfo)
-		s.Logf("upstream %s %s: %v", r.Method, tgt.authority, err)
-		w.Header().Set("X-Countersign-Reason", result.Error)
-		http.Error(w, "upstream failed", http.StatusBadGateway)
-		return
-	}
-	defer func() { _ = cc.Close() }()
+	// B2-01: the upstream attempt runs on one dedicated conn — the
+	// synchronous h1 path or a pooled-exempt ClientConn for h2 — so no
+	// transport retry path (h1 reused-conn or h2 REFUSED/GOAWAY) can
+	// fire: a second attempt could never be recorded, so none may
+	// happen. Resolve-once needs the session (dial budget) and the grant
+	// (network opt-in) inside the dial carrier; upInfo comes back
+	// through the same carrier.
 	ctx := httptrace.WithClientTrace(r.Context(), trace)
-	upReq = upReq.WithContext(ctx)
-
-	res, err := cc.RoundTrip(upReq)
+	res, closeUpstream, err := s.upstreamRoundTrip(withDial(r.Context(), sess, grant, upInfo),
+		ctx, tgt, dialAuthority, upReq, upInfo, gotFirstByte)
 	if err != nil {
-		if errors.Is(err, errBodyLimit) {
+		// The synchronous h1 path wraps a body-read failure in net/http's
+		// requestBodyReadError (no Unwrap); the capBody flag records the
+		// sentinel independently of the wrapping (C3.5.3).
+		if errors.Is(err, errBodyLimit) || (capped != nil && capped.over) {
 			result.Error = "limit-body"
 			w.Header().Set("X-Countersign-Reason", "LIMIT_BODY")
 			http.Error(w, "request denied: LIMIT_BODY", http.StatusForbidden)
@@ -410,6 +404,7 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
 		http.Error(w, "upstream failed", http.StatusBadGateway)
 		return
 	}
+	defer closeUpstream()
 	// Best effort: the upstream body is drained or abandoned; a close
 	// error only repeats an already-recorded failure mode.
 	defer func() { _ = res.Body.Close() }()

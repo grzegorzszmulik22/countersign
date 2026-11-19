@@ -1,7 +1,6 @@
-diff --git a/internal/proxy/pipeline.go b/internal/proxy/pipeline.go
 --- a/internal/proxy/pipeline.go
 +++ b/internal/proxy/pipeline.go
-@@ -308,12 +308,6 @@
+@@ -310,12 +310,6 @@
  	// goes upstream — and before the credential materializes (02 §6:
  	// evidence first, then secrets touch the wire). Sink failure fails
  	// closed, and the append itself is bounded (M2.4's write-ahead window).
@@ -14,10 +13,10 @@ diff --git a/internal/proxy/pipeline.go b/internal/proxy/pipeline.go
  	if plan.spec != nil {
  		plan.spec.Apply(outHdr)
  		plan.injected = true
-@@ -402,6 +396,14 @@
- 		http.Error(w, "upstream failed", http.StatusBadGateway)
+@@ -405,6 +399,14 @@
  		return
  	}
+ 	defer closeUpstream()
 +	// Sabotage: the effect record waits for a successful round trip —
 +	// an errored attempt leaves a result with no effect behind it.
 +	if err := s.appendRecordBound(sess, "effect.http", effect); err != nil {

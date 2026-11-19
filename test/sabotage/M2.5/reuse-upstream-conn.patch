@@ -1,26 +1,29 @@
---- a/internal/proxy/pipeline.go	2026-11-19 03:40:57.361938845 +0000
-+++ b/internal/proxy/pipeline.go	2026-11-19 03:40:59.413943728 +0000
-@@ -381,21 +381,9 @@
- 	// never be recorded, so none may happen. Resolve-once needs the
- 	// session (dial budget) and the grant (network opt-in) inside the
- 	// transport's dial hook; upInfo comes back through the same carrier.
--	cc, err := s.transport.NewClientConn(withDial(r.Context(), sess, grant, upInfo),
--		tgt.scheme, dialAuthority)
--	if err != nil {
--		result.Error = upstreamErrorReason(err)
--		result.Upstream = nonNil(upInfo)
--		s.Logf("upstream %s %s: %v", r.Method, tgt.authority, err)
--		w.Header().Set("X-Countersign-Reason", result.Error)
--		http.Error(w, "upstream failed", http.StatusBadGateway)
--		return
--	}
--	defer func() { _ = cc.Close() }()
--	ctx := httptrace.WithClientTrace(r.Context(), trace)
-+	ctx := httptrace.WithClientTrace(withDial(r.Context(), sess, grant, upInfo), trace)
- 	upReq = upReq.WithContext(ctx)
--
--	res, err := cc.RoundTrip(upReq)
-+	res, err := s.transport.RoundTrip(upReq)
- 	if err != nil {
- 		if errors.Is(err, errBodyLimit) {
- 			result.Error = "limit-body"
+--- a/internal/proxy/upsend.go
++++ b/internal/proxy/upsend.go
+@@ -40,14 +40,19 @@
+ 	return s.conn.Close()
+ }
+ 
+-// upstreamRoundTrip performs exactly one upstream attempt on a freshly
+-// dialled conn and returns the response plus the close func that tears
+-// the conn down once the body is consumed. HTTP/1.1 targets (plain http,
+-// or https after ALPN learned h1) take the synchronous path; h2 targets
+-// — including first contact while ALPN is still unknown — take
+-// Transport.NewClientConn, whose pooled-exempt conn likewise has no
+-// retry path (B2-01).
++// Sabotage: route the attempt through the pooled transport — idle
++// conns get reused and the transport's retry paths become reachable
++// again, so a second upstream attempt can happen off the record (B2-01).
+ func (s *Server) upstreamRoundTrip(dctx, reqCtx context.Context, tgt forwardTarget, dialAuthority string, upReq *http.Request, upInfo *UpstreamRecord, firstByte chan<- struct{}) (*http.Response, func(), error) {
++	_ = dialAuthority
++	res, err := s.transport.RoundTrip(upReq.WithContext(dctx))
++	if err != nil {
++		return nil, func() {}, err
++	}
++	return res, func() {}, nil
++}
++
++func (s *Server) upstreamRoundTripUnused(dctx, reqCtx context.Context, tgt forwardTarget, dialAuthority string, upReq *http.Request, upInfo *UpstreamRecord, firstByte chan<- struct{}) (*http.Response, func(), error) {
+ 	proto := "http/1.1"
+ 	if tgt.scheme == "https" {
+ 		proto = ""

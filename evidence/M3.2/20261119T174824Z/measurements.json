@@ -1,0 +1,14 @@
+{
+  "chunk": "M3.2",
+  "check": "MM3.3",
+  "metric": "p50 added latency of policy evaluation + injection (in-process hot path)",
+  "unit": "ms",
+  "target": 0.3,
+  "samples": {
+    "p50_ms": 0.0027,
+    "p99_ms": 0.3549
+  },
+  "met": true,
+  "mm3_2_canary_occurrences": 0,
+  "machine": "see sysinfo.txt in this evidence folder"
+}

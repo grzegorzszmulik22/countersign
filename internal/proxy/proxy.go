@@ -102,6 +102,7 @@ type Server struct {
 	// upstreamSessionCache abbreviates repeat TLS handshakes to an
 	// upstream; every request still dials its own conn (B2-01).
 	upstreamSessionCache tls.ClientSessionCache
+	upstreamProto        sync.Map // authority -> negotiated ALPN for path selection
 	ln                   net.Listener
 	mu                   sync.Mutex
 	tlsSrv               map[*http.Server]bool // per-tunnel inner servers

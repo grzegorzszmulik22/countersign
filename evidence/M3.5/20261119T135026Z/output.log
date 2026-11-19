@@ -1,0 +1,5 @@
+CHECK C3.5.1 PASS
+CHECK C3.5.2 PASS
+CHECK C3.5.3 FAIL — github.com/countersign/countersign/internal/proxy.startTLSUpstream.func1() 	/home/csbuild/src/cs-broker2/internal/proxy/harness_test.go:374 +0x44 created by github.com/countersign/countersign/internal/proxy.startTLSUpstream in goroutine 68361 	/home/csbuild/src/cs-broker2/internal/proxy/harness_test.go:374 +0x550 FAIL	github.com/countersign/countersign/internal/proxy	600.818s FAIL 
+CHECK C3.5.4 PASS
+M3.5 suite: FAILURES

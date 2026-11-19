@@ -138,7 +138,7 @@ func TestC251SmugglingCorpus(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			dir := t.TempDir()
+			dir := shmTempDir(t)
 			pol := writePolicy(t, dir, "p", m25Grants)
 			var hits atomic.Int64
 			var pathsMu sync.Mutex
@@ -240,7 +240,7 @@ func TestC251SmugglingCorpus(t *testing.T) {
 // segments, encoded separators, backslash, NUL, mixed case and the
 // double-encoded form — each denied before any grant lookup.
 func TestC252PathForms(t *testing.T) {
-	dir := t.TempDir()
+	dir := shmTempDir(t)
 	pol := writePolicy(t, dir, "p", m25Grants)
 	var hits atomic.Int64
 	upAddr, upClose := startUpstream(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -307,7 +307,7 @@ func TestC253UpstreamAddrCheck(t *testing.T) {
 	}
 	for _, tc := range blocked {
 		t.Run("blocked/"+tc.name, func(t *testing.T) {
-			dir := t.TempDir()
+			dir := shmTempDir(t)
 			pol := writePolicy(t, dir, "p", m25Grants)
 			ip := netip.MustParseAddr(tc.ip)
 			var resolveCalls atomic.Int64
@@ -350,7 +350,7 @@ func TestC253UpstreamAddrCheck(t *testing.T) {
 
 	// Resolve-once + dialled address == recorded address.
 	t.Run("resolve-once", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := shmTempDir(t)
 		pol := writePolicy(t, dir, "p", m25Grants)
 		upAddr, upClose := startUpstream(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(200)
@@ -415,7 +415,7 @@ func TestC253UpstreamAddrCheck(t *testing.T) {
 	// (and only when) asked again — the dial must still hit the address
 	// the policy checked.
 	t.Run("rebinding", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := shmTempDir(t)
 		pol := writePolicy(t, dir, "p", m25Grants)
 		upAddr, upClose := startUpstream(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(200)
@@ -461,7 +461,7 @@ func TestC253UpstreamAddrCheck(t *testing.T) {
 	// retry path (h1 nothing-written, h2 REFUSED stream) cannot exist —
 	// one request is exactly one dial, one accept, one attempt (B2-01).
 	t.Run("no-reuse", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := shmTempDir(t)
 		pol := writePolicy(t, dir, "p", m25Grants)
 		var accepts atomic.Int64
 		ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -537,7 +537,7 @@ func TestC253UpstreamAddrCheck(t *testing.T) {
 	// every request on one dial and could hide a same-conn stream retry —
 	// the broker must dial once per upstream attempt instead (B2-01).
 	t.Run("no-reuse-h2", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := shmTempDir(t)
 		pol := writePolicy(t, dir, "p", `  mode: enforce
   grants:
     - id: h2up
@@ -586,7 +586,7 @@ func TestC253UpstreamAddrCheck(t *testing.T) {
 
 	// network:cluster admits private ranges a default grant blocks.
 	t.Run("cluster-allowed", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := shmTempDir(t)
 		pol := writePolicy(t, dir, "p", m25Grants)
 		upAddr, upClose := startUpstream(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(200)
@@ -757,7 +757,7 @@ func wsWriteFrame(w io.Writer, op byte, payload []byte, masked bool) error {
 // the granted ws.test upgrades, echoes, and the tunnel result's byte
 // counts match what each side really moved.
 func TestC254WebSocket(t *testing.T) {
-	dir := t.TempDir()
+	dir := shmTempDir(t)
 	pol := writePolicy(t, dir, "p", m25Grants)
 	upAddr, upClose := wsUpstream(t)
 	defer upClose()
@@ -826,7 +826,7 @@ func TestC254WebSocket(t *testing.T) {
 // both directions, records effect.tunnel{kind:passthrough} with the SNI
 // the client offered, and mints no leaf certificate.
 func TestC255Passthrough(t *testing.T) {
-	dir := t.TempDir()
+	dir := shmTempDir(t)
 	pol := writePolicy(t, dir, "p", m25Grants)
 	// The env's CA comes from fxlib.EnsureCA(dir) — building it here first
 	// means the TLS upstream mints under the same CA the broker will trust.
@@ -912,7 +912,7 @@ func TestC256Isolation(t *testing.T) {
 	if testing.Short() {
 		t.Skip("timing check")
 	}
-	dir := t.TempDir()
+	dir := shmTempDir(t)
 	pol := writePolicy(t, dir, "p", m25Grants)
 	upAddr, upClose := startUpstream(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)

@@ -1,0 +1,13 @@
+make[1]: Entering directory '/home/csbuild/src/cs-broker2/.check-work/sabotage-M2.5-record-name-not-ip'
+CHECK C2.5.1 PASS
+CHECK C2.5.2 PASS
+CHECK C2.5.3 FAIL — --- FAIL: TestC253UpstreamAddrCheck (0.17s)     --- FAIL: TestC253UpstreamAddrCheck/resolve-once (0.01s)         check_m25_test.go:406: recorded upstream.ip "up.test", want dialled 198.51.100.77 FAIL FAIL	github.com/countersign/countersign/internal/proxy	0.186s FAIL 
+CHECK C2.5.4 PASS
+CHECK C2.5.5 PASS
+CHECK C2.5.6 PASS
+CHECK C2.5.7 PASS
+CHECK lint.proxy PASS
+M2.5 suite: FAILURES
+check-M2.5: FAIL (exit 1, evidence: evidence/M2.5/20261119T120755Z)
+make[1]: *** [Makefile:37: check-M2.5] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-broker2/.check-work/sabotage-M2.5-record-name-not-ip'

@@ -1,0 +1,6 @@
+make[3]: Entering directory '/home/csbuild/src/cs-broker2/.check-work/sabotage-DUMMY1-corrupt-greeting'
+CHECK D1.1 FAIL — greeting.txt corrupted
+DUMMY1 suite: FAILURES
+check-DUMMY1: FAIL (exit 1, evidence: evidence/DUMMY1/20261119T141154Z)
+make[3]: *** [Makefile:37: check-DUMMY1] Error 1
+make[3]: Leaving directory '/home/csbuild/src/cs-broker2/.check-work/sabotage-DUMMY1-corrupt-greeting'

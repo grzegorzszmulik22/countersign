@@ -1,0 +1,6 @@
+SABOTAGE eseq-out-of-lock: caught (exit 2) by C2.4.5 
+SABOTAGE fail-open-on-ledger-error: caught (exit 2) by C2.4.3 
+SABOTAGE forward-before-ack: caught (exit 2) by C2.4.1 C2.4.3 C2.4.6 
+SABOTAGE no-record-for-denied: caught (exit 2) by C2.4.4 C2.4.5 lint.proxy 
+SABOTAGE result-without-effect-on-error-path: caught (exit 2) by C2.4.1 C2.4.3 
+sabotage-M2.4: 5 caught, 0 uncaught (evidence: evidence/M2.4/20261119T105201Z/sabotage)

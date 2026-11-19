@@ -40,6 +40,52 @@ func publishDialInfo(ctx context.Context, info UpstreamRecord) {
 	}
 }
 
+// dialChecked resolves the authority once, checks the range policy, and
+// dials the checked address; for https it performs the upstream TLS
+// handshake inline (ServerName is the name the client asked for — the
+// resolved IP rides only in the socket and the record). The completed
+// record is published to the dial carrier (B2-06); the negotiated ALPN
+// comes back in the returned record. Used by the transport's dial hooks
+// (ClientConn path) and by the synchronous h1 upstream path.
+func (s *Server) dialChecked(ctx context.Context, network, addr, scheme string) (net.Conn, UpstreamRecord, error) {
+	raw, info, err := s.dialResolved(ctx, network, addr)
+	if err != nil {
+		return nil, info, err
+	}
+	if scheme != "https" {
+		publishDialInfo(ctx, info)
+		return raw, info, nil
+	}
+	// ServerName is the name the client asked for — the resolved IP
+	// rides only in the socket and the record.
+	host, _ := splitHostPort(addr)
+	tc := tls.Client(raw, &tls.Config{
+		RootCAs:    s.upstreamRoots(),
+		MinVersion: tls.VersionTLS12,
+		ServerName: host,
+		NextProtos: []string{"h2", "http/1.1"},
+		// Every request still gets its own conn and handshake (B2-01);
+		// resumption only abbreviates the handshake — fresh keys, fresh
+		// socket, fresh recorded attempt.
+		ClientSessionCache: s.upstreamSessionCache,
+	})
+	if err := tc.HandshakeContext(ctx); err != nil {
+		// Best effort: the handshake already failed; the close error
+		// cannot make upstream verification any safer.
+		_ = raw.Close()
+		return nil, info, &upstreamTLSError{err: err}
+	}
+	st := tc.ConnectionState()
+	info.TLSVersion = tlsVersionName(st.Version)
+	info.ALPN = st.NegotiatedProtocol
+	if len(st.PeerCertificates) > 0 {
+		sum := sha256.Sum256(st.PeerCertificates[0].Raw)
+		info.CertSHA256 = hex.EncodeToString(sum[:])
+	}
+	publishDialInfo(ctx, info)
+	return tc, info, nil
+}
+
 // upstreamTransport builds the broker's upstream RoundTripper. HTTPS dials
 // go through DialTLSContext so the broker performs the upstream handshake
 // itself: system roots (+ test root in fixtures builds), TLS >= 1.2, and an
@@ -64,47 +110,12 @@ func (s *Server) upstreamTransport() *http.Transport {
 		// h2 REFUSED/GOAWAY stream retry can ever produce an upstream
 		// attempt the effect records did not cover.
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			c, info, err := s.dialResolved(ctx, network, addr)
-			if err != nil {
-				return nil, err
-			}
-			publishDialInfo(ctx, info)
-			return c, nil
+			c, _, err := s.dialChecked(ctx, network, addr, "http")
+			return c, err
 		},
 		DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			raw, info, err := s.dialResolved(ctx, network, addr)
-			if err != nil {
-				return nil, err
-			}
-			// ServerName is the name the client asked for — the resolved
-			// IP rides only in the socket and the record.
-			host, _ := splitHostPort(addr)
-			cfg := &tls.Config{
-				RootCAs:    s.upstreamRoots(),
-				MinVersion: tls.VersionTLS12,
-				ServerName: host,
-				NextProtos: []string{"h2", "http/1.1"},
-				// Every request still gets its own conn and handshake
-				// (B2-01); resumption only abbreviates the handshake —
-				// fresh keys, fresh socket, fresh recorded attempt.
-				ClientSessionCache: s.upstreamSessionCache,
-			}
-			tc := tls.Client(raw, cfg)
-			if err := tc.HandshakeContext(ctx); err != nil {
-				// Best effort: the handshake already failed; the close
-				// error cannot make upstream verification any safer.
-				_ = raw.Close()
-				return nil, &upstreamTLSError{err: err}
-			}
-			st := tc.ConnectionState()
-			info.TLSVersion = tlsVersionName(st.Version)
-			info.ALPN = st.NegotiatedProtocol
-			if len(st.PeerCertificates) > 0 {
-				sum := sha256.Sum256(st.PeerCertificates[0].Raw)
-				info.CertSHA256 = hex.EncodeToString(sum[:])
-			}
-			publishDialInfo(ctx, info)
-			return tc, nil
+			c, _, err := s.dialChecked(ctx, network, addr, "https")
+			return c, err
 		},
 	}
 	return tr

@@ -85,7 +85,7 @@ func innerRequest(t *testing.T, tc *tls.Conn, req string) (int, string) {
 // A client trusting ONLY the session CA completes requests over HTTP/1.1
 // and HTTP/2.
 func TestC221SessionCATrust(t *testing.T) {
-	dir := t.TempDir()
+	dir := shmTempDir(t)
 	pol := writePolicy(t, dir, "p", m22Grants)
 	e := newTestEnv(t, []SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)}, nil)
 	e.startEcho(t)
@@ -119,7 +119,7 @@ func TestC221SessionCATrust(t *testing.T) {
 // Session A's CA does not validate a leaf minted under session B's CA —
 // CAs are per-session.
 func TestC222PerSessionCA(t *testing.T) {
-	dir := t.TempDir()
+	dir := shmTempDir(t)
 	pol := writePolicy(t, dir, "p", m22Grants)
 	e := newTestEnv(t, []SessionEntry{
 		sessionEntry("sa", "tok-a", "127.0.0.1", pol),
@@ -158,7 +158,7 @@ func TestC222PerSessionCA(t *testing.T) {
 // Invalid, expired or wrong-name upstream certificate: 502 UPSTREAM_TLS
 // and nothing reaches the upstream.
 func TestC223UpstreamVerify(t *testing.T) {
-	dir := t.TempDir()
+	dir := shmTempDir(t)
 	pol := writePolicy(t, dir, "p", m22Grants)
 
 	// trusted-miniCA: the broker's pool trusts it, so expired/wrong-name
@@ -228,7 +228,7 @@ const m224Grants = `  grants:
 `
 
 func TestC224SNICrossCheck(t *testing.T) {
-	dir := t.TempDir()
+	dir := shmTempDir(t)
 	pol := writePolicy(t, dir, "p", m224Grants)
 	hit := &countHandler{}
 	routes := map[string]string{}
@@ -429,7 +429,7 @@ func TestC224SNICrossCheck(t *testing.T) {
 
 	// A denial whose record append fails must surface as a broker error:
 	// a denial that is not recorded breaks the evidence record.
-	dir2 := t.TempDir()
+	dir2 := shmTempDir(t)
 	inner, err := NewFileRecordSink(filepath.Join(dir2, "records"), "broker/test")
 	if err != nil {
 		t.Fatal(err)
@@ -476,7 +476,7 @@ denied:
 // The CA private key reaches neither the client, the records dir, nor the
 // logs. Its only serialization call site is the session-key store.
 func TestC225KeyContainment(t *testing.T) {
-	dir := t.TempDir()
+	dir := shmTempDir(t)
 	pol := writePolicy(t, dir, "p", m22Grants)
 	e := newTestEnv(t, []SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)}, nil)
 	e.startEcho(t)
@@ -558,7 +558,7 @@ func sessionKeyDER(t *testing.T, srv *Server, sessionID string) []byte {
 // --- C2.2.6 ---------------------------------------------------------------
 // Client HTTP/2 with upstream HTTP/1.1, and the reverse.
 func TestC226ALPNIndependent(t *testing.T) {
-	dir := t.TempDir()
+	dir := shmTempDir(t)
 	pol := writePolicy(t, dir, "p", m22Grants)
 	routes := map[string]string{}
 	e := newTestEnv(t, []SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)}, routes)
@@ -623,7 +623,7 @@ func TestC226ALPNIndependent(t *testing.T) {
 // 1,000 distinct host names in one session all mint leaves; the per-session
 // cache stays bounded at 4,096.
 func TestC227LeafMinting(t *testing.T) {
-	dir := t.TempDir()
+	dir := shmTempDir(t)
 	pol := writePolicy(t, dir, "p", m22Grants)
 	routes := map[string]string{}
 	e := newTestEnv(t, []SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)}, routes)

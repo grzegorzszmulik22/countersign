@@ -57,6 +57,22 @@ var testSeq struct {
 
 // newTestEnv builds a broker with the given session table entries and a
 // dialer that resolves names via routes (name -> host:port, or "*" as a
+// shmTempDir is shmTempDir(t) on tmpfs when available: every proxied
+// request pays two FileRecordSink fsyncs, and a real-disk fsync costs
+// ~1000x a tmpfs one — under -race -count=200 on a contended host the
+// fsync wait alone can push a stress check over the go test timeout.
+// Durability semantics are unchanged; the append path is identical.
+func shmTempDir(t *testing.T) string {
+	t.Helper()
+	if st, err := os.Stat("/dev/shm"); err == nil && st.IsDir() {
+		if dir, err := os.MkdirTemp("/dev/shm", "cs-"); err == nil {
+			t.Cleanup(func() { _ = os.RemoveAll(dir) })
+			return dir
+		}
+	}
+	return t.TempDir()
+}
+
 // wildcard) before falling back to fxres.
 func newTestEnv(t *testing.T, entries []SessionEntry, routes map[string]string) *testEnv {
 	t.Helper()
@@ -68,7 +84,7 @@ func newTestEnv(t *testing.T, entries []SessionEntry, routes map[string]string) 
 // broker otherwise trusts).
 func newTestEnvRoots(t *testing.T, entries []SessionEntry, routes map[string]string, extraCA *miniCA) *testEnv {
 	t.Helper()
-	return newTestEnvFull(t, t.TempDir(), entries, routes, extraCA, nil)
+	return newTestEnvFull(t, shmTempDir(t), entries, routes, extraCA, nil)
 }
 
 // newTestEnvFull is the shared builder: dir holds the CA/session/records

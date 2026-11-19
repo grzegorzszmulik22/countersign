@@ -329,7 +329,7 @@ type credEnv struct {
 // NewFileRecordSink) so broker.log and the sink share the directory.
 func startCredEnv(t *testing.T, grants string, sinkFn func(dir string) RecordSink) *credEnv {
 	t.Helper()
-	dir := t.TempDir()
+	dir := shmTempDir(t)
 	pol, sec := m3PolicySecrets(t, dir, grants)
 	ca, err := fxlib.EnsureCA(dir)
 	if err != nil {
@@ -584,7 +584,7 @@ func TestC324GitCloneBasic(t *testing.T) {
 	p := ph(t, e, "s1", "github")
 
 	// CA bundle for git: session CA (the broker's MITM issuer) + test root.
-	bundle := filepath.Join(t.TempDir(), "ca.pem")
+	bundle := filepath.Join(shmTempDir(t), "ca.pem")
 	sess := e.broker.Session("s1")
 	var pemBuf bytes.Buffer
 	_ = pem.Encode(&pemBuf, &pem.Block{Type: "CERTIFICATE", Bytes: sess.CACert().Raw})
@@ -593,12 +593,12 @@ func TestC324GitCloneBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cloneDir := filepath.Join(t.TempDir(), "clone")
+	cloneDir := filepath.Join(shmTempDir(t), "clone")
 	proxy := "http://cs:tok-one@" + e.proxyURL.Host
 	// The environment carries the placeholder — the only client-side
 	// form of the credential (04 §4.1). No real secret appears in it.
 	env := []string{
-		"HOME=" + t.TempDir(),
+		"HOME=" + shmTempDir(t),
 		"PATH=" + filepath.Dir(git) + string(os.PathListSeparator) + "/usr/bin:/bin",
 		"HTTPS_PROXY=" + proxy, "https_proxy=" + proxy,
 		"HTTP_PROXY=" + proxy, "http_proxy=" + proxy,
@@ -721,7 +721,7 @@ func (e *testEnv) timeoutCtx(t *testing.T, d time.Duration) context.Context {
 // NO_GRANT/DENY_GRANT/SMUGGLING_SUSPECT) and by construction for the
 // credential checks (they produced the inject plan being logged).
 func TestC325InjectionInvariant(t *testing.T) {
-	dir := t.TempDir()
+	dir := shmTempDir(t)
 	pol, sec := m3PolicySecrets(t, dir, m3Grants)
 	sessionsFile := filepath.Join(dir, "sessions.yaml")
 	table := fmt.Sprintf("sessions:\n  - id: s1\n    token: t1\n    client_ip: 127.0.0.1\n    policy: %s\n    credentials: %s\n  - id: s2\n    token: t2\n    client_ip: 127.0.0.1\n    policy: %s\n    credentials: %s\n",

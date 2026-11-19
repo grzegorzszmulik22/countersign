@@ -1,0 +1,12 @@
+make[1]: Entering directory '/home/csbuild/src/cs-broker2/.check-work/sabotage-M2.4-eseq-out-of-lock'
+CHECK C2.4.1 PASS
+CHECK C2.4.2 PASS
+CHECK C2.4.3 PASS
+CHECK C2.4.4 PASS
+CHECK C2.4.5 FAIL — --- FAIL: TestC245CountEquality (175.13s)     check_m24_test.go:932: record 5 has eseq 6 — the chain is out of append order FAIL FAIL	github.com/countersign/countersign/internal/proxy	175.159s FAIL 
+CHECK C2.4.6 PASS
+CHECK lint.proxy PASS
+M2.4 suite: FAILURES
+check-M2.4: FAIL (exit 1, evidence: evidence/M2.4/20261119T105202Z)
+make[1]: *** [Makefile:37: check-M2.4] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-broker2/.check-work/sabotage-M2.4-eseq-out-of-lock'

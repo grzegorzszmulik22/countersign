@@ -156,7 +156,7 @@ func (p *patternSource) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // digest upstream saw equals what the client sent and what the result
 // record holds — request (upload) and response (download) directions.
 func TestC231ByteEquality(t *testing.T) {
-	dir := t.TempDir()
+	dir := shmTempDir(t)
 	pol := writePolicy(t, dir, "p", m23Grants)
 	routes := map[string]string{}
 	e := newTestEnv(t, []SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)}, routes)
@@ -301,7 +301,7 @@ func TestC232SSEFlush(t *testing.T) {
 	// added delay that is not the broker's. Freeze it for the window.
 	oldGC := debug.SetGCPercent(-1)
 	defer debug.SetGCPercent(oldGC)
-	dir := t.TempDir()
+	dir := shmTempDir(t)
 	pol := writePolicy(t, dir, "p", m23Grants)
 	routes := map[string]string{}
 	e := newTestEnv(t, []SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)}, routes)
@@ -514,7 +514,7 @@ const m233Grants = `  grants:
 `
 
 func TestC233WriteAheadDigest(t *testing.T) {
-	dir := t.TempDir()
+	dir := shmTempDir(t)
 	pol := writePolicy(t, dir, "p", m233Grants)
 	routes := map[string]string{}
 	e := newTestEnv(t, []SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)}, routes)
@@ -847,7 +847,7 @@ func wantDigest(method, scheme, authority, path, query string, bodySHA [32]byte,
 // Client aborts mid-download: the upstream connection is closed within
 // 1 s; the result record has error: client-abort and the partial count.
 func TestC234ClientAbort(t *testing.T) {
-	dir := t.TempDir()
+	dir := shmTempDir(t)
 	pol := writePolicy(t, dir, "p", m23Grants)
 	routes := map[string]string{}
 	e := newTestEnv(t, []SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)}, routes)
@@ -936,7 +936,7 @@ func TestC234ClientAbort(t *testing.T) {
 // MM2.5: resident memory growth while relaying a 1 GiB body, either
 // direction, stays under 64 MiB.
 func TestC235MemoryBound(t *testing.T) {
-	dir := t.TempDir()
+	dir := shmTempDir(t)
 	pol := writePolicy(t, dir, "p", m23Grants)
 	routes := map[string]string{}
 	e := newTestEnv(t, []SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)}, routes)
@@ -1024,7 +1024,7 @@ func TestC233CloseWaitsForInFlightRecords(t *testing.T) {
 }
 
 func closeWaitsOnce(t *testing.T) {
-	dir := t.TempDir()
+	dir := shmTempDir(t)
 	pol := writePolicy(t, dir, "p", m23Grants)
 	routes := map[string]string{}
 	e := newTestEnv(t, []SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)}, routes)
