@@ -12,6 +12,8 @@ package proxy
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -179,6 +181,15 @@ func m8PathFor(endpoint string) string {
 	return "/v1/messages"
 }
 
+// m8ProviderFor maps a vector's format key to the provider value the
+// intent.declared record carries.
+func m8ProviderFor(endpoint string) string {
+	if endpoint == "anthropic" {
+		return "anthropic"
+	}
+	return "openai"
+}
+
 // m8Request is the minimal request body a client sends for a vector —
 // content the request parser accepts on that endpoint.
 func m8Request(endpoint string) []byte {
@@ -252,6 +263,10 @@ func TestM8E2E_ResponseVectors(t *testing.T) {
 						t.Fatalf("declared %d = %+v, want id=%s tool=%s exec=%s sha=%s len=%d",
 							i, d, x.ID, x.Tool, x.Executor, x.InputSHA256, x.InputLen)
 					}
+					if d.Source != "inference" || d.Provider != m8ProviderFor(v.exp.Provider) ||
+						d.Model != v.exp.Model || d.ViaEffect == "" {
+						t.Fatalf("declared %d fields = %+v", i, d)
+					}
 				}
 				// intent.unparsed lands when the pipe sees upstream EOF —
 				// on a Content-Length response the client can consume the
@@ -275,10 +290,17 @@ func TestM8E2E_ResponseVectors(t *testing.T) {
 				} else if len(unp) != 0 {
 					t.Fatalf("unexpected intent.unparsed: %+v", unp[0])
 				}
-				// effect.http carries the grant's real inspect mode.
+				// effect.http carries the grant's real inspect mode; every
+				// declared intent rides that effect.
 				effs := recordsOfType[EffectHTTPBody](t, m8Records(t, e, "s8-"+v.name), "effect.http")
 				if len(effs) != 1 || effs[0].Inspect != "inference" {
 					t.Fatalf("effect.http inspect = %+v", effs)
+				}
+				for _, d := range declared {
+					if d.ViaEffect != effs[0].EffectID {
+						t.Fatalf("declared %s via_effect %q, want effect %q",
+							d.IntentID, d.ViaEffect, effs[0].EffectID)
+					}
 				}
 			})
 		}
@@ -365,6 +387,63 @@ func TestM8E2E_WriteAheadOrdering(t *testing.T) {
 	}
 	if doneBlocks != len(exp.Intents) {
 		t.Fatalf("%d completed blocks, want %d", doneBlocks, len(exp.Intents))
+	}
+}
+
+// TestM8E2E_IntentClassAnchor runs multi-call-sse under a policy that
+// classes tools: Bash → exec carries anchor_sha256 = SHA-256 of the
+// commandField string (04 §10), the Web* glob maps, and the rest fall to
+// the catch-all with no anchor.
+func TestM8E2E_IntentClassAnchor(t *testing.T) {
+	var wire []byte
+	for _, v := range m8Vectors(t, "anthropic") {
+		if v.name == "multi-call-sse" {
+			wire = v.wire
+		}
+	}
+	if wire == nil {
+		t.Fatal("multi-call-sse vector missing")
+	}
+	dir := t.TempDir()
+	pol := m8Policy(t, dir, "p8c", nil, nil, `    "Bash": exec
+    "Web*": local
+    "*": other
+`)
+	e, routes := m8Env(t, "s8cls", "tok-8c", pol)
+	addr, closeUp := startTLSUpstream(t, e.ca, []string{"llm.example"}, nil,
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(200)
+			_, _ = w.Write(wire)
+		}))
+	defer closeUp()
+	routes["llm.example"] = addr
+	cli := e.proxyClient(t, "tok-8c", e.combinedPool(t, "s8cls"), "http/1.1")
+	res, err := cli.Post("https://llm.example"+m8PathFor("anthropic"),
+		"application/json", bytes.NewReader(m8Request("anthropic")))
+	if err != nil {
+		t.Fatalf("proxy request: %v", err)
+	}
+	_, _ = io.Copy(io.Discard, res.Body)
+	_ = res.Body.Close()
+
+	wantClass := map[string]string{"Bash": "exec", "Read": "other", "WebSearch": "local"}
+	declared := declaredList(t, e, "s8cls")
+	if len(declared) != 3 {
+		t.Fatalf("%d declared, want 3", len(declared))
+	}
+	for _, d := range declared {
+		if d.Class != wantClass[d.Tool] {
+			t.Fatalf("%s class %q, want %q", d.Tool, d.Class, wantClass[d.Tool])
+		}
+		if d.Class == "exec" {
+			sum := sha256.Sum256([]byte("git status"))
+			if d.AnchorSHA256 != hex.EncodeToString(sum[:]) {
+				t.Fatalf("%s anchor_sha256 %q, want sha256(%q)", d.Tool, d.AnchorSHA256, "git status")
+			}
+		} else if d.AnchorSHA256 != "" {
+			t.Fatalf("%s class %s carries anchor %q", d.Tool, d.Class, d.AnchorSHA256)
+		}
 	}
 }
 

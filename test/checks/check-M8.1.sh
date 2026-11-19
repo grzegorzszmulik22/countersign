@@ -42,10 +42,11 @@ run C8.1.1 ./internal/inspect/ -count=1 -run '^TestVectorsChunkIndependent$' -v
 # C8.1.2: write-ahead ordering through a live broker.
 run C8.1.2 -tags fixtures ./internal/proxy/ -count=1 -run '^TestM8E2E_WriteAheadOrdering$' -v
 
-# C8.1.3: byte equality (MM8.2) on every vector through the broker and
-# the paced-stream added-delay bound (MM8.3).
+# C8.1.3: byte equality (MM8.2) on every vector through the broker,
+# the paced-stream added-delay bound (MM8.3), and the declared-record
+# field shape (class from toolClasses, exec anchor, via_effect).
 run C8.1.3 -tags fixtures ./internal/proxy/ -count=1 \
-    -run '^(TestM8E2E_ResponseVectors|TestM8E2E_Latency)$' -v
+    -run '^(TestM8E2E_ResponseVectors|TestM8E2E_Latency|TestM8E2E_IntentClassAnchor)$' -v
 
 # C8.1.4: the cut-midblock vector declares nothing for the incomplete
 # block and writes intent.unparsed while the client sees sent bytes
