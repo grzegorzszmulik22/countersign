@@ -291,12 +291,7 @@ func TestParserMutationFuzz(t *testing.T) {
 					cs, err := p.Feed(wire[pos : pos+m])
 					pos += m
 					for _, c := range cs {
-						// The ID surfaces as a JSON string in the wire;
-						// check its re-encoded form (covers \" escapes
-						// and the U+FFFD sanitization above).
-						jid, _ := json.Marshal(c.Intent.ID)
-						inner := strings.Trim(string(jid), `"`)
-						if c.Intent != nil && !strings.Contains(norm, inner) {
+						if c.Intent != nil && !idInWire(c.Intent.ID, wire, norm) {
 							t.Fatalf("%s mutation %d: fabricated intent id %q",
 								v.name, i, c.Intent.ID)
 						}
@@ -353,8 +348,8 @@ func TestParserNeverFabricatesOnGarbage(t *testing.T) {
 // suites run it at -fuzztime=600s). Every wire — corpus-seeded or
 // fuzzer-mutated — is fed to all three endpoint parsers under both
 // content types: no panic (the fuzzer reports it) and no fabricated
-// intent — an intent's re-encoded ID must occur in the wire it was
-// parsed from (MM8.4).
+// intent — an intent's ID must be a string the wire actually carried
+// (MM8.4).
 func FuzzResponseParser(f *testing.F) {
 	for _, dir := range []string{"anthropic", "openai"} {
 		base := filepath.Join(vectorRoot, dir)
@@ -408,7 +403,7 @@ func checkNoFabrication(t *testing.T, p ResponseParser, wire []byte, norm string
 	feed := func() (stop bool) {
 		if len(wire) <= 4096 {
 			for i := 0; i < len(wire); i++ {
-				if stop = checkComps(t, p, wire[i:i+1], norm); stop {
+				if stop = checkComps(t, p, wire[i:i+1], wire, norm); stop {
 					return true
 				}
 			}
@@ -419,7 +414,7 @@ func checkNoFabrication(t *testing.T, p ResponseParser, wire []byte, norm string
 			if i := bytes.IndexByte(wire[pos:], '\n'); i >= 0 {
 				m = i + 1
 			}
-			if stop = checkComps(t, p, wire[pos:pos+m], norm); stop {
+			if stop = checkComps(t, p, wire[pos:pos+m], wire, norm); stop {
 				return true
 			}
 			pos += m
@@ -430,17 +425,47 @@ func checkNoFabrication(t *testing.T, p ResponseParser, wire []byte, norm string
 	p.Finish()
 }
 
-func checkComps(t *testing.T, p ResponseParser, chunk []byte, norm string) (stop bool) {
+func checkComps(t *testing.T, p ResponseParser, chunk, wire []byte, norm string) (stop bool) {
 	cs, err := p.Feed(chunk)
 	for _, c := range cs {
-		if c.Intent == nil {
-			continue
-		}
-		jid, _ := json.Marshal(c.Intent.ID)
-		inner := strings.Trim(string(jid), `"`)
-		if !strings.Contains(norm, inner) {
+		if c.Intent != nil && !idInWire(c.Intent.ID, wire, norm) {
 			t.Fatalf("fabricated intent id %q", c.Intent.ID)
 		}
 	}
 	return err != nil
+}
+
+// idInWire reports whether id could have been parsed out of wire. Every
+// intent ID arrives as a JSON string value, so the check decodes every
+// well-formed string token in the wire and looks for the ID inside one
+// — checking the ID's re-encoded form instead would miss characters Go
+// HTML-escapes (&, <, >) that wires legitimately carry unescaped. The
+// raw wire is tried first as a fast path (also covers UTF-8
+// sanitization, since norm is the ToValidUTF8 view of the wire).
+func idInWire(id string, wire []byte, norm string) bool {
+	if strings.Contains(norm, id) {
+		return true
+	}
+	for i := 0; i+1 < len(wire); i++ {
+		if wire[i] != '"' {
+			continue
+		}
+		j := i + 1
+		for ; j < len(wire); j++ {
+			switch wire[j] {
+			case '\\':
+				j++
+			case '"':
+				goto quoted
+			}
+		}
+		break
+	quoted:
+		var s string
+		if json.Unmarshal(wire[i:j+1], &s) == nil && strings.Contains(s, id) {
+			return true
+		}
+		i = j
+	}
+	return false
 }
