@@ -14,6 +14,7 @@ package proxy
 
 import (
 	"context"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -98,14 +99,17 @@ type Server struct {
 
 	http      *http.Server
 	transport *http.Transport
-	ln        net.Listener
-	mu        sync.Mutex
-	tlsSrv    map[*http.Server]bool // per-tunnel inner servers
-	conns     map[net.Conn]struct{} // hijacked tunnel conns (untracked by http.Server)
-	isClosed  bool
-	closed    chan struct{}
-	closeOnce sync.Once
-	wg        sync.WaitGroup
+	// upstreamSessionCache abbreviates repeat TLS handshakes to an
+	// upstream; every request still dials its own conn (B2-01).
+	upstreamSessionCache tls.ClientSessionCache
+	ln                   net.Listener
+	mu                   sync.Mutex
+	tlsSrv               map[*http.Server]bool // per-tunnel inner servers
+	conns                map[net.Conn]struct{} // hijacked tunnel conns (untracked by http.Server)
+	isClosed             bool
+	closed               chan struct{}
+	closeOnce            sync.Once
+	wg                   sync.WaitGroup
 	// anonSem bounds connections no admitting session has a slot for.
 	anonSem chan struct{}
 	// reqs counts request handlers (plain listener and every tunnel's
@@ -204,6 +208,7 @@ func NewServer(cfg Config) (*Server, error) {
 	// every h1 head is conn-level inspected (B2-05). h2 is unaffected:
 	// its streams multiplex under the h2 parser plus parsedHeadDeny.
 	s.http.SetKeepAlivesEnabled(false)
+	s.upstreamSessionCache = tls.NewLRUClientSessionCache(1024)
 	s.transport = s.upstreamTransport()
 	return s, nil
 }
