@@ -1,0 +1,243 @@
+{
+  "endpoint": "anthropic",
+  "steps": [
+    {
+      "name": "A1",
+      "request": {
+        "model": "claude-opus-4-1-20250805",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": "conv A MK5d9e620d89ce-a0"
+          }
+        ]
+      },
+      "response": {
+        "sse": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01XyZ\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-1-20250805\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":25,\"output_tokens\":1}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_ic_A1\",\"name\":\"Bash\",\"input\":{}}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"comm\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"and\\\":\\\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"aa\\\"}\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":15}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+      }
+    },
+    {
+      "name": "B1",
+      "request": {
+        "model": "claude-opus-4-1-20250805",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": "conv B MK5d9e620d89ce-b0"
+          }
+        ]
+      },
+      "response": {
+        "sse": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01XyZ\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-1-20250805\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":25,\"output_tokens\":1}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_ic_B1\",\"name\":\"Read\",\"input\":{}}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"file\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"_path\\\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\":\\\"/b\\\"}\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":15}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+      }
+    },
+    {
+      "name": "A2",
+      "request": {
+        "model": "claude-opus-4-1-20250805",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": "conv A MK5d9e620d89ce-a0"
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "toolu_ic_A1",
+                "name": "Bash",
+                "input": {
+                  "command": "aa"
+                }
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "toolu_ic_A1",
+                "content": "outA"
+              }
+            ]
+          }
+        ]
+      },
+      "response": {
+        "sse": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01XyZ\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-1-20250805\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":25,\"output_tokens\":1}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_ic_A2\",\"name\":\"Bash\",\"input\":{}}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"comm\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"and\\\":\\\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"ab\\\"}\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":15}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+      }
+    },
+    {
+      "name": "B2",
+      "request": {
+        "model": "claude-opus-4-1-20250805",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": "conv B MK5d9e620d89ce-b0"
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "toolu_ic_B1",
+                "name": "Read",
+                "input": {
+                  "file_path": "/b"
+                }
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "toolu_ic_B1",
+                "content": "outB"
+              }
+            ]
+          }
+        ]
+      },
+      "response": {
+        "sse": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01XyZ\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-1-20250805\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":25,\"output_tokens\":1}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_ic_B2\",\"name\":\"Bash\",\"input\":{}}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"comm\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"and\\\":\\\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"bb\\\"}\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":15}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+      }
+    },
+    {
+      "name": "A3",
+      "request": {
+        "model": "claude-opus-4-1-20250805",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": "conv A MK5d9e620d89ce-a0"
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "toolu_ic_A1",
+                "name": "Bash",
+                "input": {
+                  "command": "aa"
+                }
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "toolu_ic_A1",
+                "content": "outA"
+              }
+            ]
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "toolu_ic_A2",
+                "name": "Bash",
+                "input": {
+                  "command": "ab"
+                }
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "toolu_ic_A2",
+                "content": "outA2"
+              }
+            ]
+          }
+        ]
+      },
+      "response": {
+        "sse": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01XyZ\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-1-20250805\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":25,\"output_tokens\":1}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"finA\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":15}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+      }
+    },
+    {
+      "name": "B3",
+      "request": {
+        "model": "claude-opus-4-1-20250805",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": "conv B MK5d9e620d89ce-b0"
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "toolu_ic_B1",
+                "name": "Read",
+                "input": {
+                  "file_path": "/b"
+                }
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "toolu_ic_B1",
+                "content": "outB"
+              }
+            ]
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "toolu_ic_B2",
+                "name": "Bash",
+                "input": {
+                  "command": "bb"
+                }
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "toolu_ic_B2",
+                "content": "outB2"
+              }
+            ]
+          }
+        ]
+      },
+      "response": {
+        "sse": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01XyZ\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-1-20250805\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":25,\"output_tokens\":1}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"finB\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":15}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+      }
+    }
+  ],
+  "markers": [
+    "MK5d9e620d89ce-a0",
+    "MK5d9e620d89ce-b0"
+  ]
+}

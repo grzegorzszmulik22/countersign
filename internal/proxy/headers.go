@@ -106,7 +106,8 @@ func parseSize(s string) (int64, error) {
 var errSize = errors.New("invalid size")
 
 // bufferLimit returns the grant's effective buffer limit in bytes
-// (04 §1: grant override, else spec.bufferLimit, else 1 MiB).
+// (04 §1: grant override, else spec.bufferLimit, else 1 MiB — and
+// 32 MiB for inspect: inference grants, M8.3).
 func bufferLimit(p *policy.SessionPolicy, g *policy.Grant) int64 {
 	s := ""
 	if g != nil && g.BufferLimit != "" {
@@ -115,11 +116,20 @@ func bufferLimit(p *policy.SessionPolicy, g *policy.Grant) int64 {
 		s = p.Spec.BufferLimit
 	}
 	if s == "" {
-		return 1 << 20
+		return defaultBufferLimit(g)
 	}
 	n, err := parseSize(s)
 	if err != nil || n < 0 {
-		return 1 << 20
+		return defaultBufferLimit(g)
 	}
 	return n
+}
+
+// defaultBufferLimit is the unset-limit default: 32 MiB for
+// inspect: inference grants (04 §1), 1 MiB otherwise.
+func defaultBufferLimit(g *policy.Grant) int64 {
+	if g != nil && g.Inspect == "inference" {
+		return 32 << 20
+	}
+	return 1 << 20
 }

@@ -1,0 +1,17 @@
+{
+  "provider": "anthropic",
+  "format": "json",
+  "model": "claude-opus-4-1-20250805",
+  "intents": [
+    {
+      "intent_id": "toolu_05EmptyInpUt0000000",
+      "tool": "GetTime",
+      "executor": "sandbox",
+      "input_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "input_len": 2
+    }
+  ],
+  "unparsed": false,
+  "detail_substring": "",
+  "markers": []
+}

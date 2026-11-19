@@ -1,0 +1,31 @@
+{
+  "provider": "responses",
+  "format": "sse",
+  "model": "gpt-5.2-2025-12-11",
+  "intents": [
+    {
+      "intent_id": "ws_0H0st3dW3bS34rch00",
+      "tool": "web_search_call",
+      "executor": "provider",
+      "input_sha256": "290b0ddedfc239d6fa01ae4c9b22d2d703df72faf0a4e163bbb7983781e8d22a",
+      "input_len": 48
+    },
+    {
+      "intent_id": "fs_0H0st3dF1l3S34rch0",
+      "tool": "file_search_call",
+      "executor": "provider",
+      "input_sha256": "b4848e98ecc659c679b20ed96a6ce119cfac9c8adac4303bf572c2fd4da4f10f",
+      "input_len": 122
+    },
+    {
+      "intent_id": "call_0H0st3dC0mput3rC4ll",
+      "tool": "computer_call",
+      "executor": "provider",
+      "input_sha256": "cc11be7c9e46578d27e8b7976d823505c3dd82ad49dec61562a913a84fce740a",
+      "input_len": 30
+    }
+  ],
+  "unparsed": false,
+  "detail_substring": "",
+  "markers": []
+}

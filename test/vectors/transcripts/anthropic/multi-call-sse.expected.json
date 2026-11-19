@@ -1,0 +1,31 @@
+{
+  "provider": "anthropic",
+  "format": "sse",
+  "model": "claude-opus-4-1-20250805",
+  "intents": [
+    {
+      "intent_id": "toolu_02M3y7f2T0hKkLvPqZy4Jb",
+      "tool": "Bash",
+      "executor": "sandbox",
+      "input_sha256": "e0d3e391760d0a9b6c24bf66cecfc5a66557784782cbc704052385bf6e9bb287",
+      "input_len": 24
+    },
+    {
+      "intent_id": "toolu_02M3y7f2T0hKkLvPqZy4Jc",
+      "tool": "Read",
+      "executor": "sandbox",
+      "input_sha256": "617090dbd72b8a5752fe40293c36fe9107129b38e1308fd0edf46968265e2849",
+      "input_len": 26
+    },
+    {
+      "intent_id": "toolu_02M3y7f2T0hKkLvPqZy4Jd",
+      "tool": "WebSearch",
+      "executor": "sandbox",
+      "input_sha256": "96a8b3f42cd63142a77e300da56056f2b21ee4645e66ac3b7f1ed473e37b101f",
+      "input_len": 24
+    }
+  ],
+  "unparsed": false,
+  "detail_substring": "",
+  "markers": []
+}

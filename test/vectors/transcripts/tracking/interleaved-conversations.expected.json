@@ -1,0 +1,199 @@
+{
+  "declared": [
+    {
+      "step": 0,
+      "intent_id": "toolu_ic_A1",
+      "tool": "Bash",
+      "executor": "sandbox",
+      "input_sha256": "d8d8d49ddebe2b9717e12df4567242b156ea311b85a83a78acfbe592d8aa1dd5",
+      "input_len": 16
+    },
+    {
+      "step": 1,
+      "intent_id": "toolu_ic_B1",
+      "tool": "Read",
+      "executor": "sandbox",
+      "input_sha256": "012f63c7c9f93f394fc46c3bbcf1f811d924ca2bb79accfa441205c314996b86",
+      "input_len": 18
+    },
+    {
+      "step": 3,
+      "intent_id": "toolu_ic_B2",
+      "tool": "Bash",
+      "executor": "sandbox",
+      "input_sha256": "56084dfccd1aa0211417cb36fca48139598d644f315b15473bc3f9ce953a18ac",
+      "input_len": 16
+    },
+    {
+      "step": 2,
+      "intent_id": "toolu_ic_A2",
+      "tool": "Bash",
+      "executor": "sandbox",
+      "input_sha256": "e985fbd39ae2917e48f5b8854919bfc752b0a2d639ed11ea8138a55cb5738201",
+      "input_len": 16
+    }
+  ],
+  "results": [
+    {
+      "step": 2,
+      "closed_by": "tool_result",
+      "intent_id": "toolu_ic_A1",
+      "content_sha256": "59ebdab7e8a2c4fef5a76f29cef503744d49dc072a1e0039e8493e3adb7b6ee5",
+      "content_len": 4,
+      "has_content": true,
+      "is_error": null
+    },
+    {
+      "step": 3,
+      "closed_by": "tool_result",
+      "intent_id": "toolu_ic_B1",
+      "content_sha256": "36700f56833f4506bcd8dc655f00ef5fb8e804ecfc52e65253d3954842eea16f",
+      "content_len": 4,
+      "has_content": true,
+      "is_error": null
+    },
+    {
+      "step": 4,
+      "closed_by": "tool_result",
+      "intent_id": "toolu_ic_A2",
+      "content_sha256": "267c73672fed507152db4f2553af9529f698c8b2d63fc15829b7fc90e3a46378",
+      "content_len": 5,
+      "has_content": true,
+      "is_error": null
+    },
+    {
+      "step": 5,
+      "closed_by": "tool_result",
+      "intent_id": "toolu_ic_B2",
+      "content_sha256": "891d534edc9b1709645a2c8b8bb4a79db00692cddef9d2dddc24aea7ecdd5fc4",
+      "content_len": 5,
+      "has_content": true,
+      "is_error": null
+    }
+  ],
+  "context": [
+    {
+      "step": 0,
+      "new_blocks": [
+        {
+          "index": 0,
+          "role": "user",
+          "kind": "text",
+          "sha256": "26bfcdfd66517edf2651bb39c3595c1fc2352464bc132f22c723d20592621768",
+          "len": 26,
+          "intent_id": ""
+        }
+      ],
+      "block_count": 1,
+      "context_sha256": "7dcadc331a6fd976b5a244c31bb3a52845941337da676819e7fad34cebe81fce"
+    },
+    {
+      "step": 1,
+      "new_blocks": [
+        {
+          "index": 0,
+          "role": "user",
+          "kind": "text",
+          "sha256": "36f085b1bd604db8485a067a0865375ebd909f75309fcc84586418edcc4107ac",
+          "len": 26,
+          "intent_id": ""
+        }
+      ],
+      "block_count": 2,
+      "context_sha256": "7e340962bba8e051572af1359459bffa2e6661137ce38cd5c20091fdc5087b34"
+    },
+    {
+      "step": 2,
+      "new_blocks": [
+        {
+          "index": 1,
+          "role": "assistant",
+          "kind": "tool_use",
+          "sha256": "2a1ca9682b239cb345ac633d0272513088a184ff2b538ef2797248abe1101e45",
+          "len": 77,
+          "intent_id": "toolu_ic_A1"
+        },
+        {
+          "index": 2,
+          "role": "user",
+          "kind": "tool_result",
+          "sha256": "fba7d8ca22cd4e2d6555fa9f4567856e0f91fc0279cda3fe6b575a9e45c99321",
+          "len": 67,
+          "intent_id": "toolu_ic_A1"
+        }
+      ],
+      "block_count": 4,
+      "context_sha256": "4f7fb9b5b7ce82267745a1bfde1bf2cddb79226afd3be30ebe35d3bde4a9f9a7"
+    },
+    {
+      "step": 3,
+      "new_blocks": [
+        {
+          "index": 1,
+          "role": "assistant",
+          "kind": "tool_use",
+          "sha256": "c57c6ef9b3b0513202e8f25f4ea0194512a120dd7ec844838b1fcb9597ae9580",
+          "len": 79,
+          "intent_id": "toolu_ic_B1"
+        },
+        {
+          "index": 2,
+          "role": "user",
+          "kind": "tool_result",
+          "sha256": "2b7df55dfcb3d634ac86e494a9cc5b86d6454534fca0450d3448d170536c91b0",
+          "len": 67,
+          "intent_id": "toolu_ic_B1"
+        }
+      ],
+      "block_count": 6,
+      "context_sha256": "21b120f2834f2f9737670bf36054ff9ec60aabd9ef7f78c4eaaa0f4f11d05186"
+    },
+    {
+      "step": 4,
+      "new_blocks": [
+        {
+          "index": 3,
+          "role": "assistant",
+          "kind": "tool_use",
+          "sha256": "e22a6255b3392e4a4afe302be6a838a716f58bfab659b2430c5e466e3d5040e9",
+          "len": 77,
+          "intent_id": "toolu_ic_A2"
+        },
+        {
+          "index": 4,
+          "role": "user",
+          "kind": "tool_result",
+          "sha256": "ec79a0b30531913ffb20101428b884de23fa3804fae724a50025a7cde20e8051",
+          "len": 68,
+          "intent_id": "toolu_ic_A2"
+        }
+      ],
+      "block_count": 8,
+      "context_sha256": "8e5c05f4b9fd8c06a20654dc2123ca8fe1850e9f6de5364ed3ba3d4b82031d02"
+    },
+    {
+      "step": 5,
+      "new_blocks": [
+        {
+          "index": 3,
+          "role": "assistant",
+          "kind": "tool_use",
+          "sha256": "b56a625bb17fe8e1ddeb599eeac78fe07ac2c3e07d7b6d24b88928a1946517be",
+          "len": 77,
+          "intent_id": "toolu_ic_B2"
+        },
+        {
+          "index": 4,
+          "role": "user",
+          "kind": "tool_result",
+          "sha256": "85b40f47259da35f9aeba60c490d16720c5362f38bf77d784f59227f35328250",
+          "len": 68,
+          "intent_id": "toolu_ic_B2"
+        }
+      ],
+      "block_count": 10,
+      "context_sha256": "26130e611100d68ef4877dbea4c31a56fcbdd13ad7db6e3e2b9780fc0cb16438"
+    }
+  ],
+  "unparsed": []
+}

@@ -1,0 +1,94 @@
+{
+  "declared": [
+    {
+      "step": 0,
+      "intent_id": "toolu_rsnd_A",
+      "tool": "Bash",
+      "executor": "sandbox",
+      "input_sha256": "09bd497096368eeddf10d54a64983344e7368a538c2069303b8a446e074c78d6",
+      "input_len": 15
+    }
+  ],
+  "results": [
+    {
+      "step": 1,
+      "closed_by": "tool_result",
+      "intent_id": "toolu_rsnd_A",
+      "content_sha256": "cda46a5d5c333597994ce91f3f4de61557cdc9850c3d650418c2cb24a4764591",
+      "content_len": 23,
+      "has_content": true,
+      "is_error": null
+    }
+  ],
+  "context": [
+    {
+      "step": 0,
+      "new_blocks": [
+        {
+          "index": 0,
+          "role": "user",
+          "kind": "text",
+          "sha256": "8f713b996883439cdcb1fae0b8561dedb813af6200f4e6df7184d7538d76d876",
+          "len": 26,
+          "intent_id": ""
+        }
+      ],
+      "block_count": 1,
+      "context_sha256": "16f776dfa0c2ce3ec117533ad89db28f82baf7ddb7eda88213bef60ee921cb52"
+    },
+    {
+      "step": 1,
+      "new_blocks": [
+        {
+          "index": 1,
+          "role": "assistant",
+          "kind": "tool_use",
+          "sha256": "a0b7898f9c1dd45f65735273a0d3982daa898bee93ce4c8bd68e9e9ff656683f",
+          "len": 77,
+          "intent_id": "toolu_rsnd_A"
+        },
+        {
+          "index": 2,
+          "role": "user",
+          "kind": "tool_result",
+          "sha256": "daa43dd35620b31625e4000e9b1f5d6a2b6ea3490dd140b81b94f38ccdd1a9be",
+          "len": 87,
+          "intent_id": "toolu_rsnd_A"
+        }
+      ],
+      "block_count": 3,
+      "context_sha256": "f1113085e6784e01644c319cf76e1b18f65413382ca70c736d8fc1462b2c8795"
+    },
+    {
+      "step": 2,
+      "new_blocks": [
+        {
+          "index": 3,
+          "role": "assistant",
+          "kind": "text",
+          "sha256": "585a856473d32783b933d1b47b55f43f77c258fd661b2b8f50bc08b077bcde73",
+          "len": 30,
+          "intent_id": ""
+        }
+      ],
+      "block_count": 4,
+      "context_sha256": "c90d8249f9a89d848818bc2b719fecfc40a211ffcf58c7dfb3bf6ea84e1f9b1f"
+    },
+    {
+      "step": 3,
+      "new_blocks": [
+        {
+          "index": 4,
+          "role": "user",
+          "kind": "text",
+          "sha256": "f452f217e3d969e919c96bc20972e704d72f3d48a8a58aa96b997fabec5ab4c6",
+          "len": 24,
+          "intent_id": ""
+        }
+      ],
+      "block_count": 5,
+      "context_sha256": "f9c83c2624b0ebcebd971765b613fb58b1663eaaed632a892de33c1ef1bf8415"
+    }
+  ],
+  "unparsed": []
+}

@@ -1,0 +1,17 @@
+{
+  "provider": "responses",
+  "format": "json",
+  "model": "gpt-5.2-2025-12-11",
+  "intents": [
+    {
+      "intent_id": "call_0R3spS1ngl3C4ll0000001",
+      "tool": "read_file",
+      "executor": "sandbox",
+      "input_sha256": "ca8754e4a801f513d448d35d340f8ce658219755810d1c154ab79d7b35c6f47c",
+      "input_len": 34
+    }
+  ],
+  "unparsed": false,
+  "detail_substring": "",
+  "markers": []
+}

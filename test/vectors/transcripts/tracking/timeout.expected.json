@@ -1,0 +1,52 @@
+{
+  "declared": [
+    {
+      "step": 0,
+      "intent_id": "toolu_tmo_A",
+      "tool": "Bash",
+      "executor": "sandbox",
+      "input_sha256": "ca47c539409bc50021fbcfdfd5991b9a5eaf304e39c62fe6715f643bf5fa0ead",
+      "input_len": 19
+    }
+  ],
+  "results": [
+    {
+      "step": 1,
+      "intent_id": "toolu_tmo_A",
+      "closed_by": "timeout"
+    }
+  ],
+  "context": [
+    {
+      "step": 0,
+      "new_blocks": [
+        {
+          "index": 0,
+          "role": "user",
+          "kind": "text",
+          "sha256": "2f3a1256791319cbe6d99d1eebdfc8a806a897d1566fc7e03fcf8c9204212a7e",
+          "len": 24,
+          "intent_id": ""
+        }
+      ],
+      "block_count": 1,
+      "context_sha256": "9dac9c0d33ae42b19bde7d1d39127d40b5d439db729ad782fcb2009dcd39ff32"
+    },
+    {
+      "step": 1,
+      "new_blocks": [
+        {
+          "index": 0,
+          "role": "user",
+          "kind": "text",
+          "sha256": "7c75a8faab9bd29506da7fdd111d8d89c51da7d735bd28324eba53433d66d2b9",
+          "len": 33,
+          "intent_id": ""
+        }
+      ],
+      "block_count": 2,
+      "context_sha256": "e945f6493a0797cdfb08ceded48b99d26052f0742f2462997281d022f9ce0589"
+    }
+  ],
+  "unparsed": []
+}

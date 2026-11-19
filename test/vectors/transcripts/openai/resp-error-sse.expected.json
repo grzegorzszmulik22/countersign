@@ -1,0 +1,17 @@
+{
+  "provider": "responses",
+  "format": "sse",
+  "model": "gpt-5.2-2025-12-11",
+  "intents": [
+    {
+      "intent_id": "call_0R3spErr0rM1dStr34m00",
+      "tool": "run",
+      "executor": "sandbox",
+      "input_sha256": "df35a206a31f88a8ab04783272f936cf5d66250fb4d5129d4d7022c391a7147b",
+      "input_len": 7
+    }
+  ],
+  "unparsed": true,
+  "detail_substring": "error",
+  "markers": []
+}

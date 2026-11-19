@@ -1,0 +1,1 @@
+{"id":"resp_01","object":"response","status":"completed","model":"gpt-5.2-2025-12-11","output":[{"type":"message","id":"msg_t","role":"assistant","status":"completed","content":[{"type":"output_text","text":"hi MK5d9e620d89ce-oj","annotations":[]}]}],"usage":{"input_tokens":10,"output_tokens":20}}

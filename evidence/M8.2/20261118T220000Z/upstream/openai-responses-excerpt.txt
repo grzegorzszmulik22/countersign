@@ -1,0 +1,167 @@
+Source: https://platform.openai.com/docs/api-reference/responses-streaming (fetched 2026-11-18)
+Source: https://platform.openai.com/docs/guides/streaming-responses.md (fetched 2026-11-18)
+Source: https://platform.openai.com/docs/guides/function-calling.md (fetched 2026-11-18)
+
+=== function_call output item (non-streaming) ===
+  "instructions": null,
+  "max_output_tokens": null,
+  "model": "gpt-6-astra",
+  "output": [
+    {
+      "type": "function_call",
+      "id": "fc_67ca09c6bedc8190a7abfec07b1a1332096610f474011cc0",
+      "call_id": "call_unLAR8MvFNptuiZK6K6HCy5k",
+      "name": "get_current_weather",
+      "arguments": "{\"location\":\"Boston, MA\",\"unit\":\"celsius\"}",
+      "status": "completed"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "previous_response_id": null,
+  "reasoning": {
+    "effort": null,
+    "summary": null
+
+=== streaming events: output_item.added / function_call_arguments.delta / .done / output_item.done ===
+event: response.in_progress
+data: {"type":"response.in_progress","response":{"id":"resp_67c9fdcecf488190bdd9a0409de3a1ec07b8b0ad4e5eb654","object":"response","access_programs":null,"created_at":1741290958,"status":"in_progress","error":null,"incomplete_details":null,"instructions":"You are a helpful assistant.","max_output_tokens":null,"model":"gpt-6-astra","output":[],"parallel_tool_calls":true,"previous_response_id":null,"reasoning":{"effort":null,"summary":null},"store":true,"temperature":1.0,"text":{"format":{"type":"text"}},"tool_choice":"auto","tools":[],"top_p":1.0,"truncation":"disabled","usage":null,"user":null,"metadata":{}},"sequence_number":1}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","output_index":0,"item":{"id":"msg_67c9fdcf37fc8190ba82116e33fb28c507b8b0ad4e5eb654","type":"message","status":"in_progress","role":"assistant","content":[]},"sequence_number":2}
+
+event: response.content_part.added
+data: {"type":"response.content_part.added","item_id":"msg_67c9fdcf37fc8190ba82116e33fb28c507b8b0ad4e5eb654","output_index":0,"content_index":0,"part":{"type":"output_text","text":"","annotations":[],"logprobs":[]},"sequence_number":3}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","item_id":"msg_67c9fdcf37fc8190ba82116e33fb28c507b8b0ad4e5eb654","output_index":0,"content_index":0,"delta":"Hi","sequence_number":4,"logprobs":[]}
+
+: Intermediate response events omitted.
+
+event: response.output_text.done
+data: {"type":"response.output_text.done","item_id":"msg_67c9fdcf37fc8190ba82116e33fb28c507b8b0ad4e5eb654","output_index":0,"content_index":0,"text":"Hi there! How can I assist you today?","sequence_number":10,"logprobs":[]}
+
+event: response.content_part.done
+data: {"type":"response.content_part.done","item_id":"msg_67c9fdcf37fc8190ba82116e33fb28c507b8b0ad4e5eb654","output_index":0,"content_index":0,"part":{"type":"output_text","text":"Hi there! How can I assist you today?","annotations":[],"logprobs":[]},"sequence_number":11}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","output_index":0,"item":{"id":"msg_67c9fdcf37fc8190ba82116e33fb28c507b8b0ad4e5eb654","type":"message","status":"completed","role":"assistant","content":[{"type":"output_text","text":"Hi there! How can I assist you today?","annotations":[],"logprobs":[]}]},"sequence_number":12}
+
+event: response.completed
+data: {"type":"response.completed","response":{"id":"resp_67c9fdcecf488190bdd9a0409de3a1ec07b8b0ad4e5eb654","object":"response","access_programs":null,"created_at":1741290958,"status":"completed","error":null,"incomplete_details":null,"instructions":"You are a helpful assistant.","max_output_tokens":null,"model":"gpt-6-astra","output":[{"id":"msg_67c9fdcf37fc8190ba82116e33fb28c507b8b0ad4e5eb654","type":"message","status":"completed","role":"assistant","content":[{"type":"output_text","text":"Hi there! How can I assist you today?","annotations":[],"logprobs":[]}]}],"parallel_tool_calls":true,"previous_response_id":null,"reasoning":{"effort":null,"summary":null},"store":true,"temperature":1.0,"text":{"format":{"type":"text"}},"tool_choice":"auto","tools":[],"top_p":1.0,"truncation":"disabled","usage":{"input_tokens":37,"output_tokens":11,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":48,"input_tokens_details":{"cached_tokens":0,"cache_write_tokens":0}},"user":null,"metadata":{}},"sequence_number":13}
+
+
+
+      The function-call arguments delta that is added.
+
+    - `item_id: string`
+
+      The ID of the output item that the function-call arguments delta is added to.
+
+    - `output_index: integer`
+
+      The index of the output item that the function-call arguments delta is added to.
+
+    - `sequence_number: integer`
+
+      The sequence number of this event.
+
+    - `type: "response.function_call_arguments.delta"`
+
+      The type of the event. Always `response.function_call_arguments.delta`.
+
+      - `"response.function_call_arguments.delta"`
+
+  - `ResponseFunctionCallArgumentsDoneEvent object { arguments, item_id, output_index, 2 more }`
+
+    Emitted when function-call arguments are finalized.
+
+    - `arguments: string`
+
+      The function-call arguments.
+
+    - `item_id: string`
+
+      The ID of the item.
+
+    - `output_index: integer`
+
+      The index of the output item.
+
+    - `sequence_number: integer`
+
+      The sequence number of this event.
+
+    - `type: "response.function_call_arguments.done"`
+
+      - `"response.function_call_arguments.done"`
+
+  - `ResponseShellCallCommandAddedEvent object { command, command_index, output_index, 2 more }`
+
+    A streaming event that indicated a shell command was added to a tool call.
+
+    - `command: string`
+
+      The shell command that was added.
+
+    - `command_index: integer`
+
+      The index of the shell command that was added.
+
+    - `output_index: integer`
+
+      The index of the output item that was updated.
+
+    - `sequence_number: integer`
+
+      The sequence number of the event that was emitted.
+
+    - `type: "response.shell_call_command.added" (default: "response.shell_call_command.added")`
+
+=== streaming event union (from streaming-responses guide) ===
+
+=== function-call streaming accumulation (function-calling guide) ===
+for await (const event of stream) {
+  if (
+    event.type === "response.output_item.added" &&
+    event.item.type === "function_call"
+  ) {
+    finalToolCalls[event.output_index] = event.item;
+  } else if (event.type === "response.function_call_arguments.delta") {
+    const index = event.output_index;
+
+    if (finalToolCalls[index]) {
+      finalToolCalls[index].arguments += event.delta;
+    }
+  }
+}
+```
+
+```python
+final_tool_calls = {}
+
+for event in stream:
+    if (
+        event.type == "response.output_item.added"
+        and event.item.type == "function_call"
+    ):
+        final_tool_calls[event.output_index] = event.item
+    elif event.type == "response.function_call_arguments.delta":
+        index = event.output_index
+
+        if final_tool_calls[index]:
+            final_tool_calls[index].arguments += event.delta
+```
+
+```go
+package main
+
+=== Chat Completions streaming (chat.completion.chunk) ===
+Source: OpenAI API reference / docs guide (and repo fixture test/fixtures/mockllm/openai.go
+which mirrors it). Wire shape: each SSE frame is `data: <chat.completion.chunk JSON>` and the
+stream ends with `data: [DONE]`. A chunk carries choices[].delta with optional
+tool_calls[] entries; each entry has {index, id?, type?, function:{name?, arguments?}};
+the first delta for an index carries id+name and subsequent deltas carry argument
+fragments. The call list ends when a chunk's choice has finish_reason "tool_calls"
+(or "stop"). Multiple calls may interleave by index.
+Example chunk:
+data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1700000000,"model":"gpt","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_abc","type":"function","function":{"name":"get_weather","arguments":""}}]},"finish_reason":null}]}

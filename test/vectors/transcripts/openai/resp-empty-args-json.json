@@ -1,0 +1,1 @@
+{"id":"resp_01","object":"response","status":"completed","model":"gpt-5.2-2025-12-11","output":[{"type":"function_call","id":"fc_e","call_id":"call_0R3spEmptyArgs000000","name":"ping","status":"completed","arguments":""}],"usage":{"input_tokens":10,"output_tokens":20}}

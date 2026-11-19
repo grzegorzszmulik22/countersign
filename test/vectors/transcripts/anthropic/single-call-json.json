@@ -1,0 +1,1 @@
+{"id":"msg_01XyZ","type":"message","role":"assistant","model":"claude-opus-4-1-20250805","content":[{"type":"tool_use","id":"toolu_01A7VoCkEoFxTwmRs6eT8V7X","name":"Bash","input":{"command":"ls -la /tmp"}}],"stop_reason":"tool_use","stop_sequence":null,"usage":{"input_tokens":25,"output_tokens":40}}

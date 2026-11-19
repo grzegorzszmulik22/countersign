@@ -278,6 +278,8 @@ func (s *Server) Close() error {
 	s.shutdown()
 	s.wg.Wait()
 	s.reqs.Wait()
+	// M8.3: open intent windows close with the session (closed_by: seal).
+	s.sealIntents()
 	if s.brokerLog != nil {
 		// Best effort: the log is being abandoned either way; only the
 		// record sink's close error reaches the caller.

@@ -1,0 +1,17 @@
+{
+  "provider": "responses",
+  "format": "json",
+  "model": "gpt-5.2-2025-12-11",
+  "intents": [
+    {
+      "intent_id": "call_0R3spEmptyArgs000000",
+      "tool": "ping",
+      "executor": "sandbox",
+      "input_sha256": "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126",
+      "input_len": 0
+    }
+  ],
+  "unparsed": false,
+  "detail_substring": "",
+  "markers": []
+}
