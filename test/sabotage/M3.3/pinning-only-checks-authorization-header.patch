@@ -1,0 +1,15 @@
+diff --git a/internal/proxy/creds.go b/internal/proxy/creds.go
+index 0000000..0000000 100644
+--- a/internal/proxy/creds.go
++++ b/internal/proxy/creds.go
+@@ -29,8 +29,7 @@
+ // credHeaders are the §4.3 credential-bearing header names checked on
+ // credentialed-grant requests (proxy-authorization never survives
+ // stripHopByHop; it is listed anyway because the rule names it).
+ var credHeaders = []string{
+-	"Authorization", "Proxy-Authorization", "X-Api-Key",
+-	"Api-Key", "X-Auth-Token", "Cookie",
++	"Authorization",
+ }
+ 
+ // credPlan is the outcome of evalCreds for an allowed request.

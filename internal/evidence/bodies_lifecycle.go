@@ -63,6 +63,7 @@ type SessionOpenBody struct {
 	ContractDigests []string     `json:"contract_digests" cs:"hex64"`
 	CACertSHA256    string       `json:"ca_cert_sha256" cs:"hex64"`
 	LogOrigin       string       `json:"log_origin"`
+	Boundary        *string      `json:"boundary" cs:"enum:enforced|cooperative"`
 	World           WorldRef     `json:"world"`
 	Start           SessionStart `json:"start"`
 	Tape            TapeConf     `json:"tape"`

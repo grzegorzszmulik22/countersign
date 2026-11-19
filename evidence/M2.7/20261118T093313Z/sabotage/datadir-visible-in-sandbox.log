@@ -1,0 +1,12 @@
+make[1]: Entering directory '/home/csbuild/src/cs-runner/.check-work/sabotage-M2.7-datadir-visible-in-sandbox'
+CHECK C2.7.1 PASS
+CHECK C2.7.2 PASS
+CHECK C2.7.3 PASS
+CHECK C2.7.4 FAIL —         cs: run-dir /tmp/TestC2_7_43058524168/001/rd1              check_m27_checks_test.go:254: canary scan run exited 1 FAIL FAIL	github.com/countersign/countersign/internal/runner	0.744s FAIL 
+CHECK C2.7.5 PASS
+CHECK C2.7.6 PASS
+CHECK lint.runner PASS
+M2.7 suite: FAILURES
+check-M2.7: FAIL (exit 1, evidence: evidence/M2.7/20261118T093407Z)
+make[1]: *** [Makefile:37: check-M2.7] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-runner/.check-work/sabotage-M2.7-datadir-visible-in-sandbox'

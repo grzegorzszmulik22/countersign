@@ -1,0 +1,17 @@
+diff --git a/internal/runner/namespaces_linux.go b/internal/runner/namespaces_linux.go
+index e5c5583..41ed6c5 100644
+--- a/internal/runner/namespaces_linux.go
++++ b/internal/runner/namespaces_linux.go
+@@ -210,11 +210,7 @@ func exitCodeOf(err error) int {
+ 	if err == nil {
+ 		return 0
+ 	}
+-	var ee *exec.ExitError
+-	if errors.As(err, &ee) {
+-		if ws, ok := ee.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+-			return 128 + int(ws.Signal())
+-		}
++	if ee, ok := err.(*exec.ExitError); ok {
+ 		return ee.ExitCode()
+ 	}
+ 	return 1

@@ -1,0 +1,52 @@
+diff --git a/internal/runner/relay.go b/internal/runner/relay.go
+index 160eab6..bcfbb2c 100644
+--- a/internal/runner/relay.go
++++ b/internal/runner/relay.go
+@@ -22,7 +22,7 @@ type unixRelay struct {
+ 	broker string
+ 	logf   func(string, ...any)
+ 	wg     sync.WaitGroup
+-	conns  sync.Map // net.Conn → struct{} for close-time cleanup
++	conns  map[net.Conn]struct{}
+ }
+ 
+ func newUnixRelay(sockPath, brokerAddr string, logf func(string, ...any)) (*unixRelay, error) {
+@@ -32,7 +32,8 @@ func newUnixRelay(sockPath, brokerAddr string, logf func(string, ...any)) (*unix
+ 		return nil, fmt.Errorf("relay listen: %w", err)
+ 	}
+ 	ln.SetUnlinkOnClose(true)
+-	r := &unixRelay{ln: ln, broker: brokerAddr, logf: logf}
++	r := &unixRelay{ln: ln, broker: brokerAddr, logf: logf,
++		conns: map[net.Conn]struct{}{}}
+ 	r.wg.Add(1)
+ 	go r.acceptLoop()
+ 	return r, nil
+@@ -58,11 +59,11 @@ func (r *unixRelay) serve(c *net.UnixConn) {
+ 		_ = c.Close()
+ 		return
+ 	}
+-	r.conns.Store(c, struct{}{})
+-	r.conns.Store(up, struct{}{})
++	r.conns[c] = struct{}{}
++	r.conns[up] = struct{}{}
+ 	defer func() {
+-		r.conns.Delete(c)
+-		r.conns.Delete(up)
++		delete(r.conns, c)
++		delete(r.conns, up)
+ 	}()
+ 	if err := splice(c, up); err != nil {
+ 		r.logf("relay splice %s ↔ %s: %v", c.RemoteAddr(), up.RemoteAddr(), err)
+@@ -120,9 +121,8 @@ func (r *unixRelay) close() {
+ 	// Shutdown path: the listener and conns are torn down regardless
+ 	// of close errors, which only ever mean "already closed".
+ 	_ = r.ln.Close()
+-	r.conns.Range(func(k, _ any) bool {
+-		_ = k.(net.Conn).Close()
+-		return true
+-	})
++	for k := range r.conns {
++		_ = k.Close()
++	}
+ 	r.wg.Wait()
+ }

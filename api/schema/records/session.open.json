@@ -55,6 +55,7 @@
         "contract_digests",
         "ca_cert_sha256",
         "log_origin",
+        "boundary",
         "world",
         "start",
         "tape",
@@ -171,6 +172,20 @@
         },
         "log_origin": {
           "type": "string"
+        },
+        "boundary": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "enforced",
+                "cooperative"
+              ]
+            }
+          ]
         },
         "world": {
           "type": "object",

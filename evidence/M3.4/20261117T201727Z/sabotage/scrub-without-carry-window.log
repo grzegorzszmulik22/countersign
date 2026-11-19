@@ -1,0 +1,11 @@
+make[1]: Entering directory '/home/csbuild/src/cs-creds/.check-work/sabotage-M3.4-scrub-without-carry-window'
+CHECK C3.4.1 PASS
+CHECK C3.4.2 FAIL — --- FAIL: TestC342SplitPoints (0.00s)     check_m34_test.go:122: split 1: secret survived or placeholder missing FAIL FAIL	github.com/countersign/countersign/internal/proxy	0.031s FAIL 
+CHECK C3.4.3 PASS
+CHECK C3.4.4 PASS
+CHECK C3.4.5 PASS
+CHECK C3.4.6 PASS
+M3.4 suite: FAILURES
+check-M3.4: FAIL (exit 1, evidence: evidence/M3.4/20261117T201748Z)
+make[1]: *** [Makefile:37: check-M3.4] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-creds/.check-work/sabotage-M3.4-scrub-without-carry-window'

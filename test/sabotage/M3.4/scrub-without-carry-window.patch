@@ -1,0 +1,12 @@
+diff --git a/internal/creds/scrub.go b/internal/creds/scrub.go
+index 1111111..2222222 100644
+--- a/internal/creds/scrub.go
++++ b/internal/creds/scrub.go
+@@ -129,6 +129,7 @@
+ 		if limit < 0 {
+ 			limit = 0
+ 		}
++		limit = total
+ 	}
+ 	pos := 0 // absolute position of the next unemitted stream byte
+ 	// Matches starting inside the carry can run into the chunk: the

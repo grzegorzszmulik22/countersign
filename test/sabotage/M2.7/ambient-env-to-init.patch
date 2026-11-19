@@ -1,0 +1,13 @@
+diff --git a/internal/runner/init_linux.go b/internal/runner/init_linux.go
+index 7613dc8..0d5ac83 100644
+--- a/internal/runner/init_linux.go
++++ b/internal/runner/init_linux.go
+@@ -276,7 +276,7 @@ func (s *session) spawnEnforced(_ context.Context) (*sandboxCmd, error) {
+ 		r.close()
+ 		return nil, fmt.Errorf("env pipe: %w", err)
+ 	}
+-	initEnv := []string{"PATH=" + envValue(s.ambient, "PATH")}
++	initEnv := s.ambient
+ 	cmd := spawnInNS(args, initEnv, []*os.File{envR})
+ 	if err := cmd.Start(); err != nil {
+ 		r.close()

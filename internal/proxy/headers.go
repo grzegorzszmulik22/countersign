@@ -66,11 +66,14 @@ func parseSize(s string) (int64, error) {
 	if s == "" {
 		return 0, errSize
 	}
-	i := len(s)
-	for i > 0 && s[i-1] >= '0' && s[i-1] <= '9' {
-		i--
+	i := 0
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
 	}
 	num, unit := s[:i], s[i:]
+	if num == "" {
+		return 0, errSize
+	}
 	var n int64
 	for _, c := range []byte(num) {
 		if c < '0' || c > '9' {

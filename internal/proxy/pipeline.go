@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/countersign/countersign/internal/creds"
 	"github.com/countersign/countersign/internal/policy"
 )
 
@@ -91,7 +92,7 @@ func policyRequest(r *http.Request, scheme, host string, port int, path, query, 
 // an effect.http with decision.action deny (C2.1.2).
 func (s *Server) denyRequest(w http.ResponseWriter, r *http.Request, env *forwardEnv, reason, scheme, authority, path, rawQuery, grantID string) {
 	status := http.StatusForbidden
-	if reason == "LEDGER_UNAVAILABLE" {
+	if reason == "LEDGER_UNAVAILABLE" || reason == "CREDENTIAL_UNAVAILABLE" {
 		status = http.StatusBadGateway
 	}
 	s.recordDenyEffect(env, r, scheme, authority, path, rawQuery, grantID, reason)
@@ -143,15 +144,29 @@ type forwardTarget struct {
 	rawQuery  string
 }
 
-// forward runs the pipeline: write-ahead record -> upstream round trip ->
-// streamed relay -> result record. It returns nothing; failures map to an
-// HTTP response and a result record where the request reached the wire.
+// forward runs the pipeline: 04 §2 step 4 limits -> body buffer/defer ->
+// step 5 credential rules -> write-ahead record -> injection -> upstream
+// round trip -> scrubbed relay -> result record. It returns nothing;
+// failures map to an HTTP response and a result record where the request
+// reached the wire.
 func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv, tgt forwardTarget, mres policy.Result) {
 	start := time.Now()
 	effectID := newULID()
 	sess := env.sess
 	grant := grantByID(sess.Policy, mres.Grant)
 	limit := bufferLimit(sess.Policy, grant)
+
+	// 04 §2 step 4 (M3.5): limits — URL size, declared body size, then the
+	// per-(session, grant) rate bucket.
+	if reason := checkLimits(grant, r, tgt); reason != "" {
+		s.denyRequest(w, r, env, reason, tgt.scheme, tgt.authority, tgt.path, tgt.rawQuery, mres.Grant)
+		return
+	}
+	if grant != nil && grant.Limits != nil && grant.Limits.RequestsPerMinute != nil &&
+		!sess.rate.take(mres.Grant, *grant.Limits.RequestsPerMinute) {
+		s.denyRequest(w, r, env, "LIMIT_RATE", tgt.scheme, tgt.authority, tgt.path, tgt.rawQuery, mres.Grant)
+		return
+	}
 
 	// Buffer-or-defer the request body (03 §4.5 deferred bodies): up to the
 	// grant's bufferLimit the digest rides in the write-ahead record.
@@ -160,28 +175,30 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
 		bodyLen    int64
 		bodyDefer  bool
 		bodyReader io.Reader
+		buf        []byte
 	)
 	reqBody := &hashCounter{h: sha256.New()}
 	if r.Body != nil && r.Body != http.NoBody {
-		buf := &bytes.Buffer{}
-		n, err := io.CopyN(buf, r.Body, limit+1)
+		b := &bytes.Buffer{}
+		n, err := io.CopyN(b, r.Body, limit+1)
 		if err != nil && err != io.EOF {
 			s.denyRequest(w, r, env, "LIMIT_BODY", tgt.scheme, tgt.authority, tgt.path, tgt.rawQuery, mres.Grant)
 			return
 		}
-		if _, err := reqBody.Write(buf.Bytes()); err != nil {
+		buf = b.Bytes()
+		if _, err := reqBody.Write(buf); err != nil {
 			s.Logf("request body hashing failed: %v", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 		if n <= limit {
-			bodySHA = sha256.Sum256(buf.Bytes())
+			bodySHA = sha256.Sum256(buf)
 			bodyLen = n
-			bodyReader = bytes.NewReader(buf.Bytes())
+			bodyReader = bytes.NewReader(buf)
 		} else {
 			bodyDefer = true
 			bodyLen = -1
-			bodyReader = io.MultiReader(bytes.NewReader(buf.Bytes()), io.TeeReader(r.Body, reqBody))
+			bodyReader = io.MultiReader(bytes.NewReader(buf), io.TeeReader(r.Body, reqBody))
 		}
 	} else {
 		bodySHA = sha256.Sum256(nil)
@@ -190,6 +207,31 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
 	}
 
 	outHdr := stripHopByHop(r.Header)
+
+	// 04 §2 step 5 (M3.3): credential rules on the pre-injection request —
+	// the buffered prefix is all a scan may see (04 §4.3).
+	plan, reason := evalCreds(sess, grant, r, outHdr, tgt, buf)
+	if reason != "" {
+		if reason == "CREDENTIAL_UNAVAILABLE" {
+			s.Logf("credential store unavailable for grant %s", mres.Grant)
+		}
+		s.denyRequest(w, r, env, reason, tgt.scheme, tgt.authority, tgt.path, tgt.rawQuery, mres.Grant)
+		return
+	}
+
+	// M3.5 streaming body cap: the buffered prefix already over the grant's
+	// body limit denies before upstream; a deferred body is capped on the
+	// wire — the connection dies mid-write and the result carries
+	// error: limit-body (C3.5.3).
+	if mb := maxBody(grant); mb > 0 {
+		if int64(len(buf)) > mb {
+			s.denyRequest(w, r, env, "LIMIT_BODY", tgt.scheme, tgt.authority, tgt.path, tgt.rawQuery, mres.Grant)
+			return
+		}
+		if bodyReader != nil {
+			bodyReader = &capBody{r: bodyReader, max: mb}
+		}
+	}
 	reqRec := RequestRecord{
 		Method:       r.Method,
 		Scheme:       tgt.scheme,
@@ -227,13 +269,25 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
 		Budget:      BudgetRecord{},
 		Inspect:     "none",
 	}
+	if plan.spec != nil {
+		effect.Decision.Creds = []string{plan.refID}
+	}
 	// Write-ahead: the effect.http record is durable before the first byte
-	// goes upstream. Sink failure fails closed (02 §6).
+	// goes upstream — and before the credential materializes (02 §6:
+	// evidence first, then secrets touch the wire). Sink failure fails
+	// closed.
 	if err := s.appendRecord(sess, "effect.http", effect); err != nil {
 		s.Logf("record append failed: %v", err)
 		w.Header().Set("X-Countersign-Reason", "LEDGER_UNAVAILABLE")
 		http.Error(w, "evidence store unavailable", http.StatusBadGateway)
 		return
+	}
+	if plan.spec != nil {
+		plan.spec.Apply(outHdr)
+		plan.injected = true
+		if injectHook != nil {
+			injectHook(sess.ID, mres.Grant, plan.refID)
+		}
 	}
 
 	result := &ResultBody{
@@ -264,6 +318,11 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
 	}
 	upReq.Host = tgt.authority
 	upReq.Header = outHdr
+	if plan.injected {
+		// 04 §4.5: credentialed requests offer exactly gzip or identity so
+		// every response arrives in an encoding the broker can scan.
+		upReq.Header.Set("Accept-Encoding", "gzip, identity")
+	}
 	if bodyLen >= 0 {
 		upReq.ContentLength = bodyLen
 	}
@@ -283,6 +342,12 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
 
 	res, err := s.transport.RoundTrip(upReq)
 	if err != nil {
+		if errors.Is(err, errBodyLimit) {
+			result.Error = "limit-body"
+			w.Header().Set("X-Countersign-Reason", "LIMIT_BODY")
+			http.Error(w, "request denied: LIMIT_BODY", http.StatusForbidden)
+			return
+		}
 		result.Error = upstreamErrorReason(err)
 		result.Upstream = nonNil(upInfo)
 		s.Logf("upstream %s %s: %v", r.Method, tgt.authority, err)
@@ -302,6 +367,21 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
 	result.Upstream = nonNil(upInfo)
 
 	outRes := stripHopByHop(res.Header)
+	src := io.Reader(res.Body)
+	var scr *creds.Scrubber
+	if plan.injected {
+		scr = newScrubber(plan)
+		scrubHeaders(scr, outRes)
+		src, err = scrubBody(res)
+		if err != nil {
+			// 04 §4.5: the broker offered only gzip and identity; anything
+			// else is unverifiable and cannot cross.
+			result.Error = "upstream-encoding"
+			w.Header().Set("X-Countersign-Reason", "UPSTREAM_ENCODING")
+			http.Error(w, "upstream encoding", http.StatusBadGateway)
+			return
+		}
+	}
 	// Preserve trailers: declare upstream-announced keys before WriteHeader
 	// (h1 framing needs it); values land via TrailerPrefix after the body.
 	for k := range res.Trailer {
@@ -316,7 +396,10 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
 	w.WriteHeader(res.StatusCode)
 
 	respBody := &hashCounter{h: sha256.New()}
-	err = relayStream(w, res.Body, respBody)
+	err = relayResponse(w, src, scr, respBody)
+	if scr != nil {
+		result.Scrubbed = scr.Count
+	}
 	result.Response.BodySHA256 = hex_SHA(respBody.h.Sum(nil))
 	result.Response.BodyLen = respBody.n
 	result.RequestBody = BodyDigest{SHA256: hex_SHA(reqBody.h.Sum(nil)), Len: reqBody.n}
@@ -325,9 +408,14 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
 		copy(ds[:], reqBody.h.Sum(nil))
 		result.ReqDigest = requestDigest(r.Method, tgt.scheme, digestAuthority(tgt.host, tgt.port, tgt.scheme), tgt.path, tgt.rawQuery, ds, outHdr)
 	}
-	// Forward upstream trailers to the client.
+	// Forward upstream trailers to the client — scrubbed when a
+	// credential is in play (04 §4.5: headers and trailers get the same
+	// search-and-replace).
 	for k, vals := range res.Trailer {
 		for _, v := range vals {
+			if scr != nil {
+				v = scr.Scrub(v)
+			}
 			w.Header().Set(http.TrailerPrefix+k, v)
 		}
 	}
@@ -365,25 +453,47 @@ type writeErr struct{ err error }
 func (e *writeErr) Error() string { return e.err.Error() }
 func (e *writeErr) Unwrap() error { return e.err }
 
-// relayStream copies src to w in bounded chunks, flushing after every
-// write so streamed responses (SSE, chunked, h2 frames) are never
-// coalesced or held back (M2.3). It counts and hashes the bytes.
-func relayStream(w http.ResponseWriter, src io.Reader, dst *hashCounter) error {
+// relayResponse copies src to w in bounded chunks, flushing after every
+// chunk so streamed responses (SSE, chunked, h2 frames) are never
+// coalesced or held back (M2.3). When scr is non-nil each chunk passes
+// the scrubber first (M3.4); its carry window holds back at most
+// maxPattern-1 bytes at a time, so streaming semantics are preserved.
+// It counts and hashes the bytes the client received.
+func relayResponse(w http.ResponseWriter, src io.Reader, scr *creds.Scrubber, dst *hashCounter) error {
 	buf := make([]byte, 32*1024)
 	fl, _ := w.(http.Flusher)
+	var werr error
+	wrote := false
+	emit := func(b []byte) {
+		if werr != nil || len(b) == 0 {
+			return
+		}
+		wm, err := w.Write(b)
+		if _, derr := dst.Write(b[:wm]); derr != nil {
+			werr = derr
+			return
+		}
+		wrote = true
+		if err != nil {
+			werr = &writeErr{err}
+		}
+	}
 	for {
 		m, rerr := src.Read(buf)
-		if m > 0 {
-			wm, werr := w.Write(buf[:m])
-			if _, derr := dst.Write(buf[:wm]); derr != nil {
-				return derr
+		wrote = false
+		if scr != nil {
+			scr.Write(buf[:m], emit)
+			if rerr == io.EOF {
+				scr.Flush(emit)
 			}
-			if fl != nil {
-				fl.Flush()
-			}
-			if werr != nil {
-				return &writeErr{werr}
-			}
+		} else {
+			emit(buf[:m])
+		}
+		if wrote && fl != nil {
+			fl.Flush()
+		}
+		if werr != nil {
+			return werr
 		}
 		if rerr != nil {
 			if rerr == io.EOF {

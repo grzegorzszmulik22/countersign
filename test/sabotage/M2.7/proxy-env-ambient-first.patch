@@ -1,0 +1,36 @@
+diff --git a/internal/runner/env.go b/internal/runner/env.go
+index dd3b275..b97c155 100644
+--- a/internal/runner/env.go
++++ b/internal/runner/env.go
+@@ -108,15 +108,27 @@ func proxyURL(hostport, token string) string {
+ // an allowed name pass through in order (matching the parent's getenv
+ // view). NO_PROXY is deliberately empty so nothing bypasses the broker.
+ func sandboxEnv(ambient []string, proxy, caPath string, placeholders map[string]string) []string {
+-	owned := boundaryOwned()
++	// sabotage: proxy vars are not boundary-owned — ambient ones pass
++	// through first, and getenv returns the first match.
++	owned := map[string]bool{}
++	for _, v := range trustVars {
++		owned[v] = true
++	}
++	for _, v := range internalVars {
++		owned[v] = true
++	}
+ 	for name := range placeholders {
+ 		owned[name] = true
+ 	}
+ 
+ 	out := make([]string, 0, len(ambient)+16)
+-	// Boundary variables first: with getenv returning the first match,
+-	// nothing ambient can shadow them even if the allowlist is widened
+-	// incorrectly later.
++	for _, kv := range ambient {
++		name, _, ok := strings.Cut(kv, "=")
++		if !ok || owned[name] {
++			continue
++		}
++		out = append(out, kv)
++	}
+ 	for _, v := range proxyVars {
+ 		if strings.HasPrefix(v, "NO_") || strings.HasPrefix(v, "no_") {
+ 			out = append(out, v+"=")

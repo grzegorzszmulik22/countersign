@@ -1,0 +1,13 @@
+diff --git a/internal/creds/scrub.go b/internal/creds/scrub.go
+index e2486b0..10308be 100644
+--- a/internal/creds/scrub.go
++++ b/internal/creds/scrub.go
+@@ -42,7 +42,7 @@ func Patterns(secret string) [][]byte {
+ 	return [][]byte{
+ 		[]byte(secret),
+ 		[]byte(base64.StdEncoding.EncodeToString([]byte(secret))),
+-		[]byte(url.QueryEscape(secret)),
++		[]byte(url.PathEscape(secret)),
+ 	}
+ }
+ 

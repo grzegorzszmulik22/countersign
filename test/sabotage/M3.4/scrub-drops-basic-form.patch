@@ -1,0 +1,14 @@
+diff --git a/internal/proxy/scrub.go b/internal/proxy/scrub.go
+index baf107e..98d48a8 100644
+--- a/internal/proxy/scrub.go
++++ b/internal/proxy/scrub.go
+@@ -28,9 +28,6 @@ import (
+ // string the client's environment held.
+ func newScrubber(plan *credPlan) *creds.Scrubber {
+ 	pats := creds.Patterns(plan.secret)
+-	if plan.username != "" {
+-		pats = append(pats, creds.BasicPattern(plan.username, plan.secret))
+-	}
+ 	return creds.NewScrubber(pats, []byte(plan.placeholder))
+ }
+ 

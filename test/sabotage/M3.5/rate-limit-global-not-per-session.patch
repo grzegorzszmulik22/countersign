@@ -1,0 +1,27 @@
+diff --git a/internal/proxy/limits.go b/internal/proxy/limits.go
+index ee2a96d..e3b316d 100644
+--- a/internal/proxy/limits.go
++++ b/internal/proxy/limits.go
+@@ -103,6 +103,9 @@ func newRateTable() *rateTable {
+ 	return &rateTable{buckets: map[string]*tokenBucket{}, now: time.Now}
+ }
+ 
++// globalRateTable is the shared bucket set for every session.
++var globalRateTable = newRateTable()
++
+ // take reports whether one request may proceed under grant's rpm. Buckets
+ // lazily fill to the burst cap (rpm/10, floor 1) and refill at rpm/60 per
+ // second; each admission costs one token.
+diff --git a/internal/proxy/session.go b/internal/proxy/session.go
+index aa921bf..2dec106 100644
+--- a/internal/proxy/session.go
++++ b/internal/proxy/session.go
+@@ -118,7 +118,7 @@ func loadSessions(path string, keys SessionKeyStore) (map[string]*Session, error
+ 			ClientIP:     pfx,
+ 			Policy:       pol,
+ 			placeholders: map[string]string{},
+-			rate:         newRateTable(),
++			rate:         globalRateTable,
+ 			leafCache:    map[string]*tls.Certificate{},
+ 		}
+ 		// Credential store + placeholders (04 §4, M3.2): a credentialed

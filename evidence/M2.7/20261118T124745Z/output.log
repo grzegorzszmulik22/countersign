@@ -1,0 +1,14 @@
+SABOTAGE ambient-env-to-init: caught (exit 2) by C2.7.4 lint.runner race.runner 
+SABOTAGE cooperative-not-recorded: caught (exit 2) by C2.7.5 C2.7.6 lint.runner race.runner 
+SABOTAGE coop-signal-leader-only: caught (exit 2) by C2.7.6 race.runner 
+SABOTAGE credential-env-denylist: caught (exit 2) by C2.7.3 C2.7.4 lint.runner race.runner 
+SABOTAGE datadir-visible-in-sandbox: caught (exit 2) by C2.7.4 race.runner 
+SABOTAGE exit-status-not-propagated: caught (exit 2) by C2.7.X race.runner 
+SABOTAGE no-credential-covers: caught (exit 2) by C2.7.4 lint.runner race.runner 
+SABOTAGE no-pid-ns: caught (exit 2) by C2.7.1 C2.7.2 C2.7.3 C2.7.4 C2.7.6 C2.7.X race.runner 
+SABOTAGE proxy-env-ambient-first: caught (exit 2) by C2.7.3 C2.7.4 lint.runner race.runner 
+SABOTAGE relay-conns-map-unsafe: caught (exit 2) by race.runner 
+SABOTAGE relay-forwards-any-destination: caught (exit 2) by C2.7.1 C2.7.2 C2.7.3 race.runner 
+SABOTAGE seal-reason-static: caught (exit 2) by C2.7.6 race.runner 
+SABOTAGE splice-swallows-errors: caught (exit 2) by C2.7.1 race.runner 
+sabotage-M2.7: 13 caught, 0 uncaught (evidence: evidence/M2.7/20261118T124745Z/sabotage)

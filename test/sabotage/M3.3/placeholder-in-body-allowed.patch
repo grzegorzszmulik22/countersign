@@ -1,0 +1,20 @@
+diff --git a/internal/proxy/creds.go b/internal/proxy/creds.go
+index 85c96fd..7d81575 100644
+--- a/internal/proxy/creds.go
++++ b/internal/proxy/creds.go
+@@ -143,14 +143,7 @@ func evalCreds(sess *Session, grant *policy.Grant, r *http.Request,
+ 
+ 	// Buffered body: csph_ for all grants; credential shapes on
+ 	// credentialed ones (raw + percent-decoded, same as the URL).
+-	for _, cand := range bodyForms(body) {
+-		if creds.HasPlaceholderTokenB(cand) {
+-			return nil, "PLACEHOLDER_MISUSE"
+-		}
+-		if credentialed && len(creds.Detect(cand)) > 0 {
+-			return nil, "FOREIGN_CREDENTIAL"
+-		}
+-	}
++	_ = body
+ 	return plan, ""
+ }
+ 

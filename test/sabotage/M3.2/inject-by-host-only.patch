@@ -1,0 +1,23 @@
+diff --git a/internal/proxy/creds.go b/internal/proxy/creds.go
+index 0000000..0000000 100644
+--- a/internal/proxy/creds.go
++++ b/internal/proxy/creds.go
+@@ -56,6 +56,18 @@ func evalCreds(sess *Session, grant *policy.Grant, r *http.Request,
+ 	h http.Header, tgt forwardTarget, body []byte) (*credPlan, string) {
+ 
+ 	credentialed := grant != nil && grant.Credential != nil
++	// Sabotage: also attach any credentialed grant on the same host.
++	for i := range sess.Policy.Spec.Grants {
++		g := &sess.Policy.Spec.Grants[i]
++		if g.Credential == nil {
++			continue
++		}
++		for _, h := range g.Match.Hosts {
++			if h == tgt.host || h == "*" {
++				grant, credentialed = g, true
++			}
++		}
++	}
+ 	plan := &credPlan{}
+ 
+ 	// URL userinfo: placeholder material → misuse; on a credentialed

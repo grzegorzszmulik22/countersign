@@ -1,0 +1,12 @@
+make[1]: Entering directory '/home/csbuild/src/cs-runner/.check-work/sabotage-M2.7-relay-forwards-any-destination'
+CHECK C2.7.1 FAIL —     check_m27_checks_test.go:60: sandbox traffic reached host sinks:         tcp-arrival 127.0.0.1:53306         unix-arrival @ FAIL FAIL	github.com/countersign/countersign/internal/runner	4.441s FAIL 
+CHECK C2.7.2 FAIL —         cs: run-dir /tmp/TestC2_7_22445707988/001/rd0              check_m27_checks_test.go:114: grandchild run exited 22 FAIL FAIL	github.com/countersign/countersign/internal/runner	0.170s FAIL 
+CHECK C2.7.3 FAIL —         cs: run-dir /tmp/TestC2_7_31175196016/001/rd0              check_m27_checks_test.go:155: clients run exited 1 FAIL FAIL	github.com/countersign/countersign/internal/runner	0.528s FAIL 
+CHECK C2.7.4 PASS
+CHECK C2.7.5 PASS
+CHECK C2.7.6 PASS
+CHECK lint.runner PASS
+M2.7 suite: FAILURES
+check-M2.7: FAIL (exit 1, evidence: evidence/M2.7/20261118T093458Z)
+make[1]: *** [Makefile:37: check-M2.7] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-runner/.check-work/sabotage-M2.7-relay-forwards-any-destination'
