@@ -19,11 +19,15 @@ bad() { say "$1" FAIL "$2"; fail=1; }
 
 [ -x "$GO" ] || { echo "missing go toolchain: run make tools" >&2; exit 2; }
 
+# The vector suite runs ~9-10 min under load; Go's default 10m test
+# timeout kills it mid-run, so give real headroom.
+TIMEOUT=-timeout=30m
+
 run() {
   local id=$1; shift
   echo "--- $id: go test $*"
   local out rc
-  out=$("$GO" test "$@" 2>&1); rc=$?
+  out=$("$GO" test "$TIMEOUT" "$@" 2>&1); rc=$?
   echo "$out" | tail -15
   if [ "$rc" -eq 0 ]; then
     pass "$id"
@@ -46,10 +50,10 @@ run C8.2.2 ./internal/inspect/ -count=1 \
 # every OpenAI vector through the live broker, the malformed unit
 # corpus, and the 10-minute native fuzz over all endpoint parsers.
 out=$(mktemp)
-if "$GO" test -tags fixtures ./internal/proxy/ -count=1 \
+if "$GO" test "$TIMEOUT" -tags fixtures ./internal/proxy/ -count=1 \
     -run '^(TestM8E2E_ResponseVectors|TestM8E2E_WriteAheadOrdering)$' >"$out" 2>&1 \
-    && "$GO" test ./internal/inspect/ -count=1 -run '^TestParseMalformed$' >>"$out" 2>&1 \
-    && "$GO" test ./internal/inspect/ -count=1 -run '^$' \
+    && "$GO" test "$TIMEOUT" ./internal/inspect/ -count=1 -run '^TestParseMalformed$' >>"$out" 2>&1 \
+    && "$GO" test "$TIMEOUT" ./internal/inspect/ -count=1 -run '^$' \
     -fuzz '^FuzzResponseParser$' -fuzztime=600s >>"$out" 2>&1; then
     tail -15 "$out"; rm -f "$out"; pass C8.2.3
 else

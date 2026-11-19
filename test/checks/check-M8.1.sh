@@ -22,11 +22,15 @@ bad() { say "$1" FAIL "$2"; fail=1; }
 
 [ -x "$GO" ] || { echo "missing go toolchain: run make tools" >&2; exit 2; }
 
+# The vector/ordering/fuzz suites run ~9-10 min under load; Go's
+# default 10m test timeout kills them mid-run, so give real headroom.
+TIMEOUT=-timeout=30m
+
 run() { # run <check-id> <go test args...>
   local id=$1; shift
   echo "--- $id: go test $*"
   local out rc
-  out=$("$GO" test "$@" 2>&1); rc=$?
+  out=$("$GO" test "$TIMEOUT" "$@" 2>&1); rc=$?
   echo "$out" | tail -15
   if [ "$rc" -eq 0 ]; then
     pass "$id"
@@ -62,9 +66,9 @@ run C8.1.5 -tags fixtures ./internal/proxy/ -count=1 \
 # content types (corpus-seeded), then the deterministic fabrication
 # corpus — no panic, no fabricated intents (MM8.4).
 fout=$(mktemp)
-if "$GO" test ./internal/inspect/ -count=1 -run '^$' \
+if "$GO" test "$TIMEOUT" ./internal/inspect/ -count=1 -run '^$' \
     -fuzz '^FuzzResponseParser$' -fuzztime=600s >"$fout" 2>&1 \
-    && "$GO" test ./internal/inspect/ -count=1 \
+    && "$GO" test "$TIMEOUT" ./internal/inspect/ -count=1 \
     -run '^(TestParserNeverFabricatesOnGarbage|TestParserMutationFuzz)$' >>"$fout" 2>&1; then
     tail -15 "$fout"; rm -f "$fout"; pass C8.1.6
 else

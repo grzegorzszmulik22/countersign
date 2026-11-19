@@ -214,7 +214,7 @@ func (p *respParser) event(ev *sseEvent) (*Completion, error) {
 			return nil, parseErrf("function_call_arguments.delta: %v", err)
 		}
 		it, ok := p.items[d.OutputIndex]
-		if !ok {
+		if !ok || it == nil {
 			return nil, parseErrf("function_call_arguments.delta: index %d not open", d.OutputIndex)
 		}
 		it.args = append(it.args, d.Delta...)
@@ -227,7 +227,7 @@ func (p *respParser) event(ev *sseEvent) (*Completion, error) {
 			return nil, parseErrf("function_call_arguments.done: %v", err)
 		}
 		it, ok := p.items[d.OutputIndex]
-		if !ok {
+		if !ok || it == nil {
 			return nil, parseErrf("function_call_arguments.done: index %d not open", d.OutputIndex)
 		}
 		it.doneArgs = d.Arguments
@@ -246,7 +246,7 @@ func (p *respParser) event(ev *sseEvent) (*Completion, error) {
 		}
 		w.raw = d.Item
 		it, ok := p.items[d.OutputIndex]
-		if !ok {
+		if !ok || it == nil {
 			if respExecutor(w.Type) != "" {
 				// The added event never arrived, but done carries the
 				// complete item — the provider's declaration is whole.
@@ -281,6 +281,9 @@ func (p *respParser) event(ev *sseEvent) (*Completion, error) {
 // function_call_arguments.done) beats assembled deltas, which beat the
 // done item's own input members, then the added item's.
 func (p *respParser) complete(st *respItemState, doneItem *respItemWire, holdAt int64) (*Completion, error) {
+	if st == nil || doneItem == nil {
+		return nil, parseErrf("output_item.done: missing item state")
+	}
 	var it *Intent
 	var err error
 	switch {
@@ -297,6 +300,9 @@ func (p *respParser) complete(st *respItemState, doneItem *respItemWire, holdAt 
 	}
 	if err != nil {
 		return nil, parseErrf("%s: input: %v", st.kind, err)
+	}
+	if it == nil {
+		return nil, parseErrf("%s: no intent produced", st.kind)
 	}
 	it.ID = doneItem.id()
 	if it.ID == "" && st.item != nil {
