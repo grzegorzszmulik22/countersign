@@ -41,10 +41,20 @@ run C8.2.1 ./internal/inspect/ -count=1 -run '^TestVectorsChunkIndependent$' -v
 run C8.2.2 ./internal/inspect/ -count=1 \
     -run '^TestVectorsChunkIndependent$' -v
 
-# C8.2.3: ordering/byte-equality/malformed/unknown/fuzz equivalents —
-# the OpenAI vectors through the live broker plus the parser fail-safes.
-run C8.2.3 -tags fixtures ./internal/proxy/ -count=1 \
-    -run '^(TestM8E2E_ResponseVectors|TestM8E2E_WriteAheadOrdering)$' -v
+# C8.2.3: the C8.1.2–C8.1.6 equivalents — write-ahead ordering on the
+# Responses stream, byte equality + malformed + unknown/cut handling of
+# every OpenAI vector through the live broker, the malformed unit
+# corpus, and the 10-minute native fuzz over all endpoint parsers.
+out=$(mktemp)
+if "$GO" test -tags fixtures ./internal/proxy/ -count=1 \
+    -run '^(TestM8E2E_ResponseVectors|TestM8E2E_WriteAheadOrdering)$' >"$out" 2>&1 \
+    && "$GO" test ./internal/inspect/ -count=1 -run '^TestParseMalformed$' >>"$out" 2>&1 \
+    && "$GO" test ./internal/inspect/ -count=1 -run '^$' \
+    -fuzz '^FuzzResponseParser$' -fuzztime=600s >>"$out" 2>&1; then
+    tail -15 "$out"; rm -f "$out"; pass C8.2.3
+else
+    tail -15 "$out"; rm -f "$out"; bad C8.2.3 "go test failed"
+fi
 
 [ "$fail" -eq 0 ] && echo "M8.2 suite: all checks passed" \
     || echo "M8.2 suite: FAILURES" >&2

@@ -1,0 +1,54 @@
+--- C8.1.1: go test ./internal/inspect/ -count=1 -run ^TestVectorsChunkIndependent$ -v
+=== RUN   TestVectorsChunkIndependent
+--- PASS: TestVectorsChunkIndependent (94.22s)
+PASS
+ok  	github.com/countersign/countersign/internal/inspect	95.427s
+CHECK C8.1.1 PASS
+--- C8.1.2: go test -tags fixtures ./internal/proxy/ -count=1 -run ^TestM8E2E_WriteAheadOrdering$ -v
+=== RUN   TestM8E2E_WriteAheadOrdering
+    harness_test.go:126: broker: tunnel 01M7RR3PK200K9BFCAPPEJ808N inner serve: listener closed (conn err: read tcp 127.0.0.1:43329->127.0.0.1:40246: use of closed network connection)
+--- PASS: TestM8E2E_WriteAheadOrdering (0.68s)
+PASS
+ok  	github.com/countersign/countersign/internal/proxy	0.719s
+CHECK C8.1.2 PASS
+--- C8.1.3: go test -tags fixtures ./internal/proxy/ -count=1 -run ^(TestM8E2E_ResponseVectors|TestM8E2E_Latency)$ -v
+    --- PASS: TestM8E2E_ResponseVectors/openai/resp-multi-sse (0.29s)
+    --- PASS: TestM8E2E_ResponseVectors/openai/resp-single-json (0.02s)
+    --- PASS: TestM8E2E_ResponseVectors/openai/resp-single-sse (0.02s)
+    --- PASS: TestM8E2E_ResponseVectors/openai/resp-text-json (0.02s)
+    --- PASS: TestM8E2E_ResponseVectors/openai/resp-unknown-sse (0.42s)
+=== RUN   TestM8E2E_Latency
+    check_m8_test.go:810: p99 added delay 310.446 ms > 2 ms (MM8.3)
+    check_m8_test.go:813: p99 tool-block completion added 260.136 ms > 6 ms (MM8.3)
+    check_m8_test.go:815: MM8.3: p99 added 310.446 ms over 325 frames; p99 hold added 260.136 ms over 40 blocks
+    harness_test.go:126: broker: tunnel 01M7RR6MES00000S0A87PW00QZ inner serve: listener closed (conn err: read tcp 127.0.0.1:34993->127.0.0.1:38544: use of closed network connection)
+    harness_test.go:126: broker: tunnel 01M7RR6MET00ZFS6SM2XGSCS8Q inner serve: listener closed (conn err: read tcp 127.0.0.1:34993->127.0.0.1:38554: use of closed network connection)
+--- FAIL: TestM8E2E_Latency (5.50s)
+FAIL
+FAIL	github.com/countersign/countersign/internal/proxy	15.086s
+FAIL
+CHECK C8.1.3 FAIL — go test failed
+--- C8.1.4: go test ./internal/inspect/ -count=1 -run ^TestParseMalformed$ -v
+=== RUN   TestParseMalformed
+--- PASS: TestParseMalformed (0.00s)
+PASS
+ok  	github.com/countersign/countersign/internal/inspect	0.015s
+CHECK C8.1.4 PASS
+--- C8.1.5: go test -tags fixtures ./internal/proxy/ -count=1 -run TestM8E2E_ResponseVectors/anthropic/unknown-sse -v
+=== RUN   TestM8E2E_ResponseVectors
+=== RUN   TestM8E2E_ResponseVectors/anthropic/unknown-sse
+    harness_test.go:126: broker: tunnel 01M7RS0WQG009EV9FSF4JWFBRT inner serve: listener closed (conn err: read tcp 127.0.0.1:33859->127.0.0.1:45988: use of closed network connection)
+--- PASS: TestM8E2E_ResponseVectors (4.36s)
+    --- PASS: TestM8E2E_ResponseVectors/anthropic/unknown-sse (1.12s)
+PASS
+ok  	github.com/countersign/countersign/internal/proxy	5.591s
+CHECK C8.1.5 PASS
+--- C8.1.6: go test ./internal/inspect/ -count=1 -run ^(TestParserNeverFabricatesOnGarbage|TestParserMutationFuzz)$ -v
+=== RUN   TestParserMutationFuzz
+--- PASS: TestParserMutationFuzz (4.54s)
+=== RUN   TestParserNeverFabricatesOnGarbage
+--- PASS: TestParserNeverFabricatesOnGarbage (0.03s)
+PASS
+ok  	github.com/countersign/countersign/internal/inspect	4.605s
+CHECK C8.1.6 PASS
+M8.1 suite: FAILURES

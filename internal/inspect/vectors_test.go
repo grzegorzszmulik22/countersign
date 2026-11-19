@@ -4,6 +4,7 @@
 package inspect
 
 import (
+	"bytes"
 	"encoding/json"
 	"math/rand"
 	"os"
@@ -346,4 +347,100 @@ func TestParserNeverFabricatesOnGarbage(t *testing.T) {
 			p.Finish()
 		}
 	}
+}
+
+// FuzzResponseParser is the C8.1.6/C8.2.3 native fuzz target (the check
+// suites run it at -fuzztime=600s). Every wire — corpus-seeded or
+// fuzzer-mutated — is fed to all three endpoint parsers under both
+// content types: no panic (the fuzzer reports it) and no fabricated
+// intent — an intent's re-encoded ID must occur in the wire it was
+// parsed from (MM8.4).
+func FuzzResponseParser(f *testing.F) {
+	for _, dir := range []string{"anthropic", "openai"} {
+		base := filepath.Join(vectorRoot, dir)
+		for _, wire := range mustFuzzCorpus(f, base) {
+			f.Add(wire)
+		}
+	}
+	f.Fuzz(func(t *testing.T, wire []byte) {
+		norm := strings.ToValidUTF8(string(wire), "�")
+		for _, ep := range []Endpoint{EndpointAnthropic, EndpointResponses, EndpointChat} {
+			for _, ct := range []string{"text/event-stream", "application/json"} {
+				p, ok := NewResponseParser(ep, ct)
+				if !ok {
+					t.Fatalf("no parser for ep %v ct %q", ep, ct)
+				}
+				checkNoFabrication(t, p, wire, norm)
+			}
+		}
+	})
+}
+
+// mustFuzzCorpus seeds the fuzzer with the transcript wires. It reads
+// files directly because testing.F offers no helper injection point.
+func mustFuzzCorpus(f *testing.F, base string) [][]byte {
+	f.Helper()
+	var out [][]byte
+	for _, ext := range []string{"*.sse", "*.json"} {
+		names, err := filepath.Glob(filepath.Join(base, ext))
+		if err != nil {
+			f.Fatal(err)
+		}
+		for _, n := range names {
+			if strings.HasSuffix(n, ".expected.json") {
+				continue
+			}
+			b, err := os.ReadFile(n)
+			if err != nil {
+				f.Fatal(err)
+			}
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
+// checkNoFabrication feeds wire to p in deterministic chunks — byte-wise
+// on small inputs (maximal scanner stress), at line boundaries otherwise —
+// and fails if any completed intent's ID is not a wire substring.
+func checkNoFabrication(t *testing.T, p ResponseParser, wire []byte, norm string) {
+	t.Helper()
+	feed := func() (stop bool) {
+		if len(wire) <= 4096 {
+			for i := 0; i < len(wire); i++ {
+				if stop = checkComps(t, p, wire[i:i+1], norm); stop {
+					return true
+				}
+			}
+			return false
+		}
+		for pos := 0; pos < len(wire); {
+			m := len(wire) - pos
+			if i := bytes.IndexByte(wire[pos:], '\n'); i >= 0 {
+				m = i + 1
+			}
+			if stop = checkComps(t, p, wire[pos:pos+m], norm); stop {
+				return true
+			}
+			pos += m
+		}
+		return false
+	}
+	_ = feed()
+	p.Finish()
+}
+
+func checkComps(t *testing.T, p ResponseParser, chunk []byte, norm string) (stop bool) {
+	cs, err := p.Feed(chunk)
+	for _, c := range cs {
+		if c.Intent == nil {
+			continue
+		}
+		jid, _ := json.Marshal(c.Intent.ID)
+		inner := strings.Trim(string(jid), `"`)
+		if !strings.Contains(norm, inner) {
+			t.Fatalf("fabricated intent id %q", c.Intent.ID)
+		}
+	}
+	return err != nil
 }

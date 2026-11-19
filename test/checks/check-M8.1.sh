@@ -58,9 +58,18 @@ run C8.1.4 ./internal/inspect/ -count=1 -run '^TestParseMalformed$' -v
 run C8.1.5 -tags fixtures ./internal/proxy/ -count=1 \
     -run 'TestM8E2E_ResponseVectors/anthropic/unknown-sse' -v
 
-# C8.1.6: mutation/garbage fuzz — no panic, no fabricated intents.
-run C8.1.6 ./internal/inspect/ -count=1 \
-    -run '^(TestParserNeverFabricatesOnGarbage|TestParserMutationFuzz)$' -v
+# C8.1.6: 10-minute native fuzz of every endpoint parser under both
+# content types (corpus-seeded), then the deterministic fabrication
+# corpus — no panic, no fabricated intents (MM8.4).
+fout=$(mktemp)
+if "$GO" test ./internal/inspect/ -count=1 -run '^$' \
+    -fuzz '^FuzzResponseParser$' -fuzztime=600s >"$fout" 2>&1 \
+    && "$GO" test ./internal/inspect/ -count=1 \
+    -run '^(TestParserNeverFabricatesOnGarbage|TestParserMutationFuzz)$' >>"$fout" 2>&1; then
+    tail -15 "$fout"; rm -f "$fout"; pass C8.1.6
+else
+    tail -15 "$fout"; rm -f "$fout"; bad C8.1.6 "go test failed"
+fi
 
 [ "$fail" -eq 0 ] && echo "M8.1 suite: all checks passed" \
     || echo "M8.1 suite: FAILURES" >&2

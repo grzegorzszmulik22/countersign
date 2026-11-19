@@ -307,86 +307,180 @@ func TestM8E2E_ResponseVectors(t *testing.T) {
 	}
 }
 
-// TestM8E2E_WriteAheadOrdering is C8.1.2: the instrumented client reads
-// the stream; the moment the frame completing a tool-use block is fully
-// received, the intent's ledger append must already be durable — read
-// the record file synchronously at that point (no wait: the bytes could
-// not have crossed earlier).
-func TestM8E2E_WriteAheadOrdering(t *testing.T) {
-	var wire []byte
-	var exp m8Expected
-	for _, v := range m8Vectors(t, "anthropic") {
-		if v.name == "multi-call-sse" {
-			wire, exp = v.wire, v.exp
+// m8ShmDir returns a temp dir on /dev/shm when one exists: thousands of
+// hold-point ledger commits through the same write+sync path return in
+// µs on tmpfs while this host's ext4 block-device queue costs ms each.
+// The ordering property under test is unchanged either way.
+func m8ShmDir(t *testing.T, prefix string) string {
+	t.Helper()
+	if st, err := os.Stat("/dev/shm"); err == nil && st.IsDir() {
+		if d, err := os.MkdirTemp("/dev/shm", prefix); err == nil {
+			t.Cleanup(func() { _ = os.RemoveAll(d) })
+			return d
 		}
 	}
-	if wire == nil {
-		t.Fatal("multi-call-sse vector missing")
-	}
-	dir := t.TempDir()
-	e, routes := m8Env(t, "s8ord", "tok-8o", m8Policy(t, dir, "p8o", nil, nil, ""))
-	addr, closeUp := startTLSUpstream(t, e.ca, []string{"llm.example"}, nil,
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/event-stream")
-			w.WriteHeader(200)
-			fl := w.(http.Flusher)
-			// One frame per write+flush so the client receives the
-			// completing bytes as their own read.
-			for _, fr := range bytes.Split(wire, []byte("\n\n")) {
-				if len(bytes.TrimSpace(fr)) == 0 {
-					continue
-				}
-				_, _ = w.Write(append(append([]byte{}, fr...), '\n', '\n'))
-				fl.Flush()
-			}
-		}))
-	defer closeUp()
-	routes["llm.example"] = addr
-	cli := e.proxyClient(t, "tok-8o", e.combinedPool(t, "s8ord"), "http/1.1")
-	res, err := cli.Post("https://llm.example"+m8PathFor("anthropic"),
-		"application/json", bytes.NewReader(m8Request("anthropic")))
-	if err != nil {
-		t.Fatalf("proxy request: %v", err)
-	}
-	defer func() { _ = res.Body.Close() }()
+	return t.TempDir()
+}
 
-	// Read frame by frame; after each frame that completes a tool-use
-	// block (content_block_stop for a tool_use index) the matching
-	// intent.declared must already be in the session's ledger.
-	buf := make([]byte, 1<<16)
-	pending := []byte{}
-	doneBlocks := 0
-	for {
-		n, rerr := res.Body.Read(buf)
-		if n > 0 {
-			pending = append(pending, buf[:n]...)
-			for {
-				i := bytes.Index(pending, []byte("\n\n"))
-				if i < 0 {
-					break
+// m8WriteAheadStream builds the n-tool-call SSE corpus for the
+// write-ahead ordering check: every block completes at its own event,
+// and wantID names the intent each completion must declare.
+// Anthropic tool_use blocks complete at content_block_stop; Responses
+// function_call items at response.output_item.done.
+func m8WriteAheadStream(endpoint string, n int) (frames [][]byte, stopMarker string, wantID func(int) string) {
+	push := func(frames *[][]byte, s string) { *frames = append(*frames, []byte(s)) }
+	switch endpoint {
+	case "responses":
+		push(&frames, "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"r\",\"model\":\"m\",\"status\":\"in_progress\"}}\n\n")
+		for i := 0; i < n; i++ {
+			push(&frames, fmt.Sprintf("event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"output_index\":%d,\"item\":{\"type\":\"function_call\",\"id\":\"fc_wa%06d\",\"call_id\":\"call_wa%06d\",\"name\":\"exec\",\"arguments\":\"\"}}\n\n", i, i, i))
+			push(&frames, fmt.Sprintf("event: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"output_index\":%d,\"delta\":\"{\\\"cmd\\\":\\\"x\\\"}\"}\n\n", i))
+			push(&frames, fmt.Sprintf("event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"output_index\":%d,\"item\":{\"type\":\"function_call\",\"id\":\"fc_wa%06d\",\"call_id\":\"call_wa%06d\",\"name\":\"exec\",\"arguments\":\"{\\\"cmd\\\":\\\"x\\\"}\"}}\n\n", i, i, i))
+		}
+		push(&frames, "event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"r\",\"model\":\"m\",\"status\":\"completed\"}}\n\n")
+		return frames, "response.output_item.done",
+			func(i int) string { return fmt.Sprintf("call_wa%06d", i) }
+	default: // anthropic
+		push(&frames, "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"m\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"m\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}}\n\n")
+		for i := 0; i < n; i++ {
+			push(&frames, fmt.Sprintf("event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":%d,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_wa%06d\",\"name\":\"Bash\",\"input\":{}}}\n\n", i, i))
+			push(&frames, fmt.Sprintf("event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":%d,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"cmd\\\":\\\"x\\\"}\"}}\n\n", i))
+			push(&frames, fmt.Sprintf("event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":%d}\n\n", i))
+		}
+		push(&frames, "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":9}}\n\n")
+		push(&frames, "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
+		return frames, "content_block_stop",
+			func(i int) string { return fmt.Sprintf("toolu_wa%06d", i) }
+	}
+}
+
+// TestM8E2E_WriteAheadOrdering is C8.1.2 (and its C8.2.3 equivalent):
+// the instrumented client reads the stream; the moment the frame
+// completing a tool-use block is received, that intent's ledger append
+// must already be durable — the held bytes could not have crossed
+// earlier. Checked on 10,000 block completions per provider format.
+func TestM8E2E_WriteAheadOrdering(t *testing.T) {
+	for _, ep := range []string{"anthropic", "responses"} {
+		t.Run(ep, func(t *testing.T) {
+			const blocks = 10000
+			// The env (records dir included) goes on tmpfs where one
+			// exists: 10,000 hold-point commits through the same
+			// write+sync path finish in µs there versus ~3 ms each on
+			// this host's ext4 queue — the ordering property is
+			// unchanged either way.
+			dir := m8ShmDir(t, "m8wa-")
+			routes := map[string]string{}
+			e := newTestEnvFull(t, dir, []SessionEntry{
+				sessionEntry("s8wa-"+ep, "tok-8w", "127.0.0.1",
+					m8Policy(t, dir, "p8wa-"+ep, nil, nil, "")),
+			}, routes, nil, nil)
+			frames, stopMarker, wantID := m8WriteAheadStream(ep, blocks)
+			addr, closeUp := startTLSUpstream(t, e.ca, []string{"llm.example"}, nil,
+				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.Header().Set("Content-Type", "text/event-stream")
+					w.WriteHeader(200)
+					fl := w.(http.Flusher)
+					for _, fr := range frames {
+						if _, err := w.Write(fr); err != nil {
+							return // client gone — do not linger in Write
+						}
+						fl.Flush()
+					}
+				}))
+			defer closeUp()
+			routes["llm.example"] = addr
+			cli := e.proxyClient(t, "tok-8w", e.combinedPool(t, "s8wa-"+ep), "http/1.1")
+			cli.Timeout = 900 * time.Second // 10k hold-point appends pace the stream
+			res, err := cli.Post("https://llm.example"+m8PathFor(ep),
+				"application/json", bytes.NewReader(m8Request(ep)))
+			if err != nil {
+				t.Fatalf("proxy request: %v", err)
+			}
+			defer func() { _ = res.Body.Close() }()
+
+			// Incremental ledger tail: ReadAt only the bytes appended
+			// since the last poll — O(1) per completing frame.
+			ledgerPath := filepath.Join(e.records, "s8wa-"+ep+".jsonl")
+			var lf *os.File
+			var off int64
+			seen := 0
+			poll := func() {
+				if lf == nil {
+					f, err := os.Open(ledgerPath)
+					if err != nil {
+						return
+					}
+					lf = f
 				}
-				frame := string(pending[:i])
-				pending = pending[i+2:]
-				if strings.Contains(frame, `"content_block_stop"`) {
-					doneBlocks++
-					found := false
-					for _, d := range declaredList(t, e, "s8ord") {
-						if d.IntentID == exp.Intents[doneBlocks-1].ID {
-							found = true
+				st, err := lf.Stat()
+				if err != nil || st.Size() <= off {
+					return
+				}
+				buf := make([]byte, st.Size()-off)
+				m, _ := lf.ReadAt(buf, off)
+				last := bytes.LastIndexByte(buf[:m], '\n')
+				if last < 0 {
+					return
+				}
+				off += int64(last) + 1
+				for _, ln := range bytes.Split(buf[:last], []byte("\n")) {
+					var rec struct {
+						Type string `json:"type"`
+						Body struct {
+							IntentID string `json:"intent_id"`
+						} `json:"body"`
+					}
+					if json.Unmarshal(ln, &rec) == nil && rec.Type == "intent.declared" {
+						if rec.Body.IntentID != wantID(seen) {
+							t.Fatalf("declared[%d] = %q, want %q",
+								seen, rec.Body.IntentID, wantID(seen))
+						}
+						seen++
+					}
+				}
+			}
+			defer func() {
+				if lf != nil {
+					_ = lf.Close()
+				}
+			}()
+
+			// Read frame by frame; the frame completing block k (its
+			// stopMarker event) may only arrive after the k-th append.
+			buf := make([]byte, 1<<16)
+			pending := []byte{}
+			doneBlocks := 0
+			for {
+				n, rerr := res.Body.Read(buf)
+				if n > 0 {
+					pending = append(pending, buf[:n]...)
+					for {
+						i := bytes.Index(pending, []byte("\n\n"))
+						if i < 0 {
+							break
+						}
+						frame := pending[:i]
+						pending = pending[i+2:]
+						if bytes.Contains(frame, []byte(stopMarker)) {
+							poll()
+							if seen <= doneBlocks {
+								t.Fatalf("block %d bytes delivered before intent.declared durable (%d declares)", doneBlocks, seen)
+							}
+							doneBlocks++
 						}
 					}
-					if !found {
-						t.Fatalf("block %d bytes delivered before intent.declared durable", doneBlocks)
-					}
+				}
+				if rerr != nil {
+					break
 				}
 			}
-		}
-		if rerr != nil {
-			break
-		}
-	}
-	if doneBlocks != len(exp.Intents) {
-		t.Fatalf("%d completed blocks, want %d", doneBlocks, len(exp.Intents))
+			if doneBlocks != blocks {
+				t.Fatalf("%d completed blocks, want %d", doneBlocks, blocks)
+			}
+			if seen != blocks {
+				t.Fatalf("%d durable declares, want %d", seen, blocks)
+			}
+		})
 	}
 }
 
@@ -575,6 +669,9 @@ func TestM8E2E_TrackingCorpus(t *testing.T) {
 				if rb.IntentID != x.IntentID || rb.ClosedBy != x.ClosedBy {
 					t.Fatalf("result %d = %+v want id=%s by %s", i, rb, x.IntentID, x.ClosedBy)
 				}
+				if rb.ViaEffect == "" {
+					t.Fatalf("result %d empty via_effect: %+v", i, rb)
+				}
 				if x.ContentSHA256 != "" {
 					if rb.ContentSHA256 != x.ContentSHA256 || rb.ContentLen != x.ContentLen {
 						t.Fatalf("result %d content %s/%d want %s/%d",
@@ -595,6 +692,9 @@ func TestM8E2E_TrackingCorpus(t *testing.T) {
 					t.Fatalf("context step %d = count %d sha %s new %d, want %d %s %d",
 						i, cb.BlockCount, cb.ContextSHA256, len(cb.NewBlocks),
 						x.BlockCount, x.ContextSHA256, len(x.NewBlocks))
+				}
+				if cb.ViaEffect == "" || cb.Provider != m8ProviderFor(sc.Endpoint) {
+					t.Fatalf("context step %d fields = %+v", i, cb)
 				}
 				for j, nb := range cb.NewBlocks {
 					if nb.SHA256 != x.NewBlocks[j].SHA256 {
@@ -673,17 +773,30 @@ func TestM8E2E_LimitBody(t *testing.T) {
 	if !found {
 		t.Fatalf("no LIMIT_BODY denial recorded: %+v", effs)
 	}
-	// The default for inference grants is 32 MiB — a body just under it
-	// on /v1/responses crosses (grant "big" sets no override).
-	smallBody := `{"model":"m","input":[{"role":"user","content":"` + strings.Repeat("y", (1<<20)+64) + `"}]}`
+	// The default for inference grants is 32 MiB (grant "big" sets no
+	// override): a body over it is denied LIMIT_BODY, a body under it
+	// crosses.
+	overBody := `{"model":"m","input":[{"role":"user","content":"` + strings.Repeat("z", (32<<20)+64) + `"}]}`
 	res2, err := cli.Post("https://llm.example/v1/responses", "application/json",
+		strings.NewReader(overBody))
+	if err != nil {
+		t.Fatalf("responses request: %v", err)
+	}
+	if res2.StatusCode != http.StatusForbidden ||
+		res2.Header.Get("X-Countersign-Reason") != "LIMIT_BODY" {
+		t.Fatalf("32MiB default: status %d reason %q, want 403 LIMIT_BODY",
+			res2.StatusCode, res2.Header.Get("X-Countersign-Reason"))
+	}
+	_ = res2.Body.Close()
+	smallBody := `{"model":"m","input":[{"role":"user","content":"` + strings.Repeat("y", (1<<20)+64) + `"}]}`
+	res3, err := cli.Post("https://llm.example/v1/responses", "application/json",
 		strings.NewReader(smallBody))
 	if err != nil {
 		t.Fatalf("responses request: %v", err)
 	}
-	_ = res2.Body.Close()
-	if res2.StatusCode != 200 {
-		t.Fatalf("under-limit request denied: %d", res2.StatusCode)
+	_ = res3.Body.Close()
+	if res3.StatusCode != 200 {
+		t.Fatalf("under-limit request denied: %d", res3.StatusCode)
 	}
 }
 
