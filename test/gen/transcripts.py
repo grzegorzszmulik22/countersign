@@ -308,13 +308,15 @@ def gen_anthropic():
 
     # 12. credential-shaped material inside inputs (M8.5): previews show
     #     [REDACTED:<shape>]; digests stay over the original bytes.
-    i12 = {"command": "aws s3 ls --token AKIAIOSFODNN7EXAMPLE",
+    # Padding places the AWS key so it straddles the 256-byte preview
+    # cap: redaction must run before truncation or a key fragment leaks.
+    i12 = {"command": "aws s3 ls " + "x" * 215 + " AKIAIOSFODNN7EXAMPLE",
            "url": "https://u:ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcd1234@h/x"}
     s = a_msg_start() + a_tool_stream("toolu_12Cr3d3nt14lSh4p3s00", "Bash", i12,
                                       idx=0, frags=5) + a_msg_end()
     write_vector(d, "cred-input-sse", s, "anthropic", "sse", MODEL_A,
                  [exp_intent("toolu_12Cr3d3nt14lSh4p3s00", "Bash", "sandbox", J(i12))],
-                 markers=["AKIAIOSFODNN7EXAMPLE"])
+                 markers=["AKIAIOSFODNN7EXAMPLE", "AKIAIOSFODNN7EX"])
 
 
 # ------------------------------------------------------------------

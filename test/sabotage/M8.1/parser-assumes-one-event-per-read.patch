@@ -1,0 +1,13 @@
+diff --git a/internal/inspect/sse.go b/internal/inspect/sse.go
+index 24c2c95..4450513 100644
+--- a/internal/inspect/sse.go
++++ b/internal/inspect/sse.go
+@@ -41,7 +41,7 @@ func (s *sseSplitter) feed(b []byte) ([]sseEvent, error) {
+ 			if err != nil {
+ 				return out, err
+ 			}
+-			if ev != nil {
++			if ev != nil && len(out) == 0 {
+ 				out = append(out, *ev)
+ 			}
+ 			s.abs += int64(len(s.line)) // line bytes already counted below

@@ -1,0 +1,17 @@
+diff --git a/internal/inspect/preview.go b/internal/inspect/preview.go
+index bdf18e7..79b39e0 100644
+--- a/internal/inspect/preview.go
++++ b/internal/inspect/preview.go
+@@ -24,10 +24,8 @@ func InputPreview(raw []byte, ok bool) (preview string, present bool) {
+ 	if !ok {
+ 		return "", false
+ 	}
+-	r := creds.RedactNamed(raw)
+-	if len(r) > PreviewMax {
+-		r = r[:utf8SafeLen(r, PreviewMax)]
+-	}
++	r := raw[:utf8SafeLen(raw, PreviewMax)]
++	r = creds.RedactNamed(r)
+ 	return string(r), true
+ }
+ 

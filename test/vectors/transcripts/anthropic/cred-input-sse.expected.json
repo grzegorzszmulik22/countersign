@@ -7,13 +7,14 @@
       "intent_id": "toolu_12Cr3d3nt14lSh4p3s00",
       "tool": "Bash",
       "executor": "sandbox",
-      "input_sha256": "98d4ba8ae8108ab8a4f922437794eec5305883558e8509ab6600e6dc59ec714b",
-      "input_len": 113
+      "input_sha256": "33d78838d35652242c684ec1e5b65bca2e4dafda44fad6f3f9551a1b6806a34b",
+      "input_len": 321
     }
   ],
   "unparsed": false,
   "detail_substring": "",
   "markers": [
-    "AKIAIOSFODNN7EXAMPLE"
+    "AKIAIOSFODNN7EXAMPLE",
+    "AKIAIOSFODNN7EX"
   ]
 }

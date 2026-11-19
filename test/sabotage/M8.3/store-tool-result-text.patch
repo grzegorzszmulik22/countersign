@@ -1,0 +1,40 @@
+diff --git a/internal/inspect/request.go b/internal/inspect/request.go
+index 55ef7ce..db1f66d 100644
+--- a/internal/inspect/request.go
++++ b/internal/inspect/request.go
+@@ -37,6 +37,7 @@ type ToolResult struct {
+ 	HasContent    bool
+ 	IsError       bool
+ 	HasIsError    bool
++	Content       string
+ }
+ 
+ // RequestInfo is the parsed content of an inference request body.
+@@ -184,6 +185,7 @@ func parseAnthropicRequest(body []byte) (*RequestInfo, error) {
+ 				tr := ToolResult{
+ 					IntentID: intentID, ContentSHA256: sha,
+ 					ContentLen: ln, HasContent: has,
++					Content:   string(bl.Content),
+ 				}
+ 				if bl.IsError != nil {
+ 					tr.IsError = *bl.IsError
+diff --git a/internal/proxy/inspect_hook.go b/internal/proxy/inspect_hook.go
+index f437233..51d0854 100644
+--- a/internal/proxy/inspect_hook.go
++++ b/internal/proxy/inspect_hook.go
+@@ -52,6 +52,7 @@ type IntentResultBody struct {
+ 	ClosedBy      string `json:"closed_by"` // tool_result | seal | timeout
+ 	ContentSHA256 string `json:"content_sha256,omitempty"`
+ 	ContentLen    int    `json:"content_len,omitempty"`
++	Content       string `json:"content,omitempty"`
+ 	IsError       *bool  `json:"is_error,omitempty"`
+ }
+ 
+@@ -242,6 +243,7 @@ func (s *Server) inspectRequest(sess *Session, st *inspectState, ep inspect.Endp
+ 		if tr.HasContent {
+ 			rb.ContentSHA256 = tr.ContentSHA256
+ 			rb.ContentLen = tr.ContentLen
++			rb.Content = tr.Content
+ 		}
+ 		if tr.HasIsError {
+ 			ie := tr.IsError

@@ -1,0 +1,18 @@
+diff --git a/internal/proxy/inspect_hook.go b/internal/proxy/inspect_hook.go
+index f437233..2fcbc1c 100644
+--- a/internal/proxy/inspect_hook.go
++++ b/internal/proxy/inspect_hook.go
+@@ -251,6 +251,13 @@ func (s *Server) inspectRequest(sess *Session, st *inspectState, ep inspect.Endp
+ 			return err
+ 		}
+ 	}
++	for _, d := range st.tracker.Seal() {
++		if err := s.appendRecord(sess, "intent.result", IntentResultBody{
++			IntentID: d.ID, ViaEffect: d.ViaEffect, ClosedBy: "tool_result",
++		}); err != nil {
++			return err
++		}
++	}
+ 
+ 	fresh, count, sha := st.tracker.Observe(info.Blocks)
+ 	nb := make([]ContextBlockBody, len(fresh))
