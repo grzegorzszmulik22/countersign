@@ -1,0 +1,360 @@
+{
+  "machine": "kernel: 6.12.0-204.92.4.4.3.el9uek.aarch64\narch: aarch64\ncpu_model: Neoverse-N1\ncores: 4\nmemory: 22945 MB\ndocker: unavailable",
+  "seed": 1,
+  "cores": 4,
+  "metrics": {
+    "MM1.1": {
+      "samples": [
+        3314.6068327649373,
+        3281.7710635220365,
+        3325.3646175993536,
+        3315.139570298167,
+        3337.157500106229
+      ],
+      "runs": 5,
+      "median": 3315.139570298167,
+      "cv": 0.0062,
+      "unstable": false,
+      "target": 2826.2309560609406,
+      "pass": true,
+      "command": "/home/csbuild/src/cs-evidence-py/.check-work/m16/csbench verify /home/csbuild/src/cs-evidence-py/.check-work/m16/bench-bundle.tar /home/csbuild/src/cs-evidence-py/.check-work/m16/bench-keys.json 5",
+      "calibration_ed25519_per_cpu_s": 5652.461912121881,
+      "ratio_to_calibration": 0.5865,
+      "wall_records_per_s": [
+        3200.7114570267568,
+        3213.938958400252,
+        3319.818091591905,
+        3299.25357877686,
+        3320.7825425037154
+      ],
+      "load1_samples": {
+        "run0": [
+          44.65
+        ],
+        "run1": [
+          44.65
+        ],
+        "run2": [
+          41.31
+        ],
+        "run3": [
+          41.31
+        ],
+        "run4": [
+          41.31
+        ]
+      },
+      "target_text": ">= 50% of same-core Ed25519 rate (5652 ops/cpu-s)"
+    },
+    "MM1.2": {
+      "samples": [
+        6753.943374263372,
+        6771.5145406424635,
+        6812.246648289489,
+        6881.156915149832,
+        6961.003414720221
+      ],
+      "runs": 5,
+      "median": 6812.246648289489,
+      "cv": 0.0125,
+      "unstable": false,
+      "target": 5000.0,
+      "pass": true,
+      "command": "strace --seccomp-bpf -f -y -e trace=fsync,fdatasync /home/csbuild/src/cs-evidence-py/.check-work/m16/csbench append /home/csbuild/src/cs-evidence-py/.check-work/m16/ledger-a<i> /home/csbuild/src/cs-evidence-py/.check-work/m16/bench-records.jsonl 20000 32 1",
+      "wall_records_per_s": [
+        4087.811690771816,
+        4036.8547194833704,
+        4042.2209901577558,
+        3988.6871522765623,
+        4118.196869113156
+      ],
+      "fsync_commits_samples": [
+        662,
+        665,
+        662,
+        663,
+        661
+      ],
+      "cluster_commits_estimate": [
+        667,
+        662,
+        660,
+        674,
+        652
+      ],
+      "cluster_per_record_estimate": [
+        0.03335,
+        0.0331,
+        0.033,
+        0.0337,
+        0.0326
+      ],
+      "median_commit_gap_ms": [
+        4.954212000000013,
+        4.987571999999996,
+        5.121611999999942,
+        4.9165319999999735,
+        5.007891999999847
+      ],
+      "load1_samples": {
+        "run0": [
+          23.78,
+          23.78,
+          23.78,
+          23.78,
+          22.11
+        ],
+        "run1": [
+          13.44,
+          13.44,
+          13.44,
+          13.44,
+          13.44
+        ],
+        "run2": [
+          8.35,
+          8.35,
+          8.35,
+          7.84,
+          7.84
+        ],
+        "run3": [
+          5.85,
+          5.62,
+          5.62,
+          5.62,
+          5.62,
+          5.62
+        ],
+        "run4": [
+          3.81,
+          3.81,
+          3.81,
+          3.81,
+          3.59
+        ]
+      },
+      "target_text": ">= 5000 rec/cpu-s and <= 1 fsync (group commit) per 10 records",
+      "fsync_note": "one group commit fsyncs entries.jsonl, hashes.bin and the session index",
+      "fsync_counting": "exact: fsync() calls on log/entries.jsonl via strace",
+      "fsync_per_record": {
+        "samples": [
+          0.0331,
+          0.03325,
+          0.0331,
+          0.03315,
+          0.03305
+        ],
+        "runs": 5,
+        "median": 0.0331,
+        "cv": 0.0023,
+        "unstable": false,
+        "target": 0.1,
+        "pass": true
+      },
+      "fsync_judgment": "judged"
+    },
+    "MM1.3": {
+      "command": "/home/csbuild/src/cs-evidence-py/.check-work/m16/csbench latency /home/csbuild/src/cs-evidence-py/.check-work/m16/ledger-b /home/csbuild/src/cs-evidence-py/.check-work/m16/bench-records.jsonl 1000 20000 8 (x5)",
+      "cores": 4,
+      "runs": 5,
+      "qualified_runs": 4,
+      "samples": [
+        10.262,
+        10.076,
+        10.76,
+        14.053,
+        14.154
+      ],
+      "all_samples": [
+        {
+          "p50_ms": 4.149,
+          "p99_ms": 10.262,
+          "max_ms": 328.059,
+          "load1_max": 1.84,
+          "load1_samples": [
+            1.81,
+            1.81,
+            1.81,
+            1.83,
+            1.83,
+            1.83,
+            1.83,
+            1.83,
+            1.84,
+            1.84,
+            1.84,
+            1.84,
+            1.84,
+            1.77,
+            1.77,
+            1.77,
+            1.77,
+            1.77,
+            1.63,
+            1.63,
+            1.63,
+            1.63,
+            1.63
+          ]
+        },
+        {
+          "p50_ms": 4.187,
+          "p99_ms": 10.076,
+          "max_ms": 348.817,
+          "load1_max": 1.81,
+          "load1_samples": [
+            1.61,
+            1.61,
+            1.61,
+            1.61,
+            1.81,
+            1.81,
+            1.81,
+            1.81,
+            1.81,
+            1.66,
+            1.66,
+            1.66,
+            1.66,
+            1.66,
+            1.53,
+            1.53,
+            1.53,
+            1.53,
+            1.53,
+            1.48,
+            1.48,
+            1.48,
+            1.48
+          ]
+        },
+        {
+          "p50_ms": 4.299,
+          "p99_ms": 10.76,
+          "max_ms": 351.675,
+          "load1_max": 1.83,
+          "load1_samples": [
+            1.67,
+            1.67,
+            1.61,
+            1.61,
+            1.61,
+            1.61,
+            1.61,
+            1.65,
+            1.65,
+            1.65,
+            1.65,
+            1.65,
+            1.83,
+            1.83,
+            1.83,
+            1.83,
+            1.83,
+            1.77,
+            1.77,
+            1.77,
+            1.77,
+            1.77,
+            1.71
+          ]
+        },
+        {
+          "p50_ms": 5.999,
+          "p99_ms": 14.053,
+          "max_ms": 413.521,
+          "load1_max": 3.92,
+          "load1_samples": [
+            3.63,
+            3.63,
+            3.63,
+            3.63,
+            3.63,
+            3.82,
+            3.82,
+            3.82,
+            3.82,
+            3.82,
+            3.92,
+            3.92,
+            3.92,
+            3.92,
+            3.92,
+            3.92,
+            3.92,
+            3.92,
+            3.92,
+            3.92,
+            3.85,
+            3.85,
+            3.85,
+            3.85,
+            3.85
+          ]
+        },
+        {
+          "p50_ms": 5.347,
+          "p99_ms": 14.154,
+          "max_ms": 399.015,
+          "load1_max": 4.34,
+          "load1_samples": [
+            3.83,
+            3.83,
+            3.83,
+            3.83,
+            3.83,
+            3.76,
+            3.76,
+            3.76,
+            3.76,
+            3.76,
+            3.86,
+            3.86,
+            3.86,
+            3.86,
+            3.86,
+            4.19,
+            4.19,
+            4.19,
+            4.19,
+            4.19,
+            4.34,
+            4.34,
+            4.34,
+            4.34
+          ]
+        }
+      ],
+      "target": 5.0,
+      "judged_samples": [
+        10.262,
+        10.076,
+        10.76,
+        14.053
+      ],
+      "median": 10.511,
+      "cv": 0.1653,
+      "unstable": true,
+      "pass": false,
+      "judgment": "judged"
+    },
+    "MM1.4": {
+      "command": "run_suite.py --seed 1",
+      "mutants_detected": 1008,
+      "mutants_generated": 1008,
+      "agreement": 1008,
+      "detected_ratio": 1.0,
+      "agreement_ratio": 1.0,
+      "target": "100% / >=1000; 100%",
+      "pass": true
+    },
+    "MM1.5": {
+      "command": "run_suite.py --seed 1",
+      "median_record_size_bytes": 1416,
+      "samples": 51904,
+      "target": "reported",
+      "pass": true
+    }
+  }
+}
