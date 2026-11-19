@@ -111,7 +111,7 @@ BODIES = {
         ("parent_seal_hash", _o(_STR)), ("principal", PRINCIPAL),
         ("sandbox", SANDBOX_REF), ("mode", _STR), ("policy_digest", _STR),
         ("contract_digests", _STRS), ("ca_cert_sha256", _STR),
-        ("log_origin", _STR), ("world", WORLD_REF), ("start", SESSION_START),
+        ("log_origin", _STR), ("boundary", _o(_STR)), ("world", WORLD_REF), ("start", SESSION_START),
         ("tape", TAPE_CONF), ("replay", _o(REPLAY_CONF)))),
     "sandbox.terminated": _body("SandboxTerminatedBody", (("reason", _STR),)),
     "world.rewound": _body("WorldRewoundBody", (

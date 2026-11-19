@@ -21,7 +21,7 @@ import genbundle  # noqa: E402
 PY = os.path.join(ROOT, ".tools", "python", "bin", "python3")
 REFPY = os.path.join(ROOT, "ref", "python")
 
-OUT_KEYS = {"verdict", "world", "errors", "warnings", "findings", "stats"}
+OUT_KEYS = {"verdict", "boundary", "world", "errors", "warnings", "findings", "stats"}
 
 
 def codes(items):

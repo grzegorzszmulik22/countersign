@@ -27,6 +27,7 @@ class _Res:
 
     def __init__(self):
         self.verdict = ""
+        self.boundary = None
         self.world = "open"
         self.errors = []
         self.warnings = None   # Go nil slice → null; [] only pre-V1
@@ -50,6 +51,7 @@ def _emit(res):
         res.verdict = "CLEAN"
     return {
         "verdict": res.verdict,
+        "boundary": res.boundary,
         "world": res.world,
         "errors": res.errors,
         "warnings": res.warnings,
@@ -425,6 +427,7 @@ def verify_bundle(data, trusted):
         res.errors.append(_f("E_OPEN", "first record is not session.open"))
     else:
         open_body = recs[0]["rec"]["body"]
+        res.boundary = open_body.get("boundary")
     if open_body is not None:
         pol = members.get("policy.yaml")
         if pol is None or \
