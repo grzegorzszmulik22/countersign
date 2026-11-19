@@ -1,6 +1,7 @@
 # Change request 003 — MM1.3: host latency floor vs the load-qualification gate
 
-**Status:** RAISED 2026-11-19 by lane `evidence-py`.
+**Status:** ACCEPTED 2026-11-19 by the human ("Calibrate vs disk"), alternative 1. Applied to `milestones/M1-evidence-core.md` (MM1.3, C1.6.3) and `FROZEN.sha256` by the supervisor; see **Decision** at the end.
+**Raised:** 2026-11-19 by lane `evidence-py`.
 **Raised with:** six check-M1.6/verify measurement runs plus direct idle
 probes (`evidence/M1.6/20261118T200837Z/`, `20261118T212209Z/`,
 `20261118T221551Z/`, `20261118T224459Z/`, `20261118T230103Z/`,
@@ -88,3 +89,26 @@ Either:
 None on the format, the evidence chain, verifier semantics, or the
 mutation suite; only MM1.3's unreachable-on-this-host bound is at
 issue. MM1.1/MM1.2 remain enforced per CR-002.
+
+## Decision (2026-11-19)
+
+Accepted as alternative 1, calibrated against the disk in the same run.
+The supervisor confirmed the floor independently on 2026-11-19: a bare
+300-byte `O_APPEND` write + `fsync` loop (400 samples, 5 ms apart) gave
+p99 9.17 ms on agent-vpc at load 2.9, against 0.70 ms on the
+supervisor's PC. The bound is a property of the storage, not of the code.
+
+MM1.3 is restated as:
+
+- **Calibration.** In the same run as the measurement and on the same file
+  system as the ledger under test, measure the disk's own fsync p99: at
+  least 400 single writes of a 300-byte record to an `O_APPEND` file,
+  each followed by `fsync`, paced ≥ 5 ms apart. Record every sample.
+- **Target.** Append p99 at 1,000 appends/s ≤ calibrated fsync p99 + 5 ms.
+  The absolute p99 is recorded next to it, and the absolute 5 ms figure
+  is shown at G1 on a host with a fast local disk.
+- **Load gate.** Unchanged from CR-002: only runs whose 1-minute load stayed
+  ≤ core count are judged; `not judged: host contended` if none qualifies.
+- The calibration runs inside the measurement harness and must not be
+  supplied, cached or estimated from an earlier run; a missing calibration
+  fails C1.6.3.

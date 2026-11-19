@@ -17,7 +17,7 @@
 |---|---|---|
 | MM1.1 | Go verification throughput, signatures included, per CPU-second of one core | ≥ 50% of the same core’s raw Ed25519 verification rate, calibrated in the same run (CR-002) |
 | MM1.2 | Durable append throughput, single writer, group commit, per CPU-second of the writer | ≥ 5,000 records per CPU-second, and ≤ 1 fsync per 10 records (CR-002) |
-| MM1.3 | Append latency at 1,000 appends/s, on runs with 1-minute load ≤ core count | p99 ≤ 5 ms; `not judged: host contended` if no run qualifies, open for G1 (CR-002) |
+| MM1.3 | Append latency at 1,000 appends/s, on runs with 1-minute load ≤ core count | p99 ≤ the same disk’s fsync p99 + 5 ms, calibrated in the same run, absolute p99 recorded; `not judged: host contended` if no run qualifies, open for G1 (CR-002, CR-003) |
 | MM1.4 | Mutants detected / generated; verifier agreement | 100% / ≥ 1,000; 100% |
 | MM1.5 | Median stored size per record | reported (no target) |
 
@@ -108,7 +108,7 @@
 **Checks.**
 - C1.6.1 200 generated valid bundles: both verifiers return a `CLEAN`-class verdict.
 - C1.6.2 ≥ 1,000 mutants, at least 100 per class, fixed seed: both verifiers reject each one; error class identical between the two; class 5 never yields `CLEAN*`.
-- C1.6.3 Measurements MM1.1–MM1.5 recorded per `06` §12 and meeting targets as restated by CR-002 (the Ed25519 calibration and the per-second load samples recorded with them; MM1.3 may be `not judged: host contended`, never dropped).
+- C1.6.3 Measurements MM1.1–MM1.5 recorded per `06` §12 and meeting targets as restated by CR-002 and CR-003 (the Ed25519 calibration, the fsync calibration and the per-second load samples recorded with them; MM1.3 may be `not judged: host contended`, never dropped).
 
 **Sabotage.** `mutator-noop-class-5` (the mutator silently produces unmodified bundles for one class; the suite must notice that mutants equal their originals and fail).
 
