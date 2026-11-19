@@ -67,7 +67,18 @@ done
 
 tmpd=$(mktemp -d)
 declare -A pids=()
+# CS_REGRESS_JOBS caps the parallel fan-out for hosts that cannot take
+# all suites at once (the 2-core/11GB oci-free-a1 OOMs and times checks
+# out under the full fan-out). Unset/empty keeps every suite parallel —
+# the historical behavior everywhere else.
+max_jobs=${CS_REGRESS_JOBS:-0}
 for c in ${par[@]+"${par[@]}"}; do
+    if [ "$max_jobs" -gt 0 ]; then
+        # Throttle without reaping: `wait -n` would consume the finished
+        # suite's status, so poll the live-job count instead. The real
+        # exit codes are collected per-suite below.
+        while [ "$(jobs -pr | wc -l)" -ge "$max_jobs" ]; do sleep 1; done
+    fi
     "${MAKE:-make}" "check-$c" >"$tmpd/$c.log" 2>&1 &
     pids[$c]=$!
 done
