@@ -308,6 +308,9 @@ func TestParserMutationFuzz(t *testing.T) {
 				if !ok {
 					t.Fatal("no parser")
 				}
+				// JSON string decoding maps invalid UTF-8 to U+FFFD, so a
+				// mutated-ID byte can legitimately surface sanitized.
+				norm := strings.ToValidUTF8(string(wire), "�")
 				pos := 0
 				for pos < len(wire) {
 					m := 1 + rng.Intn(512)
@@ -317,7 +320,12 @@ func TestParserMutationFuzz(t *testing.T) {
 					cs, err := p.Feed(wire[pos : pos+m])
 					pos += m
 					for _, c := range cs {
-						if c.Intent != nil && !strings.Contains(string(wire), c.Intent.ID) {
+						// The ID surfaces as a JSON string in the wire;
+						// check its re-encoded form (covers \" escapes
+						// and the U+FFFD sanitization above).
+						jid, _ := json.Marshal(c.Intent.ID)
+						inner := strings.Trim(string(jid), `"`)
+						if c.Intent != nil && !strings.Contains(norm, inner) {
 							t.Fatalf("%s mutation %d: fabricated intent id %q",
 								v.name, i, c.Intent.ID)
 						}
