@@ -296,15 +296,20 @@ def t_mm13_calib_same_filesystem():
 
 
 def t_mm13_bound_uses_calibration():
-    """CR-003: the judged bound must BE the calibration — target equals
-    the samples-derived fsync p99 + 5 ms and pass follows it. A fixed
-    5 ms bound or a pass computed any other way fails."""
+    """CR-003: the judged bound must BE the calibration — every run has
+    its own co-timed record, target is the median qualified calib p99 +
+    5 ms, and pass follows it. A fixed bound, wrong pass, missing
+    records or doctored qualified flags all fail."""
     with tempfile.TemporaryDirectory() as d:
         ctx = {"ledger_dir": d}
         calib = _calib(d)          # p99 8.0 -> bound 13.0
-        base = {"runs": 5, "samples": [12.0] * 5, "judgment": "judged",
-                "calibration": calib, "median": 12.0, "pass": True,
-                "target": 13.0, "absolute_p99_ms": 12.0}
+        run = {"p99_ms": 12.0, "load1_samples": [1.0, 2.0],
+               "qualified": True, "calib_p99_ms": 8.0}
+        base = {"runs": 5, "samples": [12.0] * 5, "cores": 4,
+                "judgment": "judged", "calibration": [calib] * 5,
+                "all_samples": [dict(run) for _ in range(5)],
+                "median": 12.0, "pass": True, "target": 13.0,
+                "absolute_p99_ms": 12.0}
         fixed = {**base, "target": 5.0}
         if not ME.mm13_res_ok(fixed, ctx):
             return False, "fixed 5 ms bound accepted as calibrated"
@@ -319,16 +324,27 @@ def t_mm13_bound_uses_calibration():
         del no_cal["calibration"]
         if not ME.mm13_res_ok(no_cal, ctx):
             return False, "judged metric without calibration accepted"
+        short_cal = {**base, "calibration": [calib] * 4}
+        if not ME.mm13_res_ok(short_cal, ctx):
+            return False, "4 calibrations for 5 runs accepted"
         over = {**base, "median": 14.0, "pass": False,
                 "absolute_p99_ms": 14.0}  # 14 > 13 must fail
         if ME.mm13_res_ok(over, ctx):
             return False, "median over the calibrated bound passed"
-        nj = dict(base, judgment="not judged: host contended")
+        # A run doctored qualified but whose own load samples exceed
+        # cores must not count toward the bound.
+        doctored = [dict(run) for _ in range(4)]
+        doctored.append({**run, "load1_samples": [9.0, 9.0]})
+        lie = {**base, "all_samples": doctored}
+        if not ME.mm13_res_ok(lie, ctx):
+            return False, "qualified flag contradicting load accepted"
+        nj = {**base, "judgment": "not judged: host contended"}
         if ME.mm13_res_ok(nj, ctx):
             return False, "honest not-judged metric flagged"
         if ME.mm13_res_ok(base, ctx):
             return False, "honest judged metric flagged"
-        return True, "fixed bounds, wrong pass and missing records rejected"
+        return True, "fixed bounds, wrong pass, missing/doctored " \
+                     "records rejected"
 
 
 CASES = [

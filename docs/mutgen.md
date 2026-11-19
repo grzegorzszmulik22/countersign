@@ -56,17 +56,22 @@ running every mutant through **both** verifiers (`csverify` and
   Runs without samples are a harness integrity failure
   (`load-samples-missing` sabotage). The bound is host-referenced
   (CR-003): append p99 ≤ the same disk's fsync p99 + 5 ms, where the
-  fsync p99 is measured in the same run on the same file system as the
-  ledger under test — `csbench fscal` writes ≥ 400 single 300-byte
-  records to an `O_APPEND` file, each followed by `fsync`, paced ≥ 5 ms
-  apart, and every sample is recorded. A missing, cached, supplied or
-  estimated calibration fails C1.6.3 — the harness checks the record's
-  source marker, sample count and pacing, that the command's observed
-  wall time and the file's mtime prove it ran in this run, and that the
-  file's device matches the ledger directory's (`calib-accepts-supplied`,
+  fsync p99 is measured co-timed with each latency run on the same file
+  system as the ledger under test — a `csbench fscal` loop keeps writing
+  400-sample batches of single 300-byte records to an `O_APPEND` file,
+  each followed by `fsync`, paced ≥ 5 ms apart, for the run's whole
+  duration, and every sample is recorded. A snapshot cannot stand in:
+  disk conditions drift across the run window, so each run is judged
+  against the calibration measured while it ran. A missing, cached,
+  supplied or estimated calibration fails C1.6.3 — the harness checks
+  the record's source marker, sample count and pacing, that the wall
+  time and file mtime prove it ran in this run, and that the file's
+  device matches the ledger directory's (`calib-accepts-supplied`,
   `calib-estimated-ok`, `calib-any-filesystem` sabotages). The judged
-  bound must be exactly that measured p99 + 5 ms — a fixed bound or a
-  pass computed any other way fails (`bound-not-calibrated` sabotage).
+  bound must be exactly the median qualified calibration p99 + 5 ms —
+  a fixed bound, a swapped-in calibration, or a qualified flag that
+  contradicts the run's own load samples all fail
+  (`bound-not-calibrated` sabotage).
 - Every metric must report ≥ 5 runs with each run's samples complete —
   dropped runs or samples fail the metric (`runs-not-counted` sabotage).
 
