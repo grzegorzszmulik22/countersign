@@ -29,10 +29,10 @@ const m8VectorRoot = "../../test/vectors/transcripts"
 
 // m8Expected is one response vector's ground truth (test/gen/transcripts.py).
 type m8Expected struct {
-	Provider   string `json:"provider"`
-	Format     string `json:"format"`
-	Model      string `json:"model"`
-	Intents    []struct {
+	Provider string `json:"provider"`
+	Format   string `json:"format"`
+	Model    string `json:"model"`
+	Intents  []struct {
 		ID          string `json:"intent_id"`
 		Tool        string `json:"tool"`
 		Executor    string `json:"executor"`
@@ -46,10 +46,10 @@ type m8Expected struct {
 
 // m8Scenario is one tracking corpus scenario.
 type m8Scenario struct {
-	Endpoint      string `json:"endpoint"`
-	Markers       []string `json:"markers"`
-	MaxOpen       *int `json:"max_intent_open_seconds"`
-	Steps         []struct {
+	Endpoint string   `json:"endpoint"`
+	Markers  []string `json:"markers"`
+	MaxOpen  *int     `json:"max_intent_open_seconds"`
+	Steps    []struct {
 		Name     string          `json:"name"`
 		Request  json.RawMessage `json:"request"`
 		Response struct {
@@ -76,8 +76,8 @@ type m8TrackExpected struct {
 		ContentLen    int    `json:"content_len"`
 	} `json:"results"`
 	Context []struct {
-		Step          int `json:"step"`
-		NewBlocks     []struct {
+		Step      int `json:"step"`
+		NewBlocks []struct {
 			Index    int    `json:"index"`
 			Role     string `json:"role"`
 			Kind     string `json:"kind"`

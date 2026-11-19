@@ -31,16 +31,16 @@ import (
 
 // IntentDeclaredBody is intent.declared for an inference source.
 type IntentDeclaredBody struct {
-	IntentID    string `json:"intent_id"`
-	Source      string `json:"source"`
-	Provider    string `json:"provider"`
-	Model       string `json:"model,omitempty"`
-	ViaEffect   string `json:"via_effect"`
-	Tool        string `json:"tool"`
-	Class       string `json:"class"`
-	Executor    string `json:"executor"`
-	InputSHA256 string `json:"input_sha256"`
-	InputLen    int    `json:"input_len"`
+	IntentID     string `json:"intent_id"`
+	Source       string `json:"source"`
+	Provider     string `json:"provider"`
+	Model        string `json:"model,omitempty"`
+	ViaEffect    string `json:"via_effect"`
+	Tool         string `json:"tool"`
+	Class        string `json:"class"`
+	Executor     string `json:"executor"`
+	InputSHA256  string `json:"input_sha256"`
+	InputLen     int    `json:"input_len"`
 	InputPreview string `json:"input_preview,omitempty"`
 	AnchorSHA256 string `json:"anchor_sha256,omitempty"`
 }

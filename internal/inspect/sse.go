@@ -13,14 +13,14 @@ package inspect
 // dispatched event is the absolute offset of the first byte of its first
 // line, so the broker can hold exactly "the bytes completing" a block.
 type sseSplitter struct {
-	abs      int64  // bytes consumed so far
-	lineOff  int64  // abs offset where the pending line began
-	evOff    int64  // abs offset where the pending event began (-1: none)
-	line     []byte // pending line bytes (not yet \n-terminated)
-	evt      string // pending event: last "event:" field seen
-	data     []byte // pending event: accumulated "data:" payloads
-	hasData  bool
-	inEvent  bool // a field/comment line for the current event was seen
+	abs     int64  // bytes consumed so far
+	lineOff int64  // abs offset where the pending line began
+	evOff   int64  // abs offset where the pending event began (-1: none)
+	line    []byte // pending line bytes (not yet \n-terminated)
+	evt     string // pending event: last "event:" field seen
+	data    []byte // pending event: accumulated "data:" payloads
+	hasData bool
+	inEvent bool // a field/comment line for the current event was seen
 }
 
 // sseEvent is one dispatched event. start is its absolute byte offset in

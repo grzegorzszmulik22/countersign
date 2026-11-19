@@ -97,30 +97,30 @@ func (sc *jsonScanner) feed(b []byte) error {
 		if sc.curElem != nil {
 			sc.curElem.buf = append(sc.curElem.buf, c)
 		}
-		switch {
-		case c == '"':
+		switch c {
+		case '"':
 			sc.inStr = true
 			sc.tokOn, sc.tokStr = true, true
 			sc.tokBuf = append(sc.tokBuf[:0], c)
 			sc.beginValue(abs)
-		case c == '{' || c == '[':
+		case '{', '[':
 			sc.beginContainer(c == '{', c, abs)
-		case c == '}' || c == ']':
+		case '}', ']':
 			sc.endLiteral(abs) // a close bracket ends a pending scalar
 			if !sc.closeContainer(c, abs) {
 				return sc.fail("mismatched close bracket")
 			}
-		case c == ',':
+		case ',':
 			sc.endLiteral(abs)
 			if f := sc.top(); f != nil && f.isObj {
 				f.wantKey = true
 			}
-		case c == ':':
+		case ':':
 			sc.endLiteral(abs)
 			if f := sc.top(); f != nil && f.isObj && !f.wantKey {
 				f.valKey = f.curKey
 			}
-		case c == ' ' || c == '\t' || c == '\n' || c == '\r':
+		case ' ', '\t', '\n', '\r':
 			sc.endLiteral(abs)
 		default:
 			if !sc.tokOn {

@@ -103,8 +103,8 @@ func blockOf(idx int, role, kind string, raw json.RawMessage, intentID string) (
 
 func parseAnthropicRequest(body []byte) (*RequestInfo, error) {
 	var req struct {
-		Model    string          `json:"model"`
-		System   json.RawMessage `json:"system"`
+		Model    string            `json:"model"`
+		System   json.RawMessage   `json:"system"`
 		Messages []json.RawMessage `json:"messages"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
@@ -290,10 +290,10 @@ func parseChatRequest(body []byte) (*RequestInfo, error) {
 	idx := 0
 	for _, mraw := range req.Messages {
 		var msg struct {
-			Role       string          `json:"role"`
-			Content    json.RawMessage `json:"content"`
+			Role       string            `json:"role"`
+			Content    json.RawMessage   `json:"content"`
 			ToolCalls  []json.RawMessage `json:"tool_calls"`
-			ToolCallID string          `json:"tool_call_id"`
+			ToolCallID string            `json:"tool_call_id"`
 		}
 		if err := json.Unmarshal(mraw, &msg); err != nil {
 			return nil, fmt.Errorf("message: %v", err)

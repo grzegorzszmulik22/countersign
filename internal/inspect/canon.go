@@ -16,6 +16,4 @@ func decodeCanon(raw []byte) (any, error) { return reconcile.DecodeJSON(raw) }
 
 func canonSHA256(v any) (string, error) { return reconcile.CanonSHA256(v) }
 
-func canonString(v any) (string, error) { return reconcile.CanonString(v) }
-
 func jsonUnmarshal(b []byte, v any) error { return json.Unmarshal(b, v) }
