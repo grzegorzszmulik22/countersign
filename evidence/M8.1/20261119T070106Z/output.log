@@ -48,3 +48,20 @@ CHECK C8.1.4 PASS
 PASS
 ok  	github.com/countersign/countersign/internal/proxy	0.161s
 CHECK C8.1.5 PASS
+fuzz: elapsed: 9m30s, execs: 775258 (0/sec), new interesting: 54 (total: 198)
+fuzz: elapsed: 9m33s, execs: 780844 (1862/sec), new interesting: 56 (total: 200)
+fuzz: elapsed: 9m36s, execs: 783303 (818/sec), new interesting: 56 (total: 200)
+fuzz: elapsed: 9m39s, execs: 783303 (0/sec), new interesting: 56 (total: 200)
+fuzz: elapsed: 9m42s, execs: 783303 (0/sec), new interesting: 56 (total: 200)
+fuzz: elapsed: 9m45s, execs: 783303 (0/sec), new interesting: 56 (total: 200)
+fuzz: elapsed: 9m48s, execs: 783303 (0/sec), new interesting: 56 (total: 200)
+fuzz: elapsed: 9m51s, execs: 783303 (0/sec), new interesting: 56 (total: 200)
+fuzz: elapsed: 9m54s, execs: 783303 (0/sec), new interesting: 56 (total: 200)
+fuzz: elapsed: 9m57s, execs: 783303 (0/sec), new interesting: 56 (total: 200)
+fuzz: elapsed: 10m0s, execs: 783303 (0/sec), new interesting: 56 (total: 200)
+fuzz: elapsed: 10m1s, execs: 783303 (0/sec), new interesting: 56 (total: 200)
+PASS
+ok  	github.com/countersign/countersign/internal/inspect	602.568s
+ok  	github.com/countersign/countersign/internal/inspect	2.191s
+CHECK C8.1.6 PASS
+M8.1 suite: all checks passed
