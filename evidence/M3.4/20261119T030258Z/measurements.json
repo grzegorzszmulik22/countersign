@@ -1,0 +1,14 @@
+{
+  "chunk": "M3.4",
+  "check": "C3.4.6",
+  "metric": "response-scrub throughput penalty on 100 MiB credentialed download",
+  "unit": "percent",
+  "target": 25,
+  "runs": 1,
+  "samples": [
+    -1.06
+  ],
+  "median": -1.06,
+  "met": true,
+  "machine": "see sysinfo.txt in this evidence folder"
+}

@@ -1,0 +1,12 @@
+CHECK snap.capture PASS
+CHECK snap.fidelity PASS
+CHECK C0.4.1 SKIPPED-ENV — no working docker on this host
+CHECK C0.4.2 SKIPPED-ENV — no working docker on this host
+CHECK C0.4.3 SKIPPED-ENV — no working docker on this host
+CHECK C0.4.4 SKIPPED-ENV — no working docker on this host
+CHECK C0.4.image SKIPPED-ENV — no working docker on this host
+CHECK snap.uncommitted SKIPPED-ENV — no working docker on this host
+CHECK snap.untracked SKIPPED-ENV — no working docker on this host
+CHECK snap.post-snapshot SKIPPED-ENV — no working docker on this host
+CHECK snap.concurrent SKIPPED-ENV — no working docker on this host
+CHECK tree.restored PASS
