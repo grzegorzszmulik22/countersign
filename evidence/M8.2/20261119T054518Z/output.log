@@ -1,0 +1,29 @@
+--- C8.2.1: go test ./internal/inspect/ -count=1 -run ^TestVectorsChunkIndependent$ -v
+=== RUN   TestVectorsChunkIndependent
+--- PASS: TestVectorsChunkIndependent (181.10s)
+PASS
+ok  	github.com/countersign/countersign/internal/inspect	181.359s
+CHECK C8.2.1 PASS
+--- C8.2.2: go test ./internal/inspect/ -count=1 -run ^TestVectorsChunkIndependent$ -v
+=== RUN   TestVectorsChunkIndependent
+--- PASS: TestVectorsChunkIndependent (131.67s)
+PASS
+ok  	github.com/countersign/countersign/internal/inspect	131.710s
+CHECK C8.2.2 PASS
+fuzz: elapsed: 9m30s, execs: 312972 (1417/sec), new interesting: 38 (total: 87)
+fuzz: elapsed: 9m33s, execs: 312972 (0/sec), new interesting: 38 (total: 87)
+fuzz: elapsed: 9m36s, execs: 312972 (0/sec), new interesting: 38 (total: 87)
+fuzz: elapsed: 9m39s, execs: 312972 (0/sec), new interesting: 38 (total: 87)
+fuzz: elapsed: 9m42s, execs: 312972 (0/sec), new interesting: 38 (total: 87)
+fuzz: elapsed: 9m45s, execs: 312972 (0/sec), new interesting: 38 (total: 87)
+fuzz: elapsed: 9m48s, execs: 312972 (0/sec), new interesting: 38 (total: 87)
+fuzz: elapsed: 9m51s, execs: 312972 (0/sec), new interesting: 38 (total: 87)
+fuzz: elapsed: 9m54s, execs: 312972 (0/sec), new interesting: 38 (total: 87)
+fuzz: elapsed: 9m57s, execs: 324961 (4012/sec), new interesting: 39 (total: 88)
+fuzz: elapsed: 10m0s, execs: 327814 (948/sec), new interesting: 41 (total: 90)
+fuzz: elapsed: 10m3s, execs: 369152 (13831/sec), new interesting: 42 (total: 91)
+fuzz: elapsed: 10m4s, execs: 369152 (0/sec), new interesting: 42 (total: 91)
+PASS
+ok  	github.com/countersign/countersign/internal/inspect	611.169s
+CHECK C8.2.3 PASS
+M8.2 suite: all checks passed
