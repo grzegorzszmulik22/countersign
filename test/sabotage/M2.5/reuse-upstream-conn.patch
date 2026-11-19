@@ -1,0 +1,12 @@
+diff --git a/internal/proxy/forward.go b/internal/proxy/forward.go
+--- a/internal/proxy/forward.go
++++ b/internal/proxy/forward.go
+@@ -68,7 +68,7 @@
+ 		// its h2 layer retries REFUSED streams: a second attempt the
+ 		// effect records never covered. One fresh conn per attempt makes
+ 		// retry unreachable and every dial accountable to its effect.
+-		DisableKeepAlives: true,
++		DisableKeepAlives: false,
+ 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+ 			c, info, err := s.dialResolved(ctx, network, addr)
+ 			if err != nil {

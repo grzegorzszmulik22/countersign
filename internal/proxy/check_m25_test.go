@@ -457,6 +457,82 @@ func TestC253UpstreamAddrCheck(t *testing.T) {
 		}
 	})
 
+	// No upstream reuse: every request dials a fresh conn, so a reused-conn
+	// retry path (h1 nothing-written, h2 REFUSED stream) cannot exist —
+	// one request is exactly one dial, one accept, one attempt (B2-01).
+	t.Run("no-reuse", func(t *testing.T) {
+		dir := t.TempDir()
+		pol := writePolicy(t, dir, "p", m25Grants)
+		var accepts atomic.Int64
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		go func() {
+			for {
+				c, err := ln.Accept()
+				if err != nil {
+					return
+				}
+				accepts.Add(1)
+				go func(c net.Conn) {
+					// Keep-alive: the conn stays open so a pooling transport
+					// could reuse it — the broker must never do so (B2-01).
+					defer func() { _ = c.Close() }()
+					br := bufio.NewReader(c)
+					for {
+						for {
+							l, err := br.ReadString('\n')
+							if err != nil || l == "\r\n" {
+								if err != nil {
+									return
+								}
+								break
+							}
+						}
+						if _, err := c.Write([]byte("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")); err != nil {
+							return
+						}
+					}
+				}(c)
+			}
+		}()
+		defer func() { _ = ln.Close() }()
+		upAddr := ln.Addr().String()
+		fakeIP := netip.MustParseAddr("198.51.100.90")
+		var dialCalls atomic.Int64
+		e := newTestEnvMut(t, dir,
+			[]SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)},
+			nil, nil, nil, func(c *Config) {
+				c.Resolve = func(ctx context.Context, host string) ([]netip.Addr, error) {
+					return []netip.Addr{fakeIP}, nil
+				}
+				c.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+					dialCalls.Add(1)
+					var d net.Dialer
+					return d.DialContext(ctx, network, upAddr)
+				}
+			})
+		cli := e.proxyClient(t, "tok-one", nil)
+		const reqs = 3
+		for i := 0; i < reqs; i++ {
+			res, err := cli.Get("http://up.test/x")
+			if err != nil {
+				t.Fatalf("request %d: %v", i, err)
+			}
+			_ = res.Body.Close()
+			if res.StatusCode != 200 {
+				t.Fatalf("request %d: status %d", i, res.StatusCode)
+			}
+		}
+		if got := dialCalls.Load(); got != reqs {
+			t.Fatalf("dials %d for %d requests — a reused conn served a request", got, reqs)
+		}
+		if got := accepts.Load(); got != reqs {
+			t.Fatalf("upstream accepts %d for %d requests", got, reqs)
+		}
+	})
+
 	// network:cluster admits private ranges a default grant blocks.
 	t.Run("cluster-allowed", func(t *testing.T) {
 		dir := t.TempDir()

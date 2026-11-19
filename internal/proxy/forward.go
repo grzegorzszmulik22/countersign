@@ -63,6 +63,12 @@ func (s *Server) upstreamTransport() *http.Transport {
 		// decoded inside the scrubber (04 §4.5), and plain ones cross
 		// byte-exact (M2.3).
 		DisableCompression: true,
+		// B2-01: no upstream retries — http.Transport retries an
+		// idempotent request whose write failed on a *reused* conn, and
+		// its h2 layer retries REFUSED streams: a second attempt the
+		// effect records never covered. One fresh conn per attempt makes
+		// retry unreachable and every dial accountable to its effect.
+		DisableKeepAlives: true,
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			c, info, err := s.dialResolved(ctx, network, addr)
 			if err != nil {
