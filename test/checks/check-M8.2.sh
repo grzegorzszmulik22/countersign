@@ -51,7 +51,7 @@ run C8.2.2 ./internal/inspect/ -count=1 \
 # corpus, and the 10-minute native fuzz over all endpoint parsers.
 out=$(mktemp)
 if "$GO" test "$TIMEOUT" -tags fixtures ./internal/proxy/ -count=1 \
-    -run '^(TestM8E2E_ResponseVectors|TestM8E2E_WriteAheadOrdering)$' >"$out" 2>&1 \
+    -run '^(TestM8E2E_ResponseVectors|TestM8E2E_WriteAheadOrdering|TestM8E2E_WriteAheadBoundary|TestM8E2E_WriteAheadBoundaryEOF|TestM8E2E_WriteAheadJSON|TestM8E2E_LedgerFailClosed)$' >"$out" 2>&1 \
     && "$GO" test "$TIMEOUT" ./internal/inspect/ -count=1 -run '^TestParseMalformed$' >>"$out" 2>&1 \
     && "$GO" test "$TIMEOUT" ./internal/inspect/ -count=1 -run '^$' \
     -fuzz '^FuzzResponseParser$' -fuzztime=600s >>"$out" 2>&1; then

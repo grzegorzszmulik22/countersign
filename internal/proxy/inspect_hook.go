@@ -217,18 +217,21 @@ func (s *Server) inspectRequest(sess *Session, st *inspectState, ep inspect.Endp
 	for _, d := range st.tracker.Timeouts() {
 		body := IntentResultBody{IntentID: d.ID, ViaEffect: effectID, ClosedBy: "timeout"}
 		if err := s.appendRecord(sess, "intent.result", body); err != nil {
+			// The record never landed: the window is still open.
+			st.tracker.Reopen(d.ID)
 			return err
 		}
 	}
 
 	info, err := inspect.ParseRequest(ep, body)
 	if err != nil {
-		// Fail-safe for the request side: record and forward.
-		_ = s.appendRecord(sess, "intent.unparsed", IntentUnparsedBody{
+		// Fail-safe for the request side (04 §5.4): forward — but only
+		// once the unparsed record is durable. A failed append fails
+		// closed rather than letting an unrecorded request cross.
+		return s.appendRecord(sess, "intent.unparsed", IntentUnparsedBody{
 			ViaEffect: effectID, Provider: ep.Provider(),
 			Detail: "request: " + err.Error(),
 		})
-		return nil
 	}
 
 	for _, tr := range info.Results {
@@ -248,6 +251,9 @@ func (s *Server) inspectRequest(sess *Session, st *inspectState, ep inspect.Endp
 			rb.IsError = &ie
 		}
 		if err := s.appendRecord(sess, "intent.result", rb); err != nil {
+			// The result never crossed (the request fails closed): the
+			// window stays open so a retry can still close it.
+			st.tracker.Reopen(tr.IntentID)
 			return err
 		}
 	}
@@ -260,10 +266,15 @@ func (s *Server) inspectRequest(sess *Session, st *inspectState, ep inspect.Endp
 			SHA256: b.SHA256, Len: b.Len, IntentID: b.IntentID,
 		}
 	}
-	return s.appendRecord(sess, "context.observed", ContextObservedBody{
+	if err := s.appendRecord(sess, "context.observed", ContextObservedBody{
 		ViaEffect: effectID, Provider: ep.Provider(), Model: info.Model,
 		BlockCount: count, ContextSHA256: sha, NewBlocks: nb,
-	})
+	}); err != nil {
+		// No record, no observation: refold these blocks on the retry.
+		st.tracker.Unobserve(fresh)
+		return err
+	}
+	return nil
 }
 
 // ------------------------------------------------------------------
@@ -292,7 +303,13 @@ func (s *Server) declaredIntent(sess *Session, st *inspectState, ep inspect.Endp
 			body.AnchorSHA256 = a
 		}
 	}
-	return s.appendRecord(sess, "intent.declared", body)
+	if err := s.appendRecord(sess, "intent.declared", body); err != nil {
+		// The completing bytes never cross: the declaration did not
+		// happen as far as tracker and client are concerned.
+		st.tracker.Undeclare(it.ID)
+		return err
+	}
+	return nil
 }
 
 // anchorSHA is the lineage anchor of an exec-class intent (04 §10): the
@@ -314,18 +331,19 @@ func anchorSHA(it *inspect.Intent, field string) string {
 // Bytes pass through untouched; when the parser completes a tool-use
 // block, the bytes at the block's hold point are released only after the
 // intent's append returns — the write-ahead property of 03 §4.5. A parse
-// fault switches to raw pass-through after one intent.unparsed record.
+// fault switches to raw pass-through after one intent.unparsed record;
+// when that record cannot be written the stream aborts instead, since
+// fail-safe without the record is fail-open.
 type inspectPipe struct {
 	src io.Reader
 	p   inspect.ResponseParser
 
 	out    []byte // releasable bytes awaiting the client
 	fed    []byte // fed bytes not yet released
-	fedAbs int64  // abs offset just past fed
 	relAbs int64  // abs offset of fed[0]
 
 	declare  func(*inspect.Intent) error
-	unparsed func(detail string)
+	unparsed func(detail string) error
 
 	dead     bool // parser faulted: pass through raw
 	finished bool // src drained + parser closed
@@ -334,7 +352,7 @@ type inspectPipe struct {
 }
 
 func newInspectPipe(src io.Reader, p inspect.ResponseParser,
-	declare func(*inspect.Intent) error, unparsed func(string)) *inspectPipe {
+	declare func(*inspect.Intent) error, unparsed func(string) error) *inspectPipe {
 	return &inspectPipe{
 		src: src, p: p,
 		out: make([]byte, 0, 64*1024), fed: make([]byte, 0, 64*1024),
@@ -383,7 +401,6 @@ func (r *inspectPipe) feed(chunk []byte) {
 	}
 	comps, err := r.p.Feed(chunk)
 	r.fed = append(r.fed, chunk...)
-	r.fedAbs += int64(len(chunk))
 	for _, c := range comps {
 		rel := int(c.HoldAt - r.relAbs)
 		if rel < 0 {
@@ -402,18 +419,44 @@ func (r *inspectPipe) feed(chunk []byte) {
 			return
 		}
 	}
-	// Everything fed is releasable once the appends above returned.
-	r.out = append(r.out, r.fed...)
-	r.relAbs += int64(len(r.fed))
-	r.fed = r.fed[:0]
 	if err != nil {
 		if detail, ok := inspect.ParseError(err); ok {
 			r.dead = true
-			r.unparsed(detail)
+			if uerr := r.unparsed(detail); uerr != nil {
+				// Fail closed: pass-through without the durable
+				// intent.unparsed record is not permitted.
+				r.err = uerr
+				r.out = r.out[:0]
+				return
+			}
 		} else {
+			// Not a recorded parse fault: release the buffered bytes
+			// and surface the error.
+			r.out = append(r.out, r.fed...)
+			r.relAbs += int64(len(r.fed))
+			r.fed = r.fed[:0]
 			r.err = err
+			return
 		}
 	}
+	// Once the appends above returned, everything fed is releasable
+	// except bytes that could still belong to a pending completion —
+	// the parser's watermark holds an in-flight completing event whole.
+	var rel int64
+	if r.dead {
+		rel = int64(len(r.fed)) // raw pass-through after the fault
+	} else {
+		rel = r.p.Pending() - r.relAbs
+	}
+	if rel < 0 {
+		rel = 0
+	}
+	if rel > int64(len(r.fed)) {
+		rel = int64(len(r.fed))
+	}
+	r.out = append(r.out, r.fed[:rel]...)
+	r.fed = r.fed[int(rel):]
+	r.relAbs += rel
 }
 
 // finish drains the parser at upstream end (clean or cut alike) and
@@ -423,13 +466,24 @@ func (r *inspectPipe) finish(cause string) {
 		return
 	}
 	r.finished = true
+	if r.err != nil {
+		// The last fed bytes may have failed closed (declare or
+		// unparsed append): the held bytes are never released.
+		return
+	}
 	if !r.dead {
 		detail, clean := r.p.Finish()
 		if !clean {
 			if cause != "" {
 				detail = detail + " (" + cause + ")"
 			}
-			r.unparsed(detail)
+			if uerr := r.unparsed(detail); uerr != nil {
+				// Fail closed: the buffered bytes never leave when the
+				// unparsed record cannot be made durable.
+				r.err = uerr
+				r.out = r.out[:0]
+				return
+			}
 		}
 	}
 	r.out = append(r.out, r.fed...)

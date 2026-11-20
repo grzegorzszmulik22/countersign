@@ -131,6 +131,34 @@ func (t *Tracker) Declared(intentID string) *Declared {
 	return t.declared[intentID]
 }
 
+// Undeclare forgets a declaration whose record failed to land: the
+// completing bytes were never released, so the intent did not happen and
+// a redelivery must declare it again.
+func (t *Tracker) Undeclare(intentID string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if _, ok := t.declared[intentID]; !ok {
+		return
+	}
+	delete(t.declared, intentID)
+	for i, d := range t.order {
+		if d.ID == intentID {
+			t.order = append(t.order[:i], t.order[i+1:]...)
+			break
+		}
+	}
+}
+
+// Reopen restores an open window after the closing record's append
+// failed: nothing crossed, so the intent stays open.
+func (t *Tracker) Reopen(intentID string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if d, ok := t.declared[intentID]; ok {
+		d.Open = true
+	}
+}
+
 // Observe folds one request's context blocks into the session's
 // first-seen set and returns the blocks not seen before (in request
 // order), the running block count and the running context digest:
@@ -148,6 +176,21 @@ func (t *Tracker) Observe(blocks []RequestBlock) (fresh []RequestBlock, count in
 		fresh = append(fresh, b)
 	}
 	return fresh, len(t.ctxOrder), t.contextSHA()
+}
+
+// Unobserve rolls back the fresh blocks of an Observe whose record's
+// append failed — they were never observed upstream, so the next
+// request reports them as new again. fresh must be the Observe result.
+func (t *Tracker) Unobserve(fresh []RequestBlock) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if len(fresh) > len(t.ctxOrder) {
+		return // inconsistent: leave state rather than corrupt it
+	}
+	for _, b := range fresh {
+		delete(t.ctxSeen, b.digest)
+	}
+	t.ctxOrder = t.ctxOrder[:len(t.ctxOrder)-len(fresh)]
 }
 
 // contextSHA is the running context digest: SHA-256 of the canonical

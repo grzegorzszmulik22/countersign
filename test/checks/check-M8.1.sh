@@ -43,8 +43,12 @@ run() { # run <check-id> <go test args...>
 # the independently computed ground truth (IDs, tools, digests, order).
 run C8.1.1 ./internal/inspect/ -count=1 -run '^TestVectorsChunkIndependent$' -v
 
-# C8.1.2: write-ahead ordering through a live broker.
-run C8.1.2 -tags fixtures ./internal/proxy/ -count=1 -run '^TestM8E2E_WriteAheadOrdering$' -v
+# C8.1.2: write-ahead ordering through a live broker — the completing
+# byte of every response shape waits on the durable append (pipe-level
+# boundary, JSON e2e, 10k-block SSE ordering), and every ledger failure
+# fails closed.
+run C8.1.2 -tags fixtures ./internal/proxy/ -count=1 \
+    -run '^(TestM8E2E_WriteAheadOrdering|TestM8E2E_WriteAheadBoundary|TestM8E2E_WriteAheadBoundaryEOF|TestM8E2E_WriteAheadJSON|TestM8E2E_LedgerFailClosed)$' -v
 
 # C8.1.3: byte equality (MM8.2) on every vector through the broker,
 # the paced-stream added-delay bound (MM8.3), and the declared-record

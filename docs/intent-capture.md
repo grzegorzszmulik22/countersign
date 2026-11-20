@@ -30,12 +30,20 @@ provider ── response ──► inspectPipe ──► client
   independent of upstream read chunking (MM8.1 holds over 1,000 random
   chunkings per vector).
 - A `Completion` reports `HoldAt`, the absolute stream offset of the
-  byte completing the tool-use block. `inspectPipe` releases everything
-  before it, runs the `intent.declared` append, then releases the rest
-  (MM8.3: p99 added delay ≤ 2 ms, ≤ 6 ms at the hold point).
+  byte completing the tool-use block. Because an SSE event can be split
+  across network reads, `inspectPipe` also asks the parser for
+  `Pending` — the absolute offset from which held bytes could still
+  complete a tool use: for SSE the start of the in-flight event (the
+  whole event is held until it closes), for JSON the fed length. Bytes
+  below `Pending` release immediately; when a `Completion` fires the
+  `intent.declared` append runs and the held remainder releases only
+  after it is durable. A failed append aborts the stream — the held
+  bytes never reach the client (MM8.3: p99 added delay ≤ 2 ms, ≤ 6 ms
+  at the hold point).
 - A parse fault stops inspection for that stream: bytes pass through
   untouched, one `intent.unparsed` is written, no intent is fabricated
-  (spec/02 §6, MM8.4).
+  (spec/02 §6, MM8.4). If that append fails the stream aborts too —
+  unrecorded bytes are never passed through.
 
 ## Request side (M8.3)
 
@@ -47,10 +55,13 @@ still applies):
   sandbox intent closes its window (`closed_by: tool_result`).
   Unknown IDs are logged and ignored; a resent result does not close
   twice. Timeouts sweep on each inspected request and `seal` closes the
-  remainder at broker shutdown.
+  remainder at broker shutdown. A failed append re-opens the window and
+  the request is denied `LEDGER_UNAVAILABLE` — nothing is forwarded
+  without the record.
 - `context.observed` — one per request: `new_blocks` (each block's
   digest appears at most once per session), `block_count`, and
-  `context_sha256`, the running context digest:
+  `context_sha256`, the running context digest. A failed append folds
+  the blocks back as unseen and the request is denied:
 
 ```
 context_sha256 = SHA-256( canonical-json( [digest1, digest2, …] ) )
@@ -61,6 +72,9 @@ context_sha256 = SHA-256( canonical-json( [digest1, digest2, …] ) )
   recomputes independently.
 - Result content is digested and measured only; the text is never
   read into any record (denied item).
+- A malformed request body records one `intent.unparsed` and the
+  request forwards uninspected; a failed append denies the request —
+  unrecorded traffic is never forwarded.
 
 `bufferLimit` for inference grants defaults to 32 MiB (spec/04 §1
 defaults); over-limit requests are denied `LIMIT_BODY` unless the grant

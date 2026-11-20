@@ -435,12 +435,10 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
 					func(it *inspect.Intent) error {
 						return s.declaredIntent(sess, st, ep, effectID, it)
 					},
-					func(detail string) {
-						if err := s.appendRecord(sess, "intent.unparsed", IntentUnparsedBody{
+					func(detail string) error {
+						return s.appendRecord(sess, "intent.unparsed", IntentUnparsedBody{
 							ViaEffect: effectID, Provider: ep.Provider(), Detail: detail,
-						}); err != nil {
-							s.Logf("intent.unparsed append failed: %v", err)
-						}
+						})
 					})
 			}
 		}

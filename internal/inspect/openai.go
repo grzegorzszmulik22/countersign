@@ -142,6 +142,15 @@ func newResponsesParser(sse bool) *respParser {
 
 func (p *respParser) Model() string { return p.model }
 
+// Pending implements ResponseParser: SSE holds at the in-flight event's
+// first byte; JSON releases everything fed.
+func (p *respParser) Pending() int64 {
+	if p.sse {
+		return p.ss.holdStart()
+	}
+	return p.js.abs
+}
+
 func (p *respParser) Feed(b []byte) ([]Completion, error) {
 	if p.dead {
 		return nil, nil
@@ -421,6 +430,15 @@ func newChatParser(sse bool) *chatParser {
 }
 
 func (p *chatParser) Model() string { return p.model }
+
+// Pending implements ResponseParser: SSE holds at the in-flight event's
+// first byte; JSON releases everything fed.
+func (p *chatParser) Pending() int64 {
+	if p.sse {
+		return p.ss.holdStart()
+	}
+	return p.js.abs
+}
 
 func (p *chatParser) Feed(b []byte) ([]Completion, error) {
 	if p.dead {

@@ -62,6 +62,39 @@ func TestParseAnthropicRequest(t *testing.T) {
 	}
 }
 
+// TestParsePartKind: an object part with a non-string `type` member is
+// malformed — the request parse must fail rather than silently degrade
+// to an unrecorded "part" kind. A bare non-object part (a string inside
+// a content array) stays a valid "part" block.
+func TestParsePartKind(t *testing.T) {
+	for _, tc := range []struct {
+		ep     Endpoint
+		bad    string
+		ok     string
+		okKind string
+	}{
+		{EndpointResponses,
+			`{"model":"m","input":[{"type":"message","role":"user","content":[{"type":42,"text":"x"}]}]}`,
+			`{"model":"m","input":[{"type":"message","role":"user","content":["just text",{"type":"input_text","text":"y"}]}]}`,
+			"input_text"},
+		{EndpointChat,
+			`{"model":"m","messages":[{"role":"user","content":[{"type":42,"text":"x"}]}]}`,
+			`{"model":"m","messages":[{"role":"user","content":["just text",{"type":"text","text":"y"}]}]}`,
+			"text"},
+	} {
+		if _, err := ParseRequest(tc.ep, []byte(tc.bad)); err == nil {
+			t.Fatalf("ep %d: non-string part type parsed cleanly", tc.ep)
+		}
+		info, err := ParseRequest(tc.ep, []byte(tc.ok))
+		if err != nil {
+			t.Fatalf("ep %d: %v", tc.ep, err)
+		}
+		if len(info.Blocks) != 2 || info.Blocks[0].Kind != "part" || info.Blocks[1].Kind != tc.okKind {
+			t.Fatalf("ep %d kinds: %+v", tc.ep, info.Blocks)
+		}
+	}
+}
+
 // TestParseResponsesRequest: function_call_output closes by call_id.
 func TestParseResponsesRequest(t *testing.T) {
 	body := []byte(`{

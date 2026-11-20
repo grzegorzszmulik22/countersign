@@ -1,0 +1,37 @@
+ok  	github.com/countersign/countersign/internal/inspect	0.019s
+ok  	github.com/countersign/countersign/internal/proxy	0.202s
+CHECK C8.5.1 PASS
+--- C8.5.2: go test -tags fixtures ./internal/proxy/ -count=1 -run ^TestM8E2E_Privacy$ -v
+=== RUN   TestM8E2E_Privacy
+    harness_test.go:126: broker: tunnel 01M7W9YSPM00XXPKTXN9NGR9SF inner serve: listener closed (conn err: read tcp 127.0.0.1:39821->127.0.0.1:49006: use of closed network connection)
+    harness_test.go:126: broker: tunnel 01M7W9YSNE00RBWR275KSEM2D6 inner serve: http: Server closed (conn err: read tcp 127.0.0.1:38985->127.0.0.1:58358: use of closed network connection)
+--- PASS: TestM8E2E_Privacy (0.09s)
+PASS
+ok  	github.com/countersign/countersign/internal/proxy	0.116s
+CHECK C8.5.2 PASS
+--- C8.5.3: go test ./internal/inspect/ -count=1 -run ^(TestPreviewCap|TestPreviewBoundaryInputs)$ -v
+=== RUN   TestPreviewCap
+--- PASS: TestPreviewCap (0.00s)
+=== RUN   TestPreviewBoundaryInputs
+--- PASS: TestPreviewBoundaryInputs (0.00s)
+PASS
+ok  	github.com/countersign/countersign/internal/inspect	0.022s
+CHECK C8.5.3 PASS
+--- C8.5.4: go test -tags fixtures ./internal/proxy/ -count=1 -run ^(TestM8E2E_Privacy|TestM8E2E_TrackingCorpus)$ -v
+    harness_test.go:126: broker: tunnel 01M7W9YZ9200H45QPCQEP0EWYJ inner serve: listener closed (conn err: read tcp 127.0.0.1:35109->127.0.0.1:33968: use of closed network connection)
+--- PASS: TestM8E2E_TrackingCorpus (4.11s)
+    --- PASS: TestM8E2E_TrackingCorpus/fifty-turn (1.62s)
+    --- PASS: TestM8E2E_TrackingCorpus/interleaved-conversations (0.07s)
+    --- PASS: TestM8E2E_TrackingCorpus/parallel-outoforder (0.05s)
+    --- PASS: TestM8E2E_TrackingCorpus/resend-result (0.04s)
+    --- PASS: TestM8E2E_TrackingCorpus/sequential (0.04s)
+    --- PASS: TestM8E2E_TrackingCorpus/timeout (2.25s)
+    --- PASS: TestM8E2E_TrackingCorpus/unknown-result (0.04s)
+=== RUN   TestM8E2E_Privacy
+    harness_test.go:126: broker: tunnel 01M7W9YZAX00ZF8HYQTQ9YDF2M inner serve: listener closed (conn err: read tcp 127.0.0.1:43179->127.0.0.1:42154: use of closed network connection)
+    harness_test.go:126: broker: tunnel 01M7W9YZA6002BXACTRK3RVFZZ inner serve: http: Server closed (conn err: read tcp 127.0.0.1:41047->127.0.0.1:35072: use of closed network connection)
+--- PASS: TestM8E2E_Privacy (0.06s)
+PASS
+ok  	github.com/countersign/countersign/internal/proxy	4.193s
+CHECK C8.5.4 PASS
+M8.5 suite: all checks passed

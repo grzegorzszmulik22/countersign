@@ -15,6 +15,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -26,6 +27,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/countersign/countersign/internal/creds"
+	"github.com/countersign/countersign/internal/inspect"
 )
 
 const m8VectorRoot = "../../test/vectors/transcripts"
@@ -1158,4 +1162,787 @@ func (h *m8Hub) Kick() {
 			close(ch)
 		}
 	}()
+}
+
+// ------------------------------------------------------------------
+// Supervisor review 20261120T075936: the write-ahead property holds at
+// the exact byte boundary for EVERY response shape, and every ledger
+// append failure fails closed.
+
+// m8HoldShapes lists the six response shapes (provider x wire format)
+// whose completing byte must wait on the intent.declared append.
+var m8HoldShapes = []struct {
+	dir, name, ctype, ep string
+}{
+	{"anthropic", "single-call-json", "application/json", "anthropic"},
+	{"anthropic", "multi-call-sse", "text/event-stream", "anthropic"},
+	{"openai", "resp-single-json", "application/json", "responses"},
+	{"openai", "resp-multi-sse", "text/event-stream", "responses"},
+	{"openai", "chat-multi-json", "application/json", "chat"},
+	{"openai", "chat-interleaved-sse", "text/event-stream", "chat"},
+}
+
+func m8Wire(t *testing.T, dir, name string) ([]byte, m8Expected) {
+	t.Helper()
+	for _, v := range m8Vectors(t, dir) {
+		if v.name == name {
+			return v.wire, v.exp
+		}
+	}
+	t.Fatalf("vector %s/%s missing", dir, name)
+	return nil, m8Expected{}
+}
+
+func m8Parser(t *testing.T, ep, ctype string) inspect.ResponseParser {
+	t.Helper()
+	p, ok := inspect.NewResponseParser(inspect.EndpointForPath(m8PathFor(ep)), ctype)
+	if !ok {
+		t.Fatalf("no parser for %s %s", ep, ctype)
+	}
+	return p
+}
+
+// m8HoldPoints returns the hold offsets a fresh parser reports for the
+// whole wire — where each intent's completing byte sits.
+func m8HoldPoints(t *testing.T, ep, ctype string, wire []byte) []int64 {
+	t.Helper()
+	p := m8Parser(t, ep, ctype)
+	comps, err := p.Feed(wire)
+	if err != nil {
+		t.Fatalf("%s %s feed: %v", ep, ctype, err)
+	}
+	if d, clean := p.Finish(); !clean {
+		t.Fatalf("%s %s: parser not clean at EOF: %s", ep, ctype, d)
+	}
+	var holds []int64
+	for _, c := range comps {
+		holds = append(holds, c.HoldAt)
+	}
+	return holds
+}
+
+// m8ChunkReader doles out at most n bytes per Read.
+type m8ChunkReader struct {
+	b      []byte
+	n, off int
+}
+
+func (c *m8ChunkReader) Read(p []byte) (int, error) {
+	if c.off >= len(c.b) {
+		return 0, io.EOF
+	}
+	m := len(p)
+	if m > c.n {
+		m = c.n
+	}
+	if m > len(c.b)-c.off {
+		m = len(c.b) - c.off
+	}
+	copy(p, c.b[c.off:c.off+m])
+	c.off += m
+	return m, nil
+}
+
+// m8EOFReader delivers the whole body in one Read returned together
+// with io.EOF — the case where inspectPipe's feed() and finish() run
+// inside the same Read pass.
+type m8EOFReader struct{ b []byte }
+
+func (r *m8EOFReader) Read(p []byte) (int, error) {
+	if len(r.b) == 0 {
+		return 0, io.EOF
+	}
+	m := copy(p, r.b)
+	r.b = r.b[m:]
+	if len(r.b) == 0 {
+		return m, io.EOF
+	}
+	return m, nil
+}
+
+// TestM8E2E_WriteAheadBoundaryEOF: when the completing bytes and the
+// upstream EOF arrive in the same source Read, a failed declare still
+// fails closed — finish() must not flush the held bytes past the dead
+// stream's error.
+func TestM8E2E_WriteAheadBoundaryEOF(t *testing.T) {
+	for _, sh := range m8HoldShapes {
+		t.Run(sh.name, func(t *testing.T) {
+			wire, exp := m8Wire(t, sh.dir, sh.name)
+			holds := m8HoldPoints(t, sh.ep, sh.ctype, wire)
+			if len(holds) != len(exp.Intents) {
+				t.Fatalf("%d holds, want %d intents", len(holds), len(exp.Intents))
+			}
+			failAt := len(holds) - 1
+			k := 0
+			pipe := newInspectPipe(&m8EOFReader{b: append([]byte(nil), wire...)},
+				m8Parser(t, sh.ep, sh.ctype),
+				func(it *inspect.Intent) error {
+					if k == failAt {
+						return errors.New("ledger down")
+					}
+					k++
+					return nil
+				},
+				func(string) error { return nil })
+			got, err := io.ReadAll(pipe)
+			if err == nil {
+				t.Fatal("declare failure did not abort the stream")
+			}
+			if int64(len(got)) > holds[failAt] {
+				t.Fatalf("held bytes flushed past failed declare at EOF: %d out, hold %d",
+					len(got), holds[failAt])
+			}
+			if !bytes.Equal(got, wire[:len(got)]) {
+				t.Fatal("released bytes are not a wire prefix")
+			}
+		})
+	}
+}
+
+// TestM8E2E_WriteAheadBoundary asserts the write-ahead property at the
+// exact byte boundary for every response shape: at the moment the
+// declare callback runs, the released byte prefix ends exactly at the
+// completion's hold offset — the completing byte (a JSON element's '}'
+// or a completing SSE event's first byte) has not left the broker. A
+// failing declare releases nothing from the hold point on.
+func TestM8E2E_WriteAheadBoundary(t *testing.T) {
+	for _, sh := range m8HoldShapes {
+		t.Run(sh.name, func(t *testing.T) {
+			wire, exp := m8Wire(t, sh.dir, sh.name)
+			holds := m8HoldPoints(t, sh.ep, sh.ctype, wire)
+			if len(holds) != len(exp.Intents) {
+				t.Fatalf("%d hold points, want %d intents", len(holds), len(exp.Intents))
+			}
+			for i, h := range holds {
+				if h <= 0 || h >= int64(len(wire)) {
+					t.Fatalf("hold %d at %d outside (0,%d)", i, h, len(wire))
+				}
+				b := wire[h]
+				if sh.ctype == "application/json" {
+					// The byte completing a JSON tool-use/tool_call/
+					// function_call element is its closing brace.
+					if b != '}' {
+						t.Fatalf("hold %d at %d: byte %q is not the element's '}'", i, h, b)
+					}
+				} else {
+					// The whole completing SSE event waits: the hold is
+					// its first byte, at a line boundary.
+					if wire[h-1] != '\n' {
+						t.Fatalf("hold %d at %d: not an event boundary", i, h)
+					}
+					if b != 'e' && b != 'd' {
+						t.Fatalf("hold %d at %d: byte %q is not an event's first byte", i, h, b)
+					}
+				}
+			}
+			for _, csz := range []int{1, 7, len(wire)} {
+				var pipe *inspectPipe
+				var released []int64
+				pipe = newInspectPipe(&m8ChunkReader{b: wire, n: csz},
+					m8Parser(t, sh.ep, sh.ctype),
+					func(it *inspect.Intent) error {
+						// relAbs is the released wire prefix: bytes below
+						// it are out or already delivered; the byte at
+						// relAbs is still held in fed.
+						released = append(released, pipe.relAbs)
+						return nil
+					},
+					func(string) error { return nil })
+				got, err := io.ReadAll(pipe)
+				if err != nil {
+					t.Fatalf("chunk %d: read: %v", csz, err)
+				}
+				if !bytes.Equal(got, wire) {
+					t.Fatalf("chunk %d: %d bytes out, wire has %d", csz, len(got), len(wire))
+				}
+				if len(released) != len(holds) {
+					t.Fatalf("chunk %d: %d declares, want %d", csz, len(released), len(holds))
+				}
+				for i, rel := range released {
+					if rel != holds[i] {
+						t.Fatalf("chunk %d intent %d: %d bytes released at declare time, want exactly hold %d — completing byte escaped early",
+							csz, i, rel, holds[i])
+					}
+				}
+			}
+			// Fail closed: with the last declare erroring, the byte at
+			// that hold point (and anything after) never leaves.
+			failAt := len(holds) - 1
+			for _, csz := range []int{1, len(wire)} {
+				var pipe *inspectPipe
+				k := 0
+				pipe = newInspectPipe(&m8ChunkReader{b: wire, n: csz},
+					m8Parser(t, sh.ep, sh.ctype),
+					func(it *inspect.Intent) error {
+						if k == failAt {
+							return errors.New("ledger down")
+						}
+						k++
+						return nil
+					},
+					func(string) error { return nil })
+				got, err := io.ReadAll(pipe)
+				if err == nil {
+					t.Fatalf("chunk %d: declare failure did not abort the stream", csz)
+				}
+				if int64(len(got)) > holds[failAt] {
+					t.Fatalf("chunk %d: completing byte released after failed declare: %d bytes out, hold at %d",
+						csz, len(got), holds[failAt])
+				}
+				if !bytes.Equal(got, wire[:len(got)]) {
+					t.Fatalf("chunk %d: released bytes are not a wire prefix", csz)
+				}
+			}
+		})
+	}
+}
+
+// TestM8E2E_WriteAheadJSON drives the non-streaming shapes through the
+// live broker: while the client reads the body, the byte completing
+// each tool call may only arrive after that intent's append is durable
+// in the session ledger. The upstream flushes the body in two parts —
+// everything through the last hold point, then the tail after a delay —
+// so a deferred append (declare at EOF) is observed, not just ordered.
+func TestM8E2E_WriteAheadJSON(t *testing.T) {
+	for _, sh := range []struct{ dir, name, ep string }{
+		{"anthropic", "single-call-json", "anthropic"},
+		{"openai", "resp-single-json", "responses"},
+		{"openai", "chat-multi-json", "chat"},
+	} {
+		t.Run(sh.name, func(t *testing.T) {
+			wire, exp := m8Wire(t, sh.dir, sh.name)
+			holds := m8HoldPoints(t, sh.ep, "application/json", wire)
+			if len(holds) != len(exp.Intents) {
+				t.Fatalf("%d holds, want %d intents", len(holds), len(exp.Intents))
+			}
+			sessID := "s8wj-" + sh.name
+			dir := t.TempDir()
+			routes := map[string]string{}
+			e := newTestEnvFull(t, dir, []SessionEntry{
+				sessionEntry(sessID, "tok-8j", "127.0.0.1",
+					m8Policy(t, dir, "p8wj-"+sh.name, nil, nil, "")),
+			}, routes, nil, nil)
+			split := int(holds[len(holds)-1]) + 1 // last completing byte in part 1
+			addr, closeUp := startTLSUpstream(t, e.ca, []string{"llm.example"}, nil,
+				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.Header().Set("Content-Type", "application/json")
+					w.Header().Set("Content-Length", fmt.Sprint(len(wire)))
+					w.WriteHeader(200)
+					fl := w.(http.Flusher)
+					_, _ = w.Write(wire[:split])
+					fl.Flush()
+					time.Sleep(150 * time.Millisecond)
+					_, _ = w.Write(wire[split:])
+					fl.Flush()
+				}))
+			defer closeUp()
+			routes["llm.example"] = addr
+			cli := e.proxyClient(t, "tok-8j", e.combinedPool(t, sessID), "http/1.1")
+			cli.Timeout = 30 * time.Second
+			res, err := cli.Post("https://llm.example"+m8PathFor(sh.ep),
+				"application/json", bytes.NewReader(m8Request(sh.ep)))
+			if err != nil {
+				t.Fatalf("proxy request: %v", err)
+			}
+			defer func() { _ = res.Body.Close() }()
+
+			ledger := filepath.Join(e.records, sessID+".jsonl")
+			declared := func() int {
+				b, err := os.ReadFile(ledger)
+				if err != nil {
+					return 0
+				}
+				return bytes.Count(b, []byte(`"type":"intent.declared"`))
+			}
+			buf := make([]byte, 1<<10)
+			var got []byte
+			for {
+				n, rerr := res.Body.Read(buf)
+				got = append(got, buf[:n]...)
+				// Byte wire[holds[seen]] may only be out once the
+				// (seen+1)-th declare is durable.
+				if seen := declared(); seen < len(holds) && int64(len(got)) > holds[seen] {
+					t.Fatalf("received %d bytes with only %d durable declares — byte at hold %d crossed before intent.declared",
+						len(got), seen, holds[seen])
+				}
+				if rerr != nil {
+					break
+				}
+			}
+			if !bytes.Equal(got, wire) {
+				t.Fatalf("%d bytes out, want wire %d", len(got), len(wire))
+			}
+			if seen := declared(); seen != len(holds) {
+				t.Fatalf("%d durable declares, want %d", seen, len(holds))
+			}
+		})
+	}
+}
+
+// m8FailSink refuses appends of the listed record types while on.
+type m8FailSink struct {
+	inner RecordSink
+	on    atomic.Bool
+	types map[string]bool
+}
+
+func (s *m8FailSink) Append(session string, rec *Record) error {
+	if s.on.Load() && s.types[rec.Type] {
+		return errors.New("record sink injected failure")
+	}
+	return s.inner.Append(session, rec)
+}
+
+func (s *m8FailSink) Close() error { return s.inner.Close() }
+
+// m8FailEnv builds an env whose record sink fails on the given types.
+func m8FailEnv(t *testing.T, dir, sessID, token, pol string, routes map[string]string, types ...string) (*testEnv, *m8FailSink) {
+	t.Helper()
+	inner, err := NewFileRecordSink(filepath.Join(dir, "records"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs := &m8FailSink{inner: inner, types: map[string]bool{}}
+	for _, ty := range types {
+		fs.types[ty] = true
+	}
+	fs.on.Store(true)
+	e := newTestEnvFull(t, dir, []SessionEntry{
+		sessionEntry(sessID, token, "127.0.0.1", pol),
+	}, routes, nil, fs)
+	return e, fs
+}
+
+// TestM8E2E_LedgerFailClosed injects record-sink failures for every
+// record type M8 writes and asserts the fail-closed contract: held
+// bytes never release, requests never forward, the stream or request
+// aborts — never silently continuing past a lost record.
+func TestM8E2E_LedgerFailClosed(t *testing.T) {
+	// intent.declared: the completing byte of every shape stays held.
+	t.Run("declared", func(t *testing.T) {
+		for _, sh := range m8HoldShapes {
+			t.Run(sh.name, func(t *testing.T) {
+				wire, _ := m8Wire(t, sh.dir, sh.name)
+				holds := m8HoldPoints(t, sh.ep, sh.ctype, wire)
+				sessID := "s8fd-" + sh.name
+				dir := t.TempDir()
+				routes := map[string]string{}
+				e, _ := m8FailEnv(t, dir, sessID, "tok-8d",
+					m8Policy(t, dir, "p8fd-"+sh.name, nil, nil, ""), routes,
+					"intent.declared")
+				var hits atomic.Int64
+				addr, closeUp := startTLSUpstream(t, e.ca, []string{"llm.example"}, nil,
+					http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						hits.Add(1)
+						w.Header().Set("Content-Type", sh.ctype)
+						w.WriteHeader(200)
+						_, _ = w.Write(wire)
+					}))
+				defer closeUp()
+				routes["llm.example"] = addr
+				cli := e.proxyClient(t, "tok-8d", e.combinedPool(t, sessID), "http/1.1")
+				res, err := cli.Post("https://llm.example"+m8PathFor(sh.ep),
+					"application/json", bytes.NewReader(m8Request(sh.ep)))
+				if err != nil {
+					t.Fatalf("proxy request: %v", err)
+				}
+				got, rerr := io.ReadAll(res.Body)
+				_ = res.Body.Close()
+				if rerr == nil {
+					t.Fatal("failed intent.declared did not abort the response")
+				}
+				if int64(len(got)) > holds[0] {
+					t.Fatalf("completing byte released on failed declare: %d bytes out, first hold %d",
+						len(got), holds[0])
+				}
+				if hits.Load() != 1 {
+					t.Fatalf("upstream hits %d, want 1 (request crosses; the response side fails)", hits.Load())
+				}
+				for _, r := range m8Records(t, e, sessID) {
+					if r.Type == "intent.declared" {
+						t.Fatal("intent.declared record exists despite sink failure")
+					}
+				}
+			})
+		}
+	})
+
+	// intent.unparsed on the response side: no record, no pass-through.
+	t.Run("unparsed_response", func(t *testing.T) {
+		for _, c := range []struct {
+			name string
+			wire string
+			feed bool // parser faults during feed (vs at EOF)
+		}{
+			{"feed_fault", "event: content_block_start\ndata: {broken}\n\n", true},
+			{"finish_cut", "", false}, // wire = cut-midblock vector
+		} {
+			t.Run(c.name, func(t *testing.T) {
+				var wire []byte
+				var wantRx int64
+				if c.feed {
+					wire = []byte(c.wire)
+					// The faulting event is the wire's first (offset 0):
+					// on a failed unparsed nothing before it may cross.
+					wantRx = 0
+				} else {
+					base, _ := m8Wire(t, "anthropic", "cut-midblock-sse")
+					// Cut mid-line so the tail event stays in flight:
+					// the pending watermark holds it back.
+					wire = append(append([]byte{}, base...), "event: content_b"...)
+					pend := m8Parser(t, "anthropic", "text/event-stream")
+					_, _ = pend.Feed(wire)
+					wantRx = pend.Pending()
+				}
+				sessID := "s8fu-" + c.name
+				dir := t.TempDir()
+				routes := map[string]string{}
+				e, _ := m8FailEnv(t, dir, sessID, "tok-8u",
+					m8Policy(t, dir, "p8fu-"+c.name, nil, nil, ""), routes,
+					"intent.unparsed")
+				addr, closeUp := startTLSUpstream(t, e.ca, []string{"llm.example"}, nil,
+					http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						w.Header().Set("Content-Type", "text/event-stream")
+						w.WriteHeader(200)
+						_, _ = w.Write(wire)
+					}))
+				defer closeUp()
+				routes["llm.example"] = addr
+				cli := e.proxyClient(t, "tok-8u", e.combinedPool(t, sessID), "http/1.1")
+				res, err := cli.Post("https://llm.example/v1/messages",
+					"application/json", bytes.NewReader(m8Request("anthropic")))
+				if err != nil {
+					t.Fatalf("proxy request: %v", err)
+				}
+				got, rerr := io.ReadAll(res.Body)
+				_ = res.Body.Close()
+				if rerr == nil {
+					t.Fatal("failed intent.unparsed did not abort the stream")
+				}
+				if int64(len(got)) != wantRx {
+					t.Fatalf("%d bytes released on failed unparsed, want the held prefix %d",
+						len(got), wantRx)
+				}
+				for _, r := range m8Records(t, e, sessID) {
+					if r.Type == "intent.unparsed" {
+						t.Fatal("intent.unparsed record exists despite sink failure")
+					}
+				}
+			})
+		}
+		// Pipe-level finish: bytes still buffered when the cut is
+		// detected never release on a failed unparsed append — the
+		// client receives only the last-complete-event prefix.
+		t.Run("finish_buffered", func(t *testing.T) {
+			wire, _ := m8Wire(t, "anthropic", "cut-midblock-sse")
+			// The pending watermark after feeding the whole (cut) wire
+			// is the partial event's start — the prefix that may release.
+			pend := m8Parser(t, "anthropic", "text/event-stream")
+			_, _ = pend.Feed(wire)
+			pipe := newInspectPipe(&m8ChunkReader{b: wire, n: len(wire)},
+				m8Parser(t, "anthropic", "text/event-stream"),
+				func(*inspect.Intent) error { return nil },
+				func(string) error { return errors.New("ledger down") })
+			got, err := io.ReadAll(pipe)
+			if err == nil {
+				t.Fatal("failed intent.unparsed did not abort at finish")
+			}
+			want := pend.Pending()
+			if int64(len(got)) != want {
+				t.Fatalf("released %d bytes on failed finish-unparsed, want held prefix %d", len(got), want)
+			}
+			if !bytes.Equal(got, wire[:len(got)]) {
+				t.Fatal("released bytes are not a wire prefix")
+			}
+		})
+	})
+
+	// intent.unparsed on the request side: the request must not cross.
+	t.Run("unparsed_request", func(t *testing.T) {
+		sessID := "s8fur"
+		dir := t.TempDir()
+		routes := map[string]string{}
+		e, fs := m8FailEnv(t, dir, sessID, "tok-8ur",
+			m8Policy(t, dir, "p8fur", nil, nil, ""), routes, "intent.unparsed")
+		var hits atomic.Int64
+		addr, closeUp := startTLSUpstream(t, e.ca, []string{"llm.example"}, nil,
+			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				hits.Add(1)
+				w.Header().Set("Content-Type", "text/event-stream")
+				w.WriteHeader(200)
+				_, _ = w.Write([]byte("event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"))
+			}))
+		defer closeUp()
+		routes["llm.example"] = addr
+		cli := e.proxyClient(t, "tok-8ur", e.combinedPool(t, sessID), "http/1.1")
+
+		res, err := cli.Post("https://llm.example/v1/messages",
+			"application/json", bytes.NewReader([]byte(`{"model":"m","messages":[{broken`)))
+		if err != nil {
+			t.Fatalf("proxy request: %v", err)
+		}
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusBadGateway ||
+			res.Header.Get("X-Countersign-Reason") != "LEDGER_UNAVAILABLE" {
+			t.Fatalf("malformed request not denied on failed unparsed append: %d %q",
+				res.StatusCode, res.Header.Get("X-Countersign-Reason"))
+		}
+		if hits.Load() != 0 {
+			t.Fatalf("request forwarded despite failed unparsed append (%d hits)", hits.Load())
+		}
+		// Sink healthy again: the same malformed request fails safe —
+		// it crosses and the unparsed record lands (04 §5.4).
+		fs.on.Store(false)
+		res2, err := cli.Post("https://llm.example/v1/messages",
+			"application/json", bytes.NewReader([]byte(`{"model":"m","messages":[{broken`)))
+		if err != nil {
+			t.Fatalf("proxy request 2: %v", err)
+		}
+		_, _ = io.Copy(io.Discard, res2.Body)
+		_ = res2.Body.Close()
+		if hits.Load() != 1 {
+			t.Fatalf("fail-safe forward lost: %d hits", hits.Load())
+		}
+		found := false
+		for _, r := range m8Records(t, e, sessID) {
+			if r.Type == "intent.unparsed" {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatal("intent.unparsed missing for forwarded malformed request")
+		}
+	})
+
+	// intent.result: a result-carrying request must not cross when the
+	// record fails; after the sink recovers the open window still closes
+	// (the tracker rolled its close back).
+	t.Run("result_request", func(t *testing.T) {
+		sessID := "s8fr"
+		dir := t.TempDir()
+		routes := map[string]string{}
+		e, fs := m8FailEnv(t, dir, sessID, "tok-8r",
+			m8Policy(t, dir, "p8fr", nil, nil, ""), routes, "intent.result")
+		wire, exp := m8Wire(t, "anthropic", "single-call-sse")
+		var hits atomic.Int64
+		addr, closeUp := startTLSUpstream(t, e.ca, []string{"llm.example"}, nil,
+			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				hits.Add(1)
+				w.Header().Set("Content-Type", "text/event-stream")
+				w.WriteHeader(200)
+				_, _ = w.Write(wire)
+			}))
+		defer closeUp()
+		routes["llm.example"] = addr
+		cli := e.proxyClient(t, "tok-8r", e.combinedPool(t, sessID), "http/1.1")
+
+		// Step 1: declare the intent (result appends are the only
+		// refused type; declaration lands normally).
+		res, err := cli.Post("https://llm.example/v1/messages",
+			"application/json", bytes.NewReader(m8Request("anthropic")))
+		if err != nil {
+			t.Fatalf("step1: %v", err)
+		}
+		_, _ = io.Copy(io.Discard, res.Body)
+		_ = res.Body.Close()
+		intentID := exp.Intents[0].ID
+
+		// Step 2: the tool_result request is denied while the
+		// intent.result append fails — upstream never sees it.
+		resultBody := []byte(fmt.Sprintf(
+			`{"model":"m","messages":[{"role":"user","content":[{"type":"tool_result","tool_use_id":%q,"content":"ok"}]}]}`,
+			intentID))
+		res2, err := cli.Post("https://llm.example/v1/messages",
+			"application/json", bytes.NewReader(resultBody))
+		if err != nil {
+			t.Fatalf("step2: %v", err)
+		}
+		_ = res2.Body.Close()
+		if res2.StatusCode != http.StatusBadGateway {
+			t.Fatalf("result request not denied on failed append: %d", res2.StatusCode)
+		}
+		if hits.Load() != 1 {
+			t.Fatalf("result request forwarded despite failed append (%d hits)", hits.Load())
+		}
+		for _, r := range m8Records(t, e, sessID) {
+			if r.Type == "intent.result" {
+				t.Fatal("intent.result record exists despite sink failure")
+			}
+		}
+
+		// Step 3: sink healthy — the same result closes the still-open
+		// window (the failed close was rolled back, not lost).
+		fs.on.Store(false)
+		res3, err := cli.Post("https://llm.example/v1/messages",
+			"application/json", bytes.NewReader(resultBody))
+		if err != nil {
+			t.Fatalf("step3: %v", err)
+		}
+		_, _ = io.Copy(io.Discard, res3.Body)
+		_ = res3.Body.Close()
+		if res3.StatusCode != 200 {
+			t.Fatalf("retry after sink recovery: status %d", res3.StatusCode)
+		}
+		found := false
+		for _, r := range m8Records(t, e, sessID) {
+			if r.Type == "intent.result" {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatal("intent.result never recorded — window lost on append failure")
+		}
+	})
+
+	// context.observed: the request must not cross when it fails, and
+	// the retry re-reports the same blocks (the fold was rolled back).
+	t.Run("observed_request", func(t *testing.T) {
+		sessID := "s8fo"
+		dir := t.TempDir()
+		routes := map[string]string{}
+		e, fs := m8FailEnv(t, dir, sessID, "tok-8o",
+			m8Policy(t, dir, "p8fo", nil, nil, ""), routes, "context.observed")
+		var hits atomic.Int64
+		addr, closeUp := startTLSUpstream(t, e.ca, []string{"llm.example"}, nil,
+			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				hits.Add(1)
+				w.Header().Set("Content-Type", "text/event-stream")
+				w.WriteHeader(200)
+				_, _ = w.Write([]byte("event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"))
+			}))
+		defer closeUp()
+		routes["llm.example"] = addr
+		cli := e.proxyClient(t, "tok-8o", e.combinedPool(t, sessID), "http/1.1")
+
+		res, err := cli.Post("https://llm.example/v1/messages",
+			"application/json", bytes.NewReader(m8Request("anthropic")))
+		if err != nil {
+			t.Fatalf("proxy request: %v", err)
+		}
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusBadGateway {
+			t.Fatalf("request not denied on failed context.observed: %d", res.StatusCode)
+		}
+		if hits.Load() != 0 {
+			t.Fatalf("request forwarded despite failed observed append (%d hits)", hits.Load())
+		}
+		fs.on.Store(false)
+		res2, err := cli.Post("https://llm.example/v1/messages",
+			"application/json", bytes.NewReader(m8Request("anthropic")))
+		if err != nil {
+			t.Fatalf("retry: %v", err)
+		}
+		_, _ = io.Copy(io.Discard, res2.Body)
+		_ = res2.Body.Close()
+		var obs []ContextObservedBody
+		for _, r := range m8Records(t, e, sessID) {
+			if r.Type == "context.observed" {
+				var b ContextObservedBody
+				if json.Unmarshal([]byte(r.Body), &b) == nil {
+					obs = append(obs, b)
+				}
+			}
+		}
+		if len(obs) == 0 {
+			t.Fatal("context.observed missing after retry")
+		}
+		last := obs[len(obs)-1]
+		if len(last.NewBlocks) == 0 {
+			t.Fatal("retry reported zero new blocks — the failed fold was never rolled back")
+		}
+	})
+}
+
+// TestM8E2E_PrivacyDigestOriginal is C8.5.1 at full width: for every
+// response shape, when the tool input carries a credential the preview
+// redacts but input_sha256 digests the ORIGINAL transmitted input —
+// never the redacted form.
+func TestM8E2E_PrivacyDigestOriginal(t *testing.T) {
+	const cred = "AKIAIOSFODNN7EXAMPLE"
+	// Already-canonical input: canonical(input) == the bytes as
+	// transmitted, so the recorded digest must equal plain SHA-256 of
+	// the transmitted serialization.
+	rawInput := `{"command":"aws s3 ls ` + cred + `"}`
+	wantSHA := sha256.Sum256([]byte(rawInput))
+	want := hex.EncodeToString(wantSHA[:])
+	redSHA := sha256.Sum256(creds.RedactNamed([]byte(rawInput)))
+	redHex := hex.EncodeToString(redSHA[:])
+	if want == redHex {
+		t.Fatal("redaction did not change the input")
+	}
+	argsEsc := strings.ReplaceAll(rawInput, `"`, `\"`)
+	wires := []struct {
+		name, ep, ctype string
+		wire            string
+	}{
+		{"anthropic-json", "anthropic", "application/json",
+			`{"id":"m1","type":"message","role":"assistant","model":"m","content":[{"type":"tool_use","id":"toolu_priv1","name":"Bash","input":` + rawInput + `}],"stop_reason":"tool_use","stop_sequence":null,"usage":{"input_tokens":1,"output_tokens":1}}`},
+		{"anthropic-sse", "anthropic", "text/event-stream",
+			"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"m\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"m\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}}\n\n" +
+				"event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_priv1\",\"name\":\"Bash\",\"input\":{}}}\n\n" +
+				"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"" + argsEsc + "\"}}\n\n" +
+				"event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n" +
+				"event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"},
+		{"responses-json", "responses", "application/json",
+			`{"id":"r1","object":"response","status":"completed","model":"m","output":[{"type":"function_call","id":"fc_priv1","call_id":"call_priv1","name":"exec","arguments":"` + argsEsc + `","status":"completed"}],"usage":{"input_tokens":1,"output_tokens":1}}`},
+		{"responses-sse", "responses", "text/event-stream",
+			"event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"function_call\",\"id\":\"fc_priv1\",\"call_id\":\"call_priv1\",\"name\":\"exec\",\"arguments\":\"\"}}\n\n" +
+				"event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{\"type\":\"function_call\",\"id\":\"fc_priv1\",\"call_id\":\"call_priv1\",\"name\":\"exec\",\"arguments\":\"" + argsEsc + "\",\"status\":\"completed\"}}\n\n"},
+		{"chat-json", "chat", "application/json",
+			`{"id":"c1","object":"chat.completion","created":1,"model":"m","choices":[{"index":0,"finish_reason":"tool_calls","message":{"role":"assistant","content":null,"tool_calls":[{"id":"call_priv1","type":"function","function":{"name":"run","arguments":"` + argsEsc + `"}}]}}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`},
+		{"chat-sse", "chat", "text/event-stream",
+			"data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"m\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_priv1\",\"type\":\"function\",\"function\":{\"name\":\"run\",\"arguments\":\"" + argsEsc + "\"}}]},\"finish_reason\":null}]}\n\n" +
+				"data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"m\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n" +
+				"data: [DONE]\n\n"},
+	}
+	previews := true
+	for _, w := range wires {
+		t.Run(w.name, func(t *testing.T) {
+			sessID := "s8pd-" + w.name
+			dir := t.TempDir()
+			routes := map[string]string{}
+			e := newTestEnvFull(t, dir, []SessionEntry{
+				sessionEntry(sessID, "tok-8pd", "127.0.0.1",
+					m8Policy(t, dir, "p8pd-"+w.name, &previews, nil, "")),
+			}, routes, nil, nil)
+			addr, closeUp := startTLSUpstream(t, e.ca, []string{"llm.example"}, nil,
+				http.HandlerFunc(func(wr http.ResponseWriter, r *http.Request) {
+					wr.Header().Set("Content-Type", w.ctype)
+					wr.WriteHeader(200)
+					_, _ = wr.Write([]byte(w.wire))
+				}))
+			defer closeUp()
+			routes["llm.example"] = addr
+			cli := e.proxyClient(t, "tok-8pd", e.combinedPool(t, sessID), "http/1.1")
+			res, err := cli.Post("https://llm.example"+m8PathFor(w.ep),
+				"application/json", bytes.NewReader(m8Request(w.ep)))
+			if err != nil {
+				t.Fatalf("proxy request: %v", err)
+			}
+			_, _ = io.Copy(io.Discard, res.Body)
+			_ = res.Body.Close()
+			closeUp()
+
+			declared := declaredList(t, e, sessID)
+			if len(declared) != 1 {
+				t.Fatalf("%d declared, want 1", len(declared))
+			}
+			d := declared[0]
+			if d.InputSHA256 != want {
+				t.Fatalf("input_sha256 %q is not the digest of the original transmitted input (want %q)", d.InputSHA256, want)
+			}
+			if d.InputSHA256 == redHex {
+				t.Fatal("input_sha256 digests the redacted form")
+			}
+			if d.InputLen != len(rawInput) {
+				t.Fatalf("input_len %d, want %d", d.InputLen, len(rawInput))
+			}
+			if !strings.Contains(d.InputPreview, "[REDACTED:") {
+				t.Fatalf("preview lacks redaction: %q", d.InputPreview)
+			}
+			if strings.Contains(d.InputPreview, cred) {
+				t.Fatalf("credential leaked in preview: %q", d.InputPreview)
+			}
+		})
+	}
 }

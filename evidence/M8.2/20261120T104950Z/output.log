@@ -1,0 +1,51 @@
+--- C8.2.1: go test ./internal/inspect/ -count=1 -run ^TestVectorsChunkIndependent$ -v
+        --- PASS: TestVectorsChunkIndependent/resp-text-json/shard3 (0.00s)
+        --- PASS: TestVectorsChunkIndependent/resp-text-json/shard1 (0.00s)
+        --- PASS: TestVectorsChunkIndependent/resp-text-json/shard2 (0.00s)
+        --- PASS: TestVectorsChunkIndependent/resp-text-json/shard6 (0.01s)
+    --- PASS: TestVectorsChunkIndependent/resp-unknown-sse (0.00s)
+        --- PASS: TestVectorsChunkIndependent/resp-unknown-sse/shard7 (0.01s)
+        --- PASS: TestVectorsChunkIndependent/resp-unknown-sse/shard0 (0.01s)
+        --- PASS: TestVectorsChunkIndependent/resp-unknown-sse/shard3 (0.01s)
+        --- PASS: TestVectorsChunkIndependent/resp-unknown-sse/shard5 (0.01s)
+        --- PASS: TestVectorsChunkIndependent/resp-unknown-sse/shard6 (0.03s)
+        --- PASS: TestVectorsChunkIndependent/resp-unknown-sse/shard4 (0.01s)
+        --- PASS: TestVectorsChunkIndependent/resp-unknown-sse/shard1 (0.01s)
+        --- PASS: TestVectorsChunkIndependent/resp-unknown-sse/shard2 (0.02s)
+PASS
+ok  	github.com/countersign/countersign/internal/inspect	71.173s
+CHECK C8.2.1 PASS
+--- C8.2.2: go test ./internal/inspect/ -count=1 -run ^TestVectorsChunkIndependent$ -v
+        --- PASS: TestVectorsChunkIndependent/resp-text-json/shard6 (0.00s)
+        --- PASS: TestVectorsChunkIndependent/resp-text-json/shard1 (0.00s)
+        --- PASS: TestVectorsChunkIndependent/resp-text-json/shard5 (0.00s)
+        --- PASS: TestVectorsChunkIndependent/resp-text-json/shard2 (0.01s)
+    --- PASS: TestVectorsChunkIndependent/resp-unknown-sse (0.00s)
+        --- PASS: TestVectorsChunkIndependent/resp-unknown-sse/shard4 (0.01s)
+        --- PASS: TestVectorsChunkIndependent/resp-unknown-sse/shard0 (0.01s)
+        --- PASS: TestVectorsChunkIndependent/resp-unknown-sse/shard6 (0.01s)
+        --- PASS: TestVectorsChunkIndependent/resp-unknown-sse/shard7 (0.01s)
+        --- PASS: TestVectorsChunkIndependent/resp-unknown-sse/shard5 (0.01s)
+        --- PASS: TestVectorsChunkIndependent/resp-unknown-sse/shard3 (0.01s)
+        --- PASS: TestVectorsChunkIndependent/resp-unknown-sse/shard1 (0.01s)
+        --- PASS: TestVectorsChunkIndependent/resp-unknown-sse/shard2 (0.02s)
+PASS
+ok  	github.com/countersign/countersign/internal/inspect	64.243s
+CHECK C8.2.2 PASS
+fuzz: elapsed: 9m27s, execs: 3002169 (7348/sec), new interesting: 2 (total: 1273)
+fuzz: elapsed: 9m30s, execs: 3023368 (7065/sec), new interesting: 2 (total: 1273)
+fuzz: elapsed: 9m33s, execs: 3046735 (7788/sec), new interesting: 2 (total: 1273)
+fuzz: elapsed: 9m36s, execs: 3061457 (4908/sec), new interesting: 2 (total: 1273)
+fuzz: elapsed: 9m39s, execs: 3081514 (6686/sec), new interesting: 2 (total: 1273)
+fuzz: elapsed: 9m42s, execs: 3096726 (5072/sec), new interesting: 2 (total: 1273)
+fuzz: elapsed: 9m45s, execs: 3122566 (8612/sec), new interesting: 2 (total: 1273)
+fuzz: elapsed: 9m48s, execs: 3143622 (7018/sec), new interesting: 2 (total: 1273)
+fuzz: elapsed: 9m51s, execs: 3170258 (8879/sec), new interesting: 2 (total: 1273)
+fuzz: elapsed: 9m54s, execs: 3190936 (6893/sec), new interesting: 2 (total: 1273)
+fuzz: elapsed: 9m57s, execs: 3209243 (6102/sec), new interesting: 2 (total: 1273)
+fuzz: elapsed: 10m0s, execs: 3232859 (7873/sec), new interesting: 2 (total: 1273)
+fuzz: elapsed: 10m1s, execs: 3232859 (0/sec), new interesting: 2 (total: 1273)
+PASS
+ok  	github.com/countersign/countersign/internal/inspect	601.533s
+CHECK C8.2.3 PASS
+M8.2 suite: all checks passed

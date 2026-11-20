@@ -64,6 +64,15 @@ func newAnthropicParser(sse bool) *anthParser {
 
 func (p *anthParser) Model() string { return p.model }
 
+// Pending implements ResponseParser: SSE holds at the in-flight event's
+// first byte; JSON releases everything fed.
+func (p *anthParser) Pending() int64 {
+	if p.sse {
+		return p.ss.holdStart()
+	}
+	return p.js.abs
+}
+
 func (p *anthParser) Feed(b []byte) ([]Completion, error) {
 	if p.dead {
 		return nil, nil

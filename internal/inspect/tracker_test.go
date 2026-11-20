@@ -112,3 +112,55 @@ func TestTrackerContextDigest(t *testing.T) {
 		t.Fatalf("context sha = %s, want %s", sha, want)
 	}
 }
+
+// TestTrackerRollback: the ledger-failure rollbacks restore the exact
+// pre-append state — Undeclare lets a redelivery declare again, Reopen
+// restores the window for a retry, Unobserve refolds the blocks so the
+// next request reports them fresh.
+func TestTrackerRollback(t *testing.T) {
+	tr := NewTracker(3600)
+	tr.Now = func() time.Time { return time.Unix(1700000000, 0) }
+
+	// Failed intent.declared: the intent is forgotten entirely.
+	tr.Declare(intent("a1", "Bash", ExecutorSandbox), "exec", "e1")
+	tr.Undeclare("a1")
+	if tr.Declared("a1") != nil {
+		t.Fatal("undeclared intent still tracked")
+	}
+	if !tr.Declare(intent("a1", "Bash", ExecutorSandbox), "exec", "e9") {
+		t.Fatal("redelivery after undeclare must declare anew")
+	}
+	if d := tr.Declared("a1"); d == nil || d.ViaEffect != "e9" {
+		t.Fatal("redelivered intent carries the new effect")
+	}
+	tr.Undeclare("ghost") // no-op, must not panic
+
+	// Failed intent.result: the window reopens; a retry closes it.
+	if _, ok := tr.CloseForResult("a1"); !ok {
+		t.Fatal("a1 window should close")
+	}
+	tr.Reopen("a1")
+	if !tr.Declared("a1").Open {
+		t.Fatal("reopen did not restore the window")
+	}
+	if _, ok := tr.CloseForResult("a1"); !ok {
+		t.Fatal("retry after reopen must close the window")
+	}
+
+	// Failed context.observed: blocks fold back as unseen.
+	mk := func(i int) RequestBlock {
+		return RequestBlock{Index: i, SHA256: fmt.Sprintf("d%02x", i), digest: fmt.Sprintf("d%02x", i)}
+	}
+	fresh, count, _ := tr.Observe([]RequestBlock{mk(0), mk(1)})
+	if len(fresh) != 2 || count != 2 {
+		t.Fatalf("observe: %d %d", len(fresh), count)
+	}
+	tr.Unobserve(fresh)
+	fresh2, count2, sha2 := tr.Observe([]RequestBlock{mk(0)})
+	if len(fresh2) != 1 || count2 != 1 {
+		t.Fatalf("unobserved blocks not reported fresh: %d %d", len(fresh2), count2)
+	}
+	if sha2 != sha256Hex([]byte(`["d00"]`)) {
+		t.Fatalf("rolled-back context sha = %s", sha2)
+	}
+}

@@ -4,6 +4,7 @@
 package inspect
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 )
@@ -348,7 +349,16 @@ func addContentBlocks(info *RequestInfo, idx int, role string, content json.RawM
 			var pt struct {
 				Type string `json:"type"`
 			}
-			_ = json.Unmarshal(p, &pt) // kind falls back to "part"
+			// The array elements are always valid JSON (the outer
+			// Unmarshal succeeded), so a decode error means p is not an
+			// object — a bare string/number part, whose kind is "part" —
+			// or an object with a non-string `type`, which is malformed
+			// and must not silently degrade to an unrecorded block kind.
+			if err := json.Unmarshal(p, &pt); err != nil {
+				if t := bytes.TrimSpace(p); len(t) > 0 && t[0] == '{' {
+					return idx, fmt.Errorf("content part: %v", err)
+				}
+			}
 			kind := pt.Type
 			if kind == "" {
 				kind = "part"

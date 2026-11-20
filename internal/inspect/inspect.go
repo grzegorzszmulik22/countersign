@@ -95,6 +95,15 @@ type ResponseParser interface {
 	Feed(b []byte) ([]Completion, error)
 	Finish() (detail string, clean bool)
 	Model() string
+	// Pending is the smallest absolute response-body offset at which a
+	// completion's hold point could still begin: bytes below it are
+	// unconditionally releasable. SSE shapes report the in-flight
+	// event's first byte — a completing event must not cross the client
+	// in pieces before its intent is durable, so the whole event waits.
+	// JSON shapes report the fed length: a completion always fires on
+	// the feed carrying its completing byte, so nothing buffered can
+	// still carry a hold.
+	Pending() int64
 }
 
 // sha256Hex is the lowercase hex digest of b.

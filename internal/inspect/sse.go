@@ -127,3 +127,18 @@ func cutField(line []byte) (name, val string, hadColon bool) {
 func (s *sseSplitter) pending() bool {
 	return len(s.line) > 0 || s.inEvent
 }
+
+// holdStart is the absolute offset where the in-flight event began —
+// the point at which a completion's hold could still begin: an event's
+// bytes are only releasable once the event has fully arrived (it is the
+// completing event's whole bytes that wait on the intent append). With
+// nothing pending it is s.abs, the consumed length.
+func (s *sseSplitter) holdStart() int64 {
+	if s.inEvent {
+		return s.evOff
+	}
+	if len(s.line) > 0 {
+		return s.lineOff // a partial line could still open an event
+	}
+	return s.abs
+}

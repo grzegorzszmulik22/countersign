@@ -40,14 +40,18 @@ run C8.3.1 -tags fixtures ./internal/proxy/ -count=1 \
     -run '^TestM8E2E_TrackingCorpus$' -v
 
 # C8.3.2: the upstream asserts the intent.result is durable before a
-# result-carrying request reaches it (inside the tracking corpus).
+# result-carrying request reaches it (inside the tracking corpus), and
+# every failed request-side append — intent.result, intent.unparsed,
+# context.observed — denies rather than forwards (the ledger fail-closed
+# run).
 run C8.3.2 -tags fixtures ./internal/proxy/ -count=1 \
-    -run '^TestM8E2E_TrackingCorpus$' -v
+    -run '^(TestM8E2E_TrackingCorpus|TestM8E2E_LedgerFailClosed)$' -v
 
 # C8.3.3: new_blocks once per digest per session; running count and
 # context_sha256 match a recomputation (inside the tracking corpus plus
-# the tracker unit tests).
-run C8.3.3 ./internal/inspect/ -count=1 -run '^TestTracker' -v
+# the tracker unit tests), and malformed content-part types fail the
+# request parse rather than degrading silently.
+run C8.3.3 ./internal/inspect/ -count=1 -run '^(TestTracker|TestParsePartKind)$' -v
 
 # C8.3.4: over-limit inspected requests are denied LIMIT_BODY; grant
 # bufferLimit raises it; the inference default is 32 MiB.

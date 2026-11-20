@@ -12,6 +12,7 @@ export PATH="$HOME/.local/bin:$HOME/.local/usr/bin:$PATH"
 cd "$(dirname "$0")/../.."
 ROOT=$PWD
 GO=$ROOT/.tools/bin/go
+TIMEOUT=-timeout=30m
 fail=0
 
 say() { printf 'CHECK %s %s%s\n' "$1" "$2" "${3:+ — $3}"; }
@@ -34,8 +35,16 @@ run() {
 }
 
 # C8.5.1: each credential shape redacts to [REDACTED:<shape>] and the
-# input digest covers the original bytes (unit + broker-level).
-run C8.5.1 ./internal/inspect/ -count=1 -run '^TestPreview' -v
+# input digest covers the original transmitted bytes — never the
+# redacted form — for every response shape (unit + broker-level).
+out=$(mktemp)
+if "$GO" test "$TIMEOUT" ./internal/inspect/ -count=1 -run '^TestPreview' >"$out" 2>&1 \
+    && "$GO" test "$TIMEOUT" -tags fixtures ./internal/proxy/ -count=1 \
+    -run '^TestM8E2E_PrivacyDigestOriginal$' >>"$out" 2>&1; then
+    tail -15 "$out"; rm -f "$out"; pass C8.5.1
+else
+    tail -15 "$out"; rm -f "$out"; bad C8.5.1 "go test failed"
+fi
 
 # C8.5.2: privacy.previews: false omits the preview field entirely.
 run C8.5.2 -tags fixtures ./internal/proxy/ -count=1 \
