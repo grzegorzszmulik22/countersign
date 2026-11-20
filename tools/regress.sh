@@ -67,11 +67,12 @@ done
 
 tmpd=$(mktemp -d)
 declare -A pids=()
-# CS_REGRESS_JOBS caps the parallel fan-out for hosts that cannot take
-# all suites at once (the 2-core/11GB oci-free-a1 OOMs and times checks
-# out under the full fan-out). Unset/empty keeps every suite parallel —
-# the historical behavior everywhere else.
-max_jobs=${CS_REGRESS_JOBS:-0}
+# CS_REGRESS_JOBS caps the parallel fan-out. Default is 2*nproc: on the
+# 2-core/11GB oci-free-a1 the full ~25-suite fan-out OOMed and pushed
+# suites past their timeouts; on bigger hosts the default still leaves
+# plenty of parallelism. Set 0 for unlimited (the historical fan-out).
+default_jobs=$(( $(nproc 2>/dev/null || echo 4) * 2 ))
+max_jobs=${CS_REGRESS_JOBS:-$default_jobs}
 for c in ${par[@]+"${par[@]}"}; do
     if [ "$max_jobs" -gt 0 ]; then
         # Throttle without reaping: `wait -n` would consume the finished
