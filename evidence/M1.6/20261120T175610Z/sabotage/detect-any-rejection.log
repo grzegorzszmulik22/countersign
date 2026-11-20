@@ -1,0 +1,24 @@
+make[1]: Entering directory '/home/csbuild/src/cs-evidence-py/.check-work/sabotage-M1.6-detect-any-rejection'
+harness negative tests (16 properties):
+  MISS denied: first error outside the class expected set is not detected — class-1 mutant with first error E_BUNDLE counted detected
+  hold agreement: full error+warning code sets, never first error only — later-error and warning divergence both disagreed
+  hold mm1.1: reported rate must be records/cpu_s, wall separate — fabricated, wall-less and impossible rows rejected
+  hold mm1.2: writer rate must be records/cpu_s, wall separate — fabricated writer rate rejected, cpu>wall allowed
+  hold mm1.3: one load sample above cores unqualifies the run — one high sample unqualifies; boundary and missing held
+  hold 06§12: run counts and per-run samples checked per metric — short runs, dropped samples and missing loads rejected
+  hold summarize: medians off target fail in both comparator modes — targets enforced in both comparator directions
+  hold mm1.2 fsync bound judges only on exact (strace) counts — estimates never judge; exact counts do
+  hold mm1.3: calibration measured in-run, never cached/supplied/estimated — missing/cached/estimated/forged calibrations rejected
+  hold mm1.3: calibration must be on the ledger's file system — foreign-device calibration rejected
+  hold mm1.3: judged bound is the measured fsync p99 + 5 ms — fixed bounds, wrong pass, missing/doctored records rejected
+  hold mm1.3: calibration runs alone, never overlapping a latency run — overlapping and bracket-less calibrations rejected; boundary alone window held
+  hold mm1.3: the larger of pre/post calibrations is the bound — smaller-of-two p99s rejected in record and bound
+  hold mm1.3: observed wall < samples x pacing is not a calibration — short observed wall rejected; boundary accepted
+  hold mm1.3: file system measured by the calib file's real device — device measured from the file, claims never trusted
+  hold mm1.3: 400 samples, 300-byte writes, 5 ms pace, wall are spec constants — spec constants enforced at the boundary
+selftest: 1 propert(ies) NOT enforced: ['denied: first error outside the class expected set is not detected']
+CHECK C1.6.4 FAIL  harness does not enforce a required property
+check-M1.6: suite FAIL
+check-M1.6: FAIL (exit 1, evidence: evidence/M1.6/20261120T180151Z)
+make[1]: *** [Makefile:37: check-M1.6] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-evidence-py/.check-work/sabotage-M1.6-detect-any-rejection'
