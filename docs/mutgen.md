@@ -70,9 +70,12 @@ running every mutant through **both** verifiers (`csverify` and
   estimated calibration fails too — the harness checks the record's
   source marker, sample count and pacing, that the reported wall and
   the harness-observed wall (≥ samples × pacing) and file mtime prove
-  it ran in this run, and that the file's device matches the ledger
-  directory's (`calib-accepts-supplied`, `calib-estimated-ok`,
-  `calib-any-filesystem`, `wall-bound-loose` sabotages). The judged
+  it ran in this run, and that the file's real device (measured by
+  stat, never the recorded `st_dev`) matches the ledger directory's —
+  a record may claim the ledger's device while its file sits on
+  another file system (`calib-accepts-supplied`, `calib-estimated-ok`,
+  `calib-any-filesystem`, `calib-dev-trusted`, `wall-bound-loose`
+  sabotages). The judged
   bound must be exactly the median qualified calibration p99 + 5 ms —
   a fixed bound, a swapped-in calibration, or a qualified flag that
   contradicts the run's own load samples all fail

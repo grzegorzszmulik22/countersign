@@ -308,6 +308,53 @@ def t_mm13_calib_same_filesystem():
         return True, "foreign-device calibration rejected"
 
 
+def t_mm13_calib_device_is_measured():
+    """CR-003 clarification: the file system check must measure the
+    calibration FILE's real device — never trust the st_dev the record
+    claims. A record whose claim matches the ledger while its file
+    actually sits on another device is the exploit; every other
+    claimable field (n, path) is likewise measured, not trusted."""
+    with tempfile.TemporaryDirectory() as d:
+        dev = os.stat(d).st_dev
+        foreign = None
+        for cand in ("/dev/shm", "/run"):
+            try:
+                if (os.stat(cand).st_dev != dev and
+                        os.access(cand, os.W_OK)):
+                    foreign = cand
+                    break
+            except OSError:
+                continue
+        if foreign is None:
+            return False, "no writable different-device dir on this host"
+        c = _calib(foreign, name="fscal-foreign.dat")
+        c["st_dev"] = dev                            # claim the ledger's device
+        try:
+            if ME.fsync_calib_ok(c, d)[0]:
+                return False, "claimed-device-matches/real-device-differs accepted"
+        finally:
+            os.unlink(c["path"])
+        c = _calib(foreign, name="fscal-foreign.dat")  # honest foreign claim too
+        try:
+            if ME.fsync_calib_ok(c, d)[0]:
+                return False, "honestly-recorded foreign device accepted"
+        finally:
+            os.unlink(c["path"])
+        c = _calib(d)
+        c["n"] = c["n"] - 1  # claim differs from the measured sample count
+        if ME.fsync_calib_ok(c, d)[0]:
+            return False, "recorded n != actual samples accepted"
+        c = _calib(d)
+        c["path"] = os.path.join(d, "ghost.dat")  # claim a file that isn't there
+        if ME.fsync_calib_ok(c, d)[0]:
+            return False, "nonexistent calibration file accepted"
+        c = _calib(d)  # boundary: claim == real == ledger device
+        ok, why = ME.fsync_calib_ok(c, d)
+        if not ok:
+            return False, f"claim == real == ledger device rejected: {why}"
+        return True, "device measured from the file, claims never trusted"
+
+
 def t_mm13_bound_uses_calibration():
     """CR-003: the judged bound must BE the calibration — every run has
     its own pre/post pair, target is the median qualified calib p99 +
@@ -473,12 +520,14 @@ CASES = [
      t_mm13_uses_larger_p99),
     ("mm1.3: observed wall < samples x pacing is not a calibration",
      t_calib_wall_floor),
+    ("mm1.3: file system measured by the calib file's real device",
+     t_mm13_calib_device_is_measured),
 ]
 
 
 def main():
-    if len(CASES) != 14:
-        print(f"selftest: {len(CASES)} cases registered, need 14 — the "
+    if len(CASES) != 15:
+        print(f"selftest: {len(CASES)} cases registered, need 15 — the "
               "negative-test set itself was tampered with")
         return 1
     print(f"harness negative tests ({len(CASES)} properties):")
