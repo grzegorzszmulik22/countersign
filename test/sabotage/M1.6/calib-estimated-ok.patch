@@ -1,6 +1,6 @@
 --- a/test/mutgen/measure.py
 +++ b/test/mutgen/measure.py
-@@ -209,21 +209,15 @@
+@@ -212,24 +212,15 @@
                         "cached or estimated")
      samples = calib.get("samples")
      n = len(samples) if isinstance(samples, list) else 0
@@ -20,6 +20,9 @@
 -        return False, (f"reported wall {wall!r}s cannot contain {n} "
 -                       f"samples paced {pace} ms — record is estimated, "
 -                       "not measured")
-     if observed_wall_s is not None and observed_wall_s < floor * 0.9:
+-    # CR-003 clarification: the harness-observed wall is floored at
+-    # samples x pacing — a command that returned faster could not have
+-    # run the paced samples, so the record was supplied, not measured.
+     need = n * pace / 1000.0
+     if observed_wall_s is not None and observed_wall_s < need:
          return False, (f"calibration command returned in "
-                        f"{observed_wall_s:.2f}s but {n} samples paced "

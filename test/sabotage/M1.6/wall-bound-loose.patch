@@ -1,0 +1,11 @@
+--- a/test/mutgen/measure.py
++++ b/test/mutgen/measure.py
+@@ -231,7 +231,7 @@
+     # samples x pacing — a command that returned faster could not have
+     # run the paced samples, so the record was supplied, not measured.
+     need = n * pace / 1000.0
+-    if observed_wall_s is not None and observed_wall_s < need:
++    if observed_wall_s is not None and observed_wall_s < need * 0.5:
+         return False, (f"calibration command returned in "
+                        f"{observed_wall_s:.2f}s but {n} samples paced "
+                        f"{pace} ms need >= {need:.2f}s — record was "

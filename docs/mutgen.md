@@ -56,18 +56,23 @@ running every mutant through **both** verifiers (`csverify` and
   Runs without samples are a harness integrity failure
   (`load-samples-missing` sabotage). The bound is host-referenced
   (CR-003): append p99 ≤ the same disk's fsync p99 + 5 ms, where the
-  fsync p99 is measured co-timed with each latency run on the same file
-  system as the ledger under test — a `csbench fscal` loop keeps writing
-  400-sample batches of single 300-byte records to an `O_APPEND` file,
-  each followed by `fsync`, paced ≥ 5 ms apart, for the run's whole
-  duration, and every sample is recorded. A snapshot cannot stand in:
-  disk conditions drift across the run window, so each run is judged
-  against the calibration measured while it ran. A missing, cached,
-  supplied or estimated calibration fails C1.6.3 — the harness checks
-  the record's source marker, sample count and pacing, that the wall
-  time and file mtime prove it ran in this run, and that the file's
-  device matches the ledger directory's (`calib-accepts-supplied`,
-  `calib-estimated-ok`, `calib-any-filesystem` sabotages). The judged
+  fsync p99 is the disk measured ALONE (CR-003 clarification): a
+  `csbench fscal` run of 400 single 300-byte `O_APPEND` write+fsync
+  samples paced ≥ 5 ms apart executes immediately before each latency
+  run and another immediately after it, never concurrently — a
+  concurrent calibration would measure the benchmark's own load and its
+  fsyncs would slow the appends under test. Both records are kept with
+  every sample, their harness-bracketed start/end times must prove no
+  overlap with the run window, and the run's calibration p99 is the
+  larger of the two legs. A missing leg, an overlap, or a bound taken
+  from the smaller p99 all fail C1.6.3 (`calib-overlaps-run`,
+  `calib-uses-min` sabotages). A missing, cached, supplied or
+  estimated calibration fails too — the harness checks the record's
+  source marker, sample count and pacing, that the reported wall and
+  the harness-observed wall (≥ samples × pacing) and file mtime prove
+  it ran in this run, and that the file's device matches the ledger
+  directory's (`calib-accepts-supplied`, `calib-estimated-ok`,
+  `calib-any-filesystem`, `wall-bound-loose` sabotages). The judged
   bound must be exactly the median qualified calibration p99 + 5 ms —
   a fixed bound, a swapped-in calibration, or a qualified flag that
   contradicts the run's own load samples all fail

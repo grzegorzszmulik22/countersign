@@ -221,10 +221,10 @@ def t_fsync_bound_needs_exact_count():
 
 
 def _calib(tmpdir, samples=400, pace=5.0, wall=4.0, dev_off=0,
-           claimed=None, mtime_age=0.0):
+           claimed=None, mtime_age=0.0, name="fscal-calib.dat"):
     """A plausible MM1.3 fsync-calibration record: `samples` write+fsync
     latencies (8 ms each) on a real file inside tmpdir."""
-    path = os.path.join(tmpdir, "fscal-calib.dat")
+    path = os.path.join(tmpdir, name)
     with open(path, "wb") as f:
         f.write(b"x" * 300)
     dev = os.stat(path).st_dev
@@ -239,6 +239,19 @@ def _calib(tmpdir, samples=400, pace=5.0, wall=4.0, dev_off=0,
     rec["fsync_p99_ms"] = (claimed if claimed is not None
                            else ME.mm13_calib_p99(rec))
     return rec
+
+
+def _pair(tmpdir, pre_p99=8.0, post_p99=8.0, rs=100.0, re_=200.0):
+    """An honest pre/post calibration pair bracketing a latency run:
+    pre ends at 20, the run spans [rs, re_]=[100, 200], post starts at
+    210 — the disk measured alone, larger leg p99 recorded."""
+    pre = _calib(tmpdir, samples=[pre_p99] * 400, name="pre.dat")
+    pre.update(t_start=10.0, t_end=20.0, observed_wall_s=10.0)
+    post = _calib(tmpdir, samples=[post_p99] * 400, name="post.dat")
+    post.update(t_start=210.0, t_end=220.0, observed_wall_s=10.0)
+    return ({"pre": pre, "post": post,
+             "calib_p99_ms": max(pre_p99, post_p99)},
+            {"run_t_start": rs, "run_t_end": re_})
 
 
 def t_mm13_calib_measured_in_run():
@@ -297,16 +310,16 @@ def t_mm13_calib_same_filesystem():
 
 def t_mm13_bound_uses_calibration():
     """CR-003: the judged bound must BE the calibration — every run has
-    its own co-timed record, target is the median qualified calib p99 +
+    its own pre/post pair, target is the median qualified calib p99 +
     5 ms, and pass follows it. A fixed bound, wrong pass, missing
     records or doctored qualified flags all fail."""
     with tempfile.TemporaryDirectory() as d:
         ctx = {"ledger_dir": d}
-        calib = _calib(d)          # p99 8.0 -> bound 13.0
+        cpair, times = _pair(d)      # both legs p99 8.0 -> bound 13.0
         run = {"p99_ms": 12.0, "load1_samples": [1.0, 2.0],
-               "qualified": True, "calib_p99_ms": 8.0}
+               "qualified": True, "calib_p99_ms": 8.0, **times}
         base = {"runs": 5, "samples": [12.0] * 5, "cores": 4,
-                "judgment": "judged", "calibration": [calib] * 5,
+                "judgment": "judged", "calibration": [cpair] * 5,
                 "all_samples": [dict(run) for _ in range(5)],
                 "median": 12.0, "pass": True, "target": 13.0,
                 "absolute_p99_ms": 12.0}
@@ -324,9 +337,13 @@ def t_mm13_bound_uses_calibration():
         del no_cal["calibration"]
         if not ME.mm13_res_ok(no_cal, ctx):
             return False, "judged metric without calibration accepted"
-        short_cal = {**base, "calibration": [calib] * 4}
+        short_cal = {**base, "calibration": [cpair] * 4}
         if not ME.mm13_res_ok(short_cal, ctx):
             return False, "4 calibrations for 5 runs accepted"
+        one_leg = {**base, "calibration": [
+            {"pre": cpair["pre"], "calib_p99_ms": 8.0}] * 5}
+        if not ME.mm13_res_ok(one_leg, ctx):
+            return False, "single-leg calibration accepted"
         over = {**base, "median": 14.0, "pass": False,
                 "absolute_p99_ms": 14.0}  # 14 > 13 must fail
         if ME.mm13_res_ok(over, ctx):
@@ -345,6 +362,86 @@ def t_mm13_bound_uses_calibration():
             return False, "honest judged metric flagged"
         return True, "fixed bounds, wrong pass, missing/doctored " \
                      "records rejected"
+
+
+def t_mm13_calib_runs_alone():
+    """CR-003 clarification: the disk is measured alone — a calibration
+    whose harness-recorded brackets overlap the latency run (or a run
+    without brackets to prove they do not) fails C1.6.3."""
+    with tempfile.TemporaryDirectory() as d:
+        ctx = {"ledger_dir": d}
+        cpair, times = _pair(d)
+        run = {"p99_ms": 12.0, "load1_samples": [1.0],
+               "qualified": True, "calib_p99_ms": 8.0, **times}
+        ok = {"runs": 1, "samples": [12.0], "cores": 4,
+              "judgment": "judged", "calibration": [cpair],
+              "all_samples": [run], "median": 12.0, "pass": True,
+              "target": 13.0, "absolute_p99_ms": 12.0}
+        if ME.mm13_res_ok(ok, ctx):
+            return False, "honest alone-window calibration flagged"
+        pre_over = {**ok, "calibration": [
+            {**cpair, "pre": {**cpair["pre"], "t_end": 150.0}}]}
+        if not ME.mm13_res_ok(pre_over, ctx):
+            return False, "pre-calibration ending inside the run accepted"
+        post_over = {**ok, "calibration": [
+            {**cpair, "post": {**cpair["post"], "t_start": 150.0}}]}
+        if not ME.mm13_res_ok(post_over, ctx):
+            return False, "post-calibration starting inside the run " \
+                          "accepted"
+        no_t = {**ok, "all_samples": [
+            {"p99_ms": 12.0, "load1_samples": [1.0], "qualified": True,
+             "calib_p99_ms": 8.0}]}
+        if not ME.mm13_res_ok(no_t, ctx):
+            return False, "run without timing brackets accepted"
+        # Boundary: a pre ending exactly when the run starts is alone.
+        tight = {**ok, "calibration": [
+            {**cpair, "pre": {**cpair["pre"], "t_end": 100.0}}]}
+        if ME.mm13_res_ok(tight, ctx):
+            return False, "boundary pre-t_end == run-start flagged"
+        return True, "overlapping and bracket-less calibrations " \
+                     "rejected; boundary alone window held"
+
+
+def t_mm13_uses_larger_p99():
+    """CR-003 clarification: the run's calibration p99 — and therefore
+    the bound — is the LARGER of the pre and post legs; recording or
+    judging from the smaller fails C1.6.3."""
+    with tempfile.TemporaryDirectory() as d:
+        ctx = {"ledger_dir": d}
+        cpair, times = _pair(d, pre_p99=8.0, post_p99=20.0)
+        run = {"p99_ms": 12.0, "load1_samples": [1.0],
+               "qualified": True, "calib_p99_ms": 20.0, **times}
+        base = {"runs": 1, "samples": [12.0], "cores": 4,
+                "judgment": "judged", "calibration": [cpair],
+                "all_samples": [run], "median": 12.0, "pass": True,
+                "target": 25.0, "absolute_p99_ms": 12.0}
+        if ME.mm13_res_ok(base, ctx):
+            return False, "honest larger-p99 bound flagged"
+        small = {"pre": cpair["pre"], "post": cpair["post"],
+                 "calib_p99_ms": 8.0}
+        bad = {**base, "calibration": [small],
+               "all_samples": [{**run, "calib_p99_ms": 8.0}]}
+        if not ME.mm13_res_ok(bad, ctx):
+            return False, "smaller of pre/post recorded as the p99 " \
+                          "accepted"
+        bad_t = {**base, "target": 13.0}  # smaller leg + 5 ms
+        if not ME.mm13_res_ok(bad_t, ctx):
+            return False, "bound computed from the smaller p99 accepted"
+        return True, "smaller-of-two p99s rejected in record and bound"
+
+
+def t_calib_wall_floor():
+    """CR-003 clarification: a calibration whose harness-observed wall
+    is shorter than samples x pacing could not have run the paced
+    samples — violating rejected, exact boundary accepted."""
+    with tempfile.TemporaryDirectory() as d:
+        c = _calib(d)  # 400 samples x 5 ms -> observed must be >= 2.0 s
+        if ME.fsync_calib_ok(c, d, observed_wall_s=1.99)[0]:
+            return False, "observed wall under samples x pacing accepted"
+        ok, why = ME.fsync_calib_ok(c, d, observed_wall_s=2.0)
+        if not ok:
+            return False, f"boundary wall == samples x pacing: {why}"
+        return True, "short observed wall rejected; boundary accepted"
 
 
 CASES = [
@@ -370,12 +467,18 @@ CASES = [
      t_mm13_calib_same_filesystem),
     ("mm1.3: judged bound is the measured fsync p99 + 5 ms",
      t_mm13_bound_uses_calibration),
+    ("mm1.3: calibration runs alone, never overlapping a latency run",
+     t_mm13_calib_runs_alone),
+    ("mm1.3: the larger of pre/post calibrations is the bound",
+     t_mm13_uses_larger_p99),
+    ("mm1.3: observed wall < samples x pacing is not a calibration",
+     t_calib_wall_floor),
 ]
 
 
 def main():
-    if len(CASES) != 11:
-        print(f"selftest: {len(CASES)} cases registered, need 11 — the "
+    if len(CASES) != 14:
+        print(f"selftest: {len(CASES)} cases registered, need 14 — the "
               "negative-test set itself was tampered with")
         return 1
     print(f"harness negative tests ({len(CASES)} properties):")

@@ -18,12 +18,15 @@ test/bench/csbench with the pinned Go toolchain, then runs:
 - MM1.3  append p99 <= the disk's fsync p99 + 5 ms at 1,000/s (CR-003),
          judged only on runs whose per-second 1-minute load samples all
          stayed <= core count; every run is recorded. The fsync p99 is
-         calibrated co-timed with each run on the same file system as
-         the ledger under test (>= 400 single 300-byte O_APPEND
-         write+fsync samples paced >= 5 ms apart per run, every sample
-         recorded) — a missing, cached, supplied or estimated
-         calibration fails. If no run qualifies the result is "not
-         judged: host contended" — allowed by CR-002, open for G1.
+         the disk measured ALONE (CR-003 clarification): one calibration
+         runs immediately before and one immediately after each latency
+         run, with no run in progress (>= 400 single 300-byte O_APPEND
+         write+fsync samples paced >= 5 ms apart each, every sample
+         recorded, on the same file system as the ledger under test),
+         and the run's bound uses the LARGER of the two p99s. A missing,
+         cached, supplied, estimated or overlapping calibration fails.
+         If no run qualifies the result is "not judged: host contended"
+         — allowed by CR-002, open for G1.
 - MM1.4/MM1.5  from run_suite.py's mutations.json.
 
 Every metric reports: command, machine description (make sysinfo), the
@@ -40,7 +43,6 @@ import os
 import statistics
 import subprocess
 import sys
-import threading
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -225,10 +227,14 @@ def fsync_calib_ok(calib, ledger_dir, observed_wall_s=None, since=None):
         return False, (f"reported wall {wall!r}s cannot contain {n} "
                        f"samples paced {pace} ms — record is estimated, "
                        "not measured")
-    if observed_wall_s is not None and observed_wall_s < floor * 0.9:
+    # CR-003 clarification: the harness-observed wall is floored at
+    # samples x pacing — a command that returned faster could not have
+    # run the paced samples, so the record was supplied, not measured.
+    need = n * pace / 1000.0
+    if observed_wall_s is not None and observed_wall_s < need:
         return False, (f"calibration command returned in "
                        f"{observed_wall_s:.2f}s but {n} samples paced "
-                       f"{pace} ms need >= {floor:.2f}s — record was "
+                       f"{pace} ms need >= {need:.2f}s — record was "
                        "supplied, not run")
     if not isinstance(calib.get("path"), str):
         return False, "calibration file path not recorded"
@@ -254,12 +260,16 @@ def fsync_calib_ok(calib, ledger_dir, observed_wall_s=None, since=None):
 
 
 def mm13_res_ok(res, ctx):
-    """MM1.3 (CR-003): a judged metric's bound must BE the in-run
-    calibration — every latency run carries its own co-timed calibration
-    (>= 400 paced samples on the ledger's file system), the target is the
-    median fsync p99 of the qualified runs' calibrations + 5 ms, and
-    pass/fail follows it, with the absolute p99 recorded beside. A
-    missing/bad calibration, a run whose recorded qualification
+    """MM1.3 (CR-003 + clarification): a judged metric's bound must BE
+    the disk's own fsync p99 measured ALONE — every latency run carries
+    a "pre" calibration that ended before the run began and a "post"
+    calibration that began after the run ended (>= 400 paced samples
+    each, on the ledger's file system, every sample recorded), the run's
+    calibration p99 is the LARGER of the two, the target is the median
+    of the qualified runs' calibration p99s + 5 ms, and pass/fail
+    follows it, with the absolute p99 recorded beside. A missing or bad
+    leg, a leg overlapping the latency run, a recorded p99 that is not
+    the larger of pre/post, a run whose recorded qualification
     contradicts its own load samples, or any other bound fails C1.6.3."""
     calibs = res.get("calibration")
     runs = res.get("all_samples") or []
@@ -267,10 +277,48 @@ def mm13_res_ok(res, ctx):
         return ["MM1.3 calibration: missing or not one per run"]
     problems = []
     cores = res.get("cores", CORES)
-    for i, (c, r) in enumerate(zip(calibs, runs)):
-        ok, why = fsync_calib_ok(c, ctx["ledger_dir"])
-        if not ok:
-            problems.append(f"MM1.3 calibration run {i}: {why}")
+    for i, (cp, r) in enumerate(zip(calibs, runs)):
+        legs = {}
+        if not isinstance(cp, dict):
+            problems.append(f"MM1.3 run {i}: calibration record malformed")
+        else:
+            for tag in ("pre", "post"):
+                c = cp.get(tag)
+                if not isinstance(c, dict):
+                    problems.append(f"MM1.3 run {i} {tag}-calibration: "
+                                    "missing")
+                    continue
+                obs = c.get("observed_wall_s")
+                if not isinstance(obs, (int, float)):
+                    problems.append(f"MM1.3 run {i} {tag}-calibration: "
+                                    "harness-observed wall not recorded")
+                    continue
+                ok, why = fsync_calib_ok(c, ctx["ledger_dir"],
+                                         observed_wall_s=obs)
+                if not ok:
+                    problems.append(f"MM1.3 run {i} {tag}-calibration: "
+                                    f"{why}")
+                else:
+                    legs[tag] = c
+        if len(legs) == 2:
+            pre, post = legs["pre"], legs["post"]
+            rs, re_ = r.get("run_t_start"), r.get("run_t_end")
+            times = (pre.get("t_end"), rs, re_, post.get("t_start"))
+            if not all(isinstance(v, (int, float)) for v in times):
+                problems.append(f"MM1.3 run {i}: timing brackets missing "
+                                "— cannot prove the calibration ran "
+                                "with no latency run in progress")
+            elif not (pre["t_end"] <= rs <= re_ <= post["t_start"]):
+                problems.append(f"MM1.3 run {i}: calibration overlaps "
+                                "the latency run — the disk must be "
+                                "measured alone")
+            cp99 = max(mm13_calib_p99(pre), mm13_calib_p99(post))
+            for val in (cp.get("calib_p99_ms"), r.get("calib_p99_ms")):
+                if (not isinstance(val, (int, float)) or
+                        abs(val - cp99) > 1e-6):
+                    problems.append(f"MM1.3 run {i}: calibration p99 "
+                                    f"{val!r} is not the larger of "
+                                    f"pre/post ({cp99:.3f})")
         want = mm13_classify(r.get("load1_samples"), cores) == "qualified"
         if r.get("qualified") != want:
             problems.append(f"MM1.3 run {i}: qualified flag contradicts "
@@ -281,7 +329,7 @@ def mm13_res_ok(res, ctx):
         return []
     if res.get("judgment") != "judged":
         return [f"MM1.3: judgment {res.get('judgment')!r} not recognized"]
-    q = [mm13_calib_p99(c) for c, r in zip(calibs, runs)
+    q = [cp["calib_p99_ms"] for cp, r in zip(calibs, runs)
          if r.get("qualified")]
     if not q:
         return ["MM1.3: judged but no qualified run has a calibration"]
@@ -524,40 +572,41 @@ def main() -> int:
                          "bound missed target")
 
     # ------------------------- MM1.3 ----------------------------------
-    # CR-003: the bound is the same disk's fsync p99 + 5 ms, measured in
-    # this run on the same file system as the ledger under test. The
-    # calibration is co-timed with every latency run — a fscal loop keeps
-    # writing 400-sample paced batches for the run's whole duration, so
-    # the bound tracks the disk conditions the appends actually saw (a
-    # one-shot snapshot cannot: it drifts over the run window). Every
-    # batch's samples are recorded; a run without a real, complete,
-    # same-device calibration fails C1.6.3.
+    # CR-003 + clarification: the bound is the same disk's fsync p99 +
+    # 5 ms, measured ALONE in this run on the same file system as the
+    # ledger under test. One calibration runs immediately before and one
+    # immediately after each latency run — never concurrently (a
+    # concurrent calibration measures the benchmark's own appends too
+    # and its fsyncs slow them). Each leg's harness-bracketed start/end
+    # times are recorded so the validator can prove no overlap; the
+    # run's calibration p99 is the larger of the two legs. A run without
+    # a real, complete, same-device, non-overlapping pair fails C1.6.3.
     ledger_dir = os.path.join(WORK, "ledger-b")
     os.makedirs(ledger_dir, exist_ok=True)
 
-    def calib_loop(path, out, stop):
-        while not stop.is_set():
-            cr = sh([bench, "fscal", path, str(MM13_CALIB_MIN),
-                     str(int(MM13_CALIB_PACE_MS))])
-            if cr.returncode != 0:
-                break
-            rec = next((s for s in samples_from(cr.stdout)
-                        if s.get("metric") == "MM1.3-calib"), None)
-            if rec:
-                out.append(rec)
+    def fscal(path):
+        """One alone-window calibration; returns the record annotated
+        with the harness's own timing brackets, or None."""
+        t0 = time.time()
+        cr = sh([bench, "fscal", path, str(MM13_CALIB_MIN),
+                 str(int(MM13_CALIB_PACE_MS))])
+        t1 = time.time()
+        if cr.returncode != 0:
+            return None
+        rec = next((s for s in samples_from(cr.stdout)
+                    if s.get("metric") == "MM1.3-calib"), None)
+        if rec is not None:
+            rec["t_start"], rec["t_end"] = t0, t1
+            rec["observed_wall_s"] = t1 - t0
+        return rec
 
     lat_rows, calib_recs = [], []
     for i in range(args.runs):
-        calib_path = os.path.join(WORK, f"fscal-calib-{i}.dat")
-        batch, stop = [], threading.Event()
-        t0 = time.time()
-        th = threading.Thread(target=calib_loop,
-                              args=(calib_path, batch, stop))
-        th.start()
+        pre = fscal(os.path.join(WORK, f"fscal-pre-{i}.dat"))
+        lt0 = time.time()
         r = sh([bench, "latency", ledger_dir, rp, "1000", "20000", "8"])
-        stop.set()
-        th.join()
-        obs_wall = time.time() - t0
+        lt1 = time.time()
+        post = fscal(os.path.join(WORK, f"fscal-post-{i}.dat"))
         if r.returncode != 0:
             fails.append(f"MM1.3 run {i}: bench failed: {r.stderr[-200:]}")
             break
@@ -566,31 +615,23 @@ def main() -> int:
         if len(rows) != 1:
             fails.append(f"MM1.3 run {i}: {len(rows)} row(s) emitted, "
                          "need 1")
-        samples_acc, walls = [], 0.0
-        for c in batch:
-            samples_acc += c.get("samples") or []
-            walls += c.get("wall_s") or 0.0
-        crec = None
-        if samples_acc:
-            try:
-                dev = os.stat(calib_path).st_dev
-            except OSError:
-                dev = None
-            crec = {"metric": "MM1.3-calib", "source": "measured-in-run",
-                    "path": calib_path, "st_dev": dev,
-                    "n": len(samples_acc), "record_bytes": 300,
-                    "pace_ms": MM13_CALIB_PACE_MS, "wall_s": walls,
-                    "batches": len(batch), "samples": samples_acc,
-                    "fsync_p99_ms": mm13_calib_p99(
-                        {"samples": samples_acc})}
-        ok, why = fsync_calib_ok(crec, ledger_dir, obs_wall, t0)
-        if not ok:
-            fails.append(f"MM1.3 run {i}: fsync calibration rejected "
-                         f"({why})")
-            crec = None
+        cpair = {"pre": pre, "post": post}
+        if pre is not None and post is not None:
+            cpair["calib_p99_ms"] = max(mm13_calib_p99(pre),
+                                        mm13_calib_p99(post))
+        for tag in ("pre", "post"):
+            leg = cpair[tag]
+            ok, why = fsync_calib_ok(
+                leg, ledger_dir,
+                observed_wall_s=(leg or {}).get("observed_wall_s"),
+                since=(leg or {}).get("t_start"))
+            if not ok:
+                fails.append(f"MM1.3 run {i} {tag}-calibration rejected "
+                             f"({why})")
         for s in rows:  # keep calib_recs aligned 1:1 with lat_rows
+            s["run_t_start"], s["run_t_end"] = lt0, lt1
             lat_rows.append(s)
-            calib_recs.append(crec)
+            calib_recs.append(cpair)
     calib_ctx = {"ledger_dir": ledger_dir}
 
     # A run qualifies for judgment only when every per-second load sample
@@ -613,18 +654,21 @@ def main() -> int:
                      f"need >= {args.runs}")
     judged = [lat_rows[i] for i in qualified]
     jcalib = [calib_recs[i] for i in qualified]
-    bound = (statistics.median(
-                 [mm13_calib_p99(c) for c in jcalib]) + MM13_SLACK_MS
-             if jcalib and all(jcalib) else None)
+    bound = (statistics.median([c["calib_p99_ms"] for c in jcalib])
+             + MM13_SLACK_MS
+             if jcalib and all("calib_p99_ms" in (c or {})
+                               for c in jcalib) else None)
     if lat_rows:
         res = {
             "command": f"{bench} latency {ledger_dir} {rp} 1000 20000 8 "
                        f"(x{len(lat_rows)})",
             "calibration": calib_recs[:len(lat_rows)],
-            "calibration_command": f"{bench} fscal <run-file> "
+            "calibration_command": f"{bench} fscal <pre/post-file> "
                                    f"{MM13_CALIB_MIN} "
-                                   f"{int(MM13_CALIB_PACE_MS)} "
-                                   "co-timed per run",
+                                   f"{int(MM13_CALIB_PACE_MS)} — one "
+                                   "immediately before and one "
+                                   "immediately after each run, disk "
+                                   "alone, larger p99 judges",
             "cores": CORES,
             "runs": len(lat_rows),
             "qualified_runs": len(qualified),
@@ -634,8 +678,10 @@ def main() -> int:
                 "max_ms": s["max_ms"],
                 "load1_max": s.get("load1_max"),
                 "load1_samples": s.get("load1_samples"),
+                "run_t_start": s.get("run_t_start"),
+                "run_t_end": s.get("run_t_end"),
                 "qualified": idx in qualified,
-                "calib_p99_ms": (mm13_calib_p99(calib_recs[idx])
+                "calib_p99_ms": (calib_recs[idx].get("calib_p99_ms")
                                  if idx < len(calib_recs)
                                  and calib_recs[idx] else None)}
                 for idx, s in enumerate(lat_rows)],
@@ -668,8 +714,9 @@ def main() -> int:
         fails += validate_metric("MM1.3", res, args.runs, calib_ctx)
         if res["judgment"] == "judged":
             status = "PASS" if res["pass"] else "FAIL"
-            tgt = (f" vs co-timed fsync p99 {bound - MM13_SLACK_MS:.1f} "
-                   f"+ {MM13_SLACK_MS} ms = {bound:.1f} ms"
+            tgt = (f" vs alone-disk fsync p99 "
+                   f"{bound - MM13_SLACK_MS:.1f} + {MM13_SLACK_MS} ms = "
+                   f"{bound:.1f} ms"
                    if bound is not None else " (no calibration)")
             print(f"MM1.3: median p99 {res['median']:.1f} ms on "
                   f"{len(judged)} qualified runs{tgt} {status}")
