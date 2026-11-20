@@ -1,8 +1,8 @@
 diff --git a/internal/proxy/inspect_hook.go b/internal/proxy/inspect_hook.go
-index f437233..443259e 100644
+index 8acc681..f56a13c 100644
 --- a/internal/proxy/inspect_hook.go
 +++ b/internal/proxy/inspect_hook.go
-@@ -331,6 +331,7 @@ type inspectPipe struct {
+@@ -349,6 +349,7 @@ type inspectPipe struct {
  	finished bool // src drained + parser closed
  	err      error
  	tailErr  error // upstream read error, delivered after out drains
@@ -10,9 +10,9 @@ index f437233..443259e 100644
  }
  
  func newInspectPipe(src io.Reader, p inspect.ResponseParser,
-@@ -385,22 +386,7 @@ func (r *inspectPipe) feed(chunk []byte) {
+@@ -402,22 +403,7 @@ func (r *inspectPipe) feed(chunk []byte) {
+ 	comps, err := r.p.Feed(chunk)
  	r.fed = append(r.fed, chunk...)
- 	r.fedAbs += int64(len(chunk))
  	for _, c := range comps {
 -		rel := int(c.HoldAt - r.relAbs)
 -		if rel < 0 {
@@ -32,9 +32,9 @@ index f437233..443259e 100644
 -		}
 +		r.pending = append(r.pending, c.Intent)
  	}
- 	// Everything fed is releasable once the appends above returned.
- 	r.out = append(r.out, r.fed...)
-@@ -423,6 +409,14 @@ func (r *inspectPipe) finish(cause string) {
+ 	if err != nil {
+ 		if detail, ok := inspect.ParseError(err); ok {
+@@ -466,6 +452,14 @@ func (r *inspectPipe) finish(cause string) {
  		return
  	}
  	r.finished = true
@@ -46,6 +46,6 @@ index f437233..443259e 100644
 +		}
 +	}
 +	r.pending = nil
- 	if !r.dead {
- 		detail, clean := r.p.Finish()
- 		if !clean {
+ 	if r.err != nil {
+ 		// The last fed bytes may have failed closed (declare or
+ 		// unparsed append): the held bytes are never released.
