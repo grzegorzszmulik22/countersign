@@ -1,0 +1,12 @@
+C1.5.1: imports are stdlib + cryptography only
+CHECK C1.5.1 PASS  stdlib+cryptography imports only
+C1.5.2: 17 golden bundles agree with csverify
+CHECK C1.5.2 PASS  golden-bundle differential vs csverify
+C1.5.3: no Go sources read or generated under ref/python/
+CHECK C1.5.3 PASS  no Go sources under ref/python
+  inclusion: 2080 proofs verified across sizes 1..64
+C1.5.4: RFC 6962 and C2SP vectors pass
+CHECK C1.5.4 PASS  RFC 6962 + C2SP vectors
+C1.5.5: 65/65 derived vectors match
+CHECK C1.5.5 PASS  derived bundle vectors beyond the goldens
+check-M1.5: suite PASS
