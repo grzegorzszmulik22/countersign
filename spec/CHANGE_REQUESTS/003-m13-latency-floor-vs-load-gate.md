@@ -112,3 +112,13 @@ MM1.3 is restated as:
 - The calibration runs inside the measurement harness and must not be
   supplied, cached or estimated from an earlier run; a missing calibration
   fails C1.6.3.
+
+## Clarification (2026-11-20, supervisor)
+
+"The disk's own fsync p99" means the disk measured alone, not under the
+benchmark's own appends: a calibration run concurrently with the latency
+run measures the test's load as well and loosens the bound (lane evidence:
+14.0-17.4 ms concurrent against 6.5 ms alone). The calibration therefore
+runs with no latency run in progress, immediately before and immediately
+after each latency run, and the larger of the two p99 values is the one
+the target uses. Both are recorded with all their samples.
