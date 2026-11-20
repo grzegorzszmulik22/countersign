@@ -48,6 +48,11 @@ job_C3.5.3() {
         echo "go toolchain missing: run make tools"
         return 1
     fi
+    # Requires a C compiler for cgo — skip only when none exists (same
+    # rule as M2.7's race.runner; the row lives in tools/env-skips.txt).
+    command -v cc >/dev/null 2>&1 || command -v gcc >/dev/null 2>&1 \
+        || command -v clang >/dev/null 2>&1 \
+        || { echo "no C compiler; -race unsupported here"; return 0; }
     # -race -count=200 runs ~10+ min under the regress fan-out; Go's
     # default 10m test timeout kills it mid-run, so give real headroom.
     if "$GO" test -tags fixtures -race -count=200 -timeout=30m -run '^TestC353' \
@@ -69,13 +74,24 @@ for id in "${ids[@]}"; do
 done
 wait
 
+skipped=0
 for id in "${ids[@]}"; do
-    if [ "$(cat "$WORK/$id.rc" 2>/dev/null)" = "0" ]; then
+    if [ "$id" = C3.5.3 ] && grep -q "^no C compiler" "$WORK/$id.out" 2>/dev/null; then
+        # Never a silent pass: without a C compiler -race cannot run, so
+        # the check is a SKIP, accepted by regress only on hosts listed
+        # in tools/env-skips.txt.
+        say "$id" SKIP "no C compiler on $(hostname -s); -race unsupported"
+        skipped=1
+    elif [ "$(cat "$WORK/$id.rc" 2>/dev/null)" = "0" ]; then
         pass "$id"
     else
         bad "$id" "$(tail -6 "$WORK/$id.out" 2>/dev/null | tr '\n' ' ')"
     fi
 done
 
-[ "$fail" -eq 0 ] && echo "M3.5 suite: all checks passed" || echo "M3.5 suite: FAILURES" >&2
-exit "$fail"
+[ "$fail" -eq 0 ] && [ "$skipped" -eq 0 ] && echo "M3.5 suite: all checks passed"
+[ "$fail" -ne 0 ] && echo "M3.5 suite: FAILURES" >&2
+[ "$fail" -eq 0 ] && [ "$skipped" -ne 0 ] && echo "M3.5 suite: passed except listed SKIPs" >&2
+[ "$fail" -ne 0 ] && exit 1
+[ "$skipped" -ne 0 ] && exit 2
+exit 0
