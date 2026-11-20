@@ -1,0 +1,5 @@
+CHECK C3.5.1 PASS
+CHECK C3.5.2 PASS
+CHECK C3.5.3 FAIL — net/http.(*conn).serve(0xc000ccb440, {0xc3bc98, 0xc00151c180}) 	/home/csbuild/src/cs-broker2/.tools/go/src/net/http/server.go:1995 +0x15bc created by net/http.(*Server).Serve in goroutine 60694 	/home/csbuild/src/cs-broker2/.tools/go/src/net/http/server.go:3608 +0x658 FAIL	github.com/countersign/countersign/internal/proxy	601.621s FAIL 
+CHECK C3.5.4 PASS
+M3.5 suite: FAILURES

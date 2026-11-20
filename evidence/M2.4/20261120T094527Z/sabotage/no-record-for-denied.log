@@ -1,0 +1,12 @@
+make[1]: Entering directory '/home/csbuild/src/cs-broker2/.check-work/sabotage-M2.4-no-record-for-denied'
+CHECK C2.4.1 PASS
+CHECK C2.4.2 PASS
+CHECK C2.4.3 PASS
+CHECK C2.4.4 FAIL — --- FAIL: TestC244DeniedCounted (0.02s)     check_m24_test.go:806: path /d-0: 0 deny records, want exactly 1 FAIL FAIL	github.com/countersign/countersign/internal/proxy	0.030s FAIL 
+CHECK C2.4.5 FAIL — --- FAIL: TestC245CountEquality (46.18s)     check_m24_test.go:913: effect.http deny=0, want 10000 FAIL FAIL	github.com/countersign/countersign/internal/proxy	46.244s FAIL 
+CHECK C2.4.6 PASS
+CHECK lint.proxy FAIL —                  ^ internal/proxy/pipeline.go:583:6: func hostOnly is unused (unused) func hostOnly(authority string) string {      ^ 2 issues: * unused: 2 
+M2.4 suite: FAILURES
+check-M2.4: FAIL (exit 1, evidence: evidence/M2.4/20261120T095812Z)
+make[1]: *** [Makefile:37: check-M2.4] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-broker2/.check-work/sabotage-M2.4-no-record-for-denied'

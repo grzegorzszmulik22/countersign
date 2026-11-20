@@ -1,0 +1,13 @@
+make[1]: Entering directory '/home/csbuild/src/cs-broker2/.check-work/sabotage-M2.5-reuse-upstream-conn'
+CHECK C2.5.1 PASS
+CHECK C2.5.2 PASS
+CHECK C2.5.3 FAIL —     --- FAIL: TestC253UpstreamAddrCheck/no-reuse-h2 (0.01s)         check_m25_test.go:583: dials 1 for 3 requests — a reused conn served a request         harness_test.go:187: broker: tunnel 01M7WCE0YV006K47ZHRC8C2W0T inner serve: http: Server closed (conn err: read tcp 127.0.0.1:43699->127.0.0.1:46228: use of closed network connection) FAIL FAIL	github.com/countersign/countersign/internal/proxy	0.065s FAIL 
+CHECK C2.5.4 PASS
+CHECK C2.5.5 PASS
+CHECK C2.5.6 PASS
+CHECK C2.5.7 PASS
+CHECK lint.proxy FAIL —                  ^ internal/proxy/upsend.go:120:6: func h1Attempt is unused (unused) func h1Attempt(ctx context.Context, conn net.Conn, req *http.Request, hdrTimeout time.Duration) (*http.Response, *spliceRW, error) {      ^ 6 issues: * unused: 6 
+M2.5 suite: FAILURES
+check-M2.5: FAIL (exit 1, evidence: evidence/M2.5/20261120T114549Z)
+make[1]: *** [Makefile:37: check-M2.5] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-broker2/.check-work/sabotage-M2.5-reuse-upstream-conn'
