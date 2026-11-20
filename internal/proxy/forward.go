@@ -64,6 +64,10 @@ func (s *Server) dialChecked(ctx context.Context, network, addr, scheme string) 
 		MinVersion: tls.VersionTLS12,
 		ServerName: host,
 		NextProtos: []string{"h2", "http/1.1"},
+		// X25519 only: the standard mandatory TLS 1.3 group — skips the
+		// hybrid ML-KEM key exchange whose cost dominates handshakes on
+		// this host (every upstream attempt pays a fresh handshake).
+		CurvePreferences: []tls.CurveID{tls.X25519},
 		// Every request still gets its own conn and handshake (B2-01);
 		// resumption only abbreviates the handshake — fresh keys, fresh
 		// socket, fresh recorded attempt.

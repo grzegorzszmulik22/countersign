@@ -16,6 +16,7 @@ package proxy
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
@@ -25,18 +26,28 @@ import (
 
 // spliceRW lets the 101 upgrade path treat the conn (plus the bytes the
 // response reader may already have buffered) as a bidirectional stream.
-// Its Close also retires the cancel-watcher goroutine.
+// Its Close unregisters the ctx watcher and RSTs the conn (linger 0) so
+// per-request conns never pile up in TIME_WAIT.
 type spliceRW struct {
 	*bufio.Reader
 	conn net.Conn
-	done chan struct{}
+	stop func() bool
 	once sync.Once
 }
 
 func (s *spliceRW) Write(b []byte) (int, error) { return s.conn.Write(b) }
 
 func (s *spliceRW) Close() error {
-	s.once.Do(func() { close(s.done) })
+	s.once.Do(func() {
+		s.stop()
+		raw := s.conn
+		if tc, ok := raw.(*tls.Conn); ok {
+			raw = tc.NetConn()
+		}
+		if tcp, ok := raw.(*net.TCPConn); ok {
+			_ = tcp.SetLinger(0)
+		}
+	})
 	return s.conn.Close()
 }
 
@@ -102,15 +113,10 @@ func (s *Server) upstreamRoundTrip(dctx, reqCtx context.Context, tgt forwardTarg
 // LIMIT_BODY abort) fails the attempt immediately rather than waiting
 // on a response the upstream is still expecting a body for.
 func h1Attempt(ctx context.Context, conn net.Conn, req *http.Request, hdrTimeout time.Duration) (*http.Response, *spliceRW, error) {
-	done := make(chan struct{})
-	go func() {
-		select {
-		case <-ctx.Done():
-			_ = conn.Close()
-		case <-done:
-		}
-	}()
-	splice := &spliceRW{Reader: bufio.NewReader(conn), conn: conn, done: done}
+	// AfterFunc needs no dedicated watcher goroutine: the close runs on
+	// the ctx canceller. stop() unregisters when the conn retires.
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	splice := &spliceRW{Reader: bufio.NewReader(conn), conn: conn, stop: stop}
 	if hdrTimeout > 0 {
 		_ = conn.SetWriteDeadline(time.Now().Add(hdrTimeout))
 	}

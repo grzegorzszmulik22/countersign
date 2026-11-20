@@ -409,6 +409,10 @@ func (s *Server) intercept(cli net.Conn, sess *Session, cID string, client Clien
 	wantName := normName(host)
 	tcfg := &tls.Config{
 		MinVersion: tls.VersionTLS12,
+		// X25519 only: the standard mandatory TLS 1.3 group — skips the
+		// hybrid ML-KEM key exchange whose cost dominates handshakes on
+		// this host.
+		CurvePreferences: []tls.CurveID{tls.X25519},
 		// ALPN offer to the client is fixed: h2 and http/1.1 (M2.2). The
 		// upstream side negotiates independently on its own TLS conn.
 		NextProtos: []string{"h2", "http/1.1"},
