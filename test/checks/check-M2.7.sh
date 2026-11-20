@@ -138,7 +138,13 @@ done
 # The skip is never a pass: regress accepts it only on the listed hosts.
 skipped=0
 for id in C2.7.1 C2.7.2 C2.7.3 C2.7.4 C2.7.5 C2.7.X C2.7.6 lint.runner race.runner; do
-    if ns_skip_host "$id"; then
+    if [ "$id" = race.runner ] && grep -q "^no C compiler" "$WORK/$id.out" 2>/dev/null; then
+        # Never a silent pass: without a C compiler -race cannot run, so the
+        # check is a SKIP, accepted by regress only on hosts listed in
+        # tools/env-skips.txt.
+        say "$id" SKIP "no C compiler on $(hostname -s); -race unsupported"
+        skipped=1
+    elif ns_skip_host "$id"; then
         say "$id" SKIP "enforced userns boundary unavailable on $(hostname -s) (tools/env-skips.txt); passed on agent-vpc"
         skipped=1
     elif [ "$(cat "$WORK/$id.rc" 2>/dev/null)" = "0" ]; then
