@@ -1,0 +1,13 @@
+make[1]: Entering directory '/home/csbuild/src/cs-broker2/.check-work/sabotage-M2.5-path-reescape'
+CHECK C2.5.1 FAIL — --- FAIL: TestC251SmugglingCorpus (3.15s)     --- FAIL: TestC251SmugglingCorpus/a-pct-normal.http (0.00s)         check_m25_test.go:222: path fidelity: upstream "/a%2520b", recorded "/a%20b" FAIL FAIL	github.com/countersign/countersign/internal/proxy	3.160s FAIL 
+CHECK C2.5.2 PASS
+CHECK C2.5.3 PASS
+CHECK C2.5.4 PASS
+CHECK C2.5.5 PASS
+CHECK C2.5.6 PASS
+CHECK C2.5.7 PASS
+CHECK lint.proxy PASS
+M2.5 suite: FAILURES
+check-M2.5: FAIL (exit 1, evidence: evidence/M2.5/20261120T033732Z)
+make[1]: *** [Makefile:37: check-M2.5] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-broker2/.check-work/sabotage-M2.5-path-reescape'

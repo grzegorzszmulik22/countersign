@@ -1,0 +1,13 @@
+make[1]: Entering directory '/home/csbuild/src/cs-broker2/.check-work/sabotage-M2.5-websocket-always-allowed'
+CHECK C2.5.1 PASS
+CHECK C2.5.2 PASS
+CHECK C2.5.3 PASS
+CHECK C2.5.4 FAIL —         X-Content-Type-Options: nosniff         X-Countersign-Reason: UPSTREAM         Date: Fri, 20 Nov 2026 05:23:02 GMT FAIL FAIL	github.com/countersign/countersign/internal/proxy	0.017s FAIL 
+CHECK C2.5.5 PASS
+CHECK C2.5.6 PASS
+CHECK C2.5.7 PASS
+CHECK lint.proxy FAIL — internal/proxy/ws.go:47:6: func grantUpgrade is unused (unused) func grantUpgrade(g *policy.Grant, u string) bool {      ^ 1 issues: * unused: 1 
+M2.5 suite: FAILURES
+check-M2.5: FAIL (exit 1, evidence: evidence/M2.5/20261120T052254Z)
+make[1]: *** [Makefile:37: check-M2.5] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-broker2/.check-work/sabotage-M2.5-websocket-always-allowed'
