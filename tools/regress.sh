@@ -51,6 +51,13 @@ fi
 # passed. A suite that itself invokes `make regress`/`make check-*` (e.g.
 # M0.5's frozen-tamper check, which dirties the main tree and re-runs other
 # chunks' suites) must not overlap other suites; it runs alone afterwards.
+#
+# Suites carrying latency-bound checks (C2.3.2's SSE p99, C2.5.6's
+# isolation p99 under flood) run serially FIRST, before the parallel
+# fan-out: their bounds assume the flood/measurement is the only real
+# load, which stops being true once every suite is running. The checks
+# themselves are unchanged — only their scheduling window is quieter.
+early=(M2.3 M2.5)
 solo=(); par=()
 for c in $done_chunks; do
     if [ "$c" = "${CS_CHECK_RUNNING:-}" ]; then
@@ -64,17 +71,43 @@ for c in $done_chunks; do
         par+=("$c")
     fi
 done
+# Move the latency-bound chunks out of par into early (keeping discovery
+# order) so a chunk is never run twice.
+if [ ${#early[@]} -gt 0 ]; then
+    next=(); snext=()
+    for c in ${par[@]+"${par[@]}"}; do
+        keep=1
+        for e in "${early[@]}"; do [ "$c" = "$e" ] && keep=0; done
+        [ "$keep" -eq 1 ] && next+=("$c")
+    done
+    for c in ${solo[@]+"${solo[@]}"}; do
+        keep=1
+        for e in "${early[@]}"; do [ "$c" = "$e" ] && keep=0; done
+        [ "$keep" -eq 1 ] && snext+=("$c")
+    done
+    par=(${next[@]+"${next[@]}"}); solo=(${snext[@]+"${snext[@]}"})
+fi
 
 tmpd=$(mktemp -d)
+# A failing suite is accepted only when every non-PASS check is a SKIP that
+# tools/env-skips.txt allows on this host (and the suite checked something).
+host=$(hostname -s)
+env_ok() { python3 tools/env_skip_ok.py tools/env-skips.txt "$host" <"$1"; }
+
+for c in ${early[@]+"${early[@]}"}; do
+    [ "$c" != "${CS_CHECK_RUNNING:-}" ] || continue
+    [ -f "test/checks/check-$c.sh" ] || continue
+    echo "-- make check-$c"
+    r=0; "${MAKE:-make}" "check-$c" >"$tmpd/$c.log" 2>&1 || r=$?
+    cat "$tmpd/$c.log"
+    [ "$r" -eq 0 ] || env_ok "$tmpd/$c.log" || rc=1
+done
+
 declare -A pids=()
 for c in ${par[@]+"${par[@]}"}; do
     "${MAKE:-make}" "check-$c" >"$tmpd/$c.log" 2>&1 &
     pids[$c]=$!
 done
-# A failing suite is accepted only when every non-PASS check is a SKIP that
-# tools/env-skips.txt allows on this host (and the suite checked something).
-host=$(hostname -s)
-env_ok() { python3 tools/env_skip_ok.py tools/env-skips.txt "$host" <"$1"; }
 for c in ${par[@]+"${par[@]}"}; do
     echo "-- make check-$c"
     r=0; wait "${pids[$c]}" || r=$?

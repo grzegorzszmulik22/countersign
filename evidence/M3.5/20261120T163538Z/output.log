@@ -1,0 +1,5 @@
+CHECK C3.5.1 PASS
+CHECK C3.5.2 PASS
+CHECK C3.5.3 PASS
+CHECK C3.5.4 PASS
+M3.5 suite: all checks passed
