@@ -1,0 +1,7 @@
+CHECK C2.3.1 PASS
+CHECK C2.3.2 FAIL —     check_m23_test.go:428: p99 added delay 7.156 ms > 2 ms (MM2.3; proxied p99 10.807 ms)     check_m23_test.go:433: SSE: 1000 events in 12.791847149s (993 proxied reads), p99 added 7.156 ms (proxied p99 10.807, direct p99 5.373), coalesced 7     harness_test.go:187: broker: tunnel 01M7VAZJQY00HJ489G6JANFKEA inner serve: listener closed (conn err: read tcp 127.0.0.1:43679->127.0.0.1:44050: use of closed network connection) FAIL FAIL	github.com/countersign/countersign/internal/proxy	12.860s FAIL 
+CHECK C2.3.3 PASS
+CHECK C2.3.4 PASS
+CHECK C2.3.5 PASS
+CHECK lint.proxy PASS
+M2.3 suite: FAILURES

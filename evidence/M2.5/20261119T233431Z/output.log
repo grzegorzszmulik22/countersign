@@ -1,0 +1,8 @@
+SABOTAGE allow-cl-and-te: caught (exit 2) by C2.5.1 
+SABOTAGE path-reescape: caught (exit 2) by C2.5.1 
+SABOTAGE record-name-not-ip: caught (exit 2) by C2.5.3 
+SABOTAGE resolve-twice: caught (exit 2) by C2.5.3 
+SABOTAGE reuse-upstream-conn: caught (exit 2) by C2.5.3 lint.proxy 
+SABOTAGE skip-link-local-block: caught (exit 2) by C2.5.3 
+SABOTAGE websocket-always-allowed: caught (exit 2) by C2.5.4 lint.proxy 
+sabotage-M2.5: 7 caught, 0 uncaught (evidence: evidence/M2.5/20261119T233431Z/sabotage)

@@ -1,0 +1,12 @@
+make[1]: Entering directory '/home/csbuild/src/cs-broker2/.check-work/sabotage-M2.4-forward-before-ack'
+CHECK C2.4.1 FAIL — --- FAIL: TestC241OrderingProof (38.82s)     check_m24_test.go:317: request 0: durable ack 2026-11-19T23:08:28.9251698Z NOT before first upstream byte 2026-11-19T23:08:28.925076519Z (write-ahead violated) FAIL FAIL	github.com/countersign/countersign/internal/proxy	38.833s FAIL 
+CHECK C2.4.2 PASS
+CHECK C2.4.3 FAIL —     --- FAIL: TestC243FailClosed/append-slow (0.80s)         harness_test.go:187: broker: record append failed: record append exceeded 500ms bound         check_m24_test.go:687: status 200, want 502 FAIL FAIL	github.com/countersign/countersign/internal/proxy	0.819s FAIL 
+CHECK C2.4.4 PASS
+CHECK C2.4.5 PASS
+CHECK C2.4.6 FAIL — --- FAIL: TestC246SealExportVerify (5.37s)     check_m24_test.go:1070: still 4 pending effects before seal (err <nil>) FAIL FAIL	github.com/countersign/countersign/internal/proxy	5.384s FAIL 
+CHECK lint.proxy PASS
+M2.4 suite: FAILURES
+check-M2.4: FAIL (exit 1, evidence: evidence/M2.4/20261119T230828Z)
+make[1]: *** [Makefile:37: check-M2.4] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-broker2/.check-work/sabotage-M2.4-forward-before-ack'
