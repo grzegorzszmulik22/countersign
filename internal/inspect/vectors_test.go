@@ -6,6 +6,7 @@ package inspect
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -144,35 +145,51 @@ func runParser(t *testing.T, ep Endpoint, format string, wire []byte, sizes []in
 func TestVectorsChunkIndependent(t *testing.T) {
 	for _, dir := range []string{"anthropic", "openai"} {
 		for _, v := range loadVectors(t, dir) {
-			sizes := [][]int{{1}, {2}, {3}, {5}, {7}, {64}, {1024}, {1 << 20}}
-			rng := rand.New(rand.NewSource(0xC0FFEE))
-			for k := 0; k < 1000; k++ {
-				a := 1 + rng.Intn(64)
-				b := 1 + rng.Intn(2048)
-				sizes = append(sizes, []int{a, b, 1 + rng.Intn(9)})
-			}
-			for si, sz := range sizes {
-				comps, detail, _ := runParser(t, endpointFor(t, v.exp.Provider),
-					v.exp.Format, v.wire, sz)
-				if len(comps) != len(v.exp.Intents) {
-					t.Fatalf("%s chunking %v: %d intents, want %d",
-						v.name, sz, len(comps), len(v.exp.Intents))
+			v := v
+			t.Run(v.name, func(t *testing.T) {
+				sizes := [][]int{{1}, {2}, {3}, {5}, {7}, {64}, {1024}, {1 << 20}}
+				rng := rand.New(rand.NewSource(0xC0FFEE))
+				for k := 0; k < 1000; k++ {
+					a := 1 + rng.Intn(64)
+					b := 1 + rng.Intn(2048)
+					sizes = append(sizes, []int{a, b, 1 + rng.Intn(9)})
 				}
-				for i, c := range comps {
-					e := v.exp.Intents[i]
-					if c.Intent.ID != e.ID || c.Intent.Tool != e.Tool ||
-						c.Intent.Executor != e.Executor ||
-						c.Intent.InputSHA256 != e.InputSHA256 ||
-						len(c.Intent.InputRaw) != e.InputLen {
-						t.Fatalf("%s chunking %v intent %d mismatch: %+v",
-							v.name, sz, i, c.Intent)
-					}
+				// Shard the chunkings so one large vector cannot dominate
+				// the wall clock: 36 vectors x 1,008 chunkings is a
+				// multi-minute serial run, and a single ~2 MB SSE wire
+				// fed byte-at-a-time is most of it. Each shard is an
+				// independent parallel subtest.
+				shards := 8
+				for sh := 0; sh < shards; sh++ {
+					sh := sh
+					t.Run(fmt.Sprintf("shard%d", sh), func(t *testing.T) {
+						t.Parallel()
+						for si := sh; si < len(sizes); si += shards {
+							sz := sizes[si]
+							comps, detail, _ := runParser(t, endpointFor(t, v.exp.Provider),
+								v.exp.Format, v.wire, sz)
+							if len(comps) != len(v.exp.Intents) {
+								t.Fatalf("%s chunking %v: %d intents, want %d",
+									v.name, sz, len(comps), len(v.exp.Intents))
+							}
+							for i, c := range comps {
+								e := v.exp.Intents[i]
+								if c.Intent.ID != e.ID || c.Intent.Tool != e.Tool ||
+									c.Intent.Executor != e.Executor ||
+									c.Intent.InputSHA256 != e.InputSHA256 ||
+									len(c.Intent.InputRaw) != e.InputLen {
+									t.Fatalf("%s chunking %v intent %d mismatch: %+v",
+										v.name, sz, i, c.Intent)
+								}
+							}
+							if (detail != "") != v.exp.Unparsed {
+								t.Fatalf("%s chunking %v: unparsed=%v detail=%q",
+									v.name, si, detail != "", detail)
+							}
+						}
+					})
 				}
-				if (detail != "") != v.exp.Unparsed {
-					t.Fatalf("%s chunking %v: unparsed=%v detail=%q",
-						v.name, si, detail != "", detail)
-				}
-			}
+			})
 		}
 	}
 }
