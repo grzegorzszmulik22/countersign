@@ -1,0 +1,8 @@
+{
+  "chunk": "M5.2", "check": "MM5.1",
+  "metric": "decision-table rows passing; Go vs Python differential cases",
+  "target": "100% of >= 250 rows; 100% of 10,000",
+  "samples": {"table_rows": 300, "differential_cases": 10000},
+  "met": false,
+  "machine": "see sysinfo.txt in this evidence folder"
+}

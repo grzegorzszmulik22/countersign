@@ -1,0 +1,10 @@
+make[1]: Entering directory '/home/csbuild/src/cs-classify/.check-work/sabotage-M5.2-grant-requires-overrides-autonomy-downward'
+CHECK C5.2.1 FAIL —         grant g5         spec {"mode":"enforce","scenario":"agent","autonomy":{"control":"deny","irreversible":"allow","staged":"deny"},"grants":[{"id":"g0","match":{"hosts":["mcp.test"]},"inspect":"mcp","class":"compensable","compensate":{"deleteCreated":{"methods":["POST"],"from":"location"}},"calls":"serialized"},{"id":"g1","match":{"hosts":["*.wild.test"],"methods":["GET","HEAD"]},"whenTainted":{"labels":{"other":"review","packages":"deny","web":"review"}}},{"id":"g2","match":{"hosts":["chat.test"]},"mode":"passthrough","class":"compensable"},{"id":"g3","match":{"hosts":["code.test"]},"class":"irreversible","stager":{"outbox":{"respond":{"status":200,"contentType":"application/json","body":"{}"},"idMap":{"provisional":"/id","real":"/id"}}}},{"id":"g4","match":{"hosts":["*.wild.test"]},"mode":"passthrough","requires":"review"},{"id":"g5","match":{"hosts":["chat.test"],"matcher":{"git-smart-http":{"repos":["acme/widgets"],"access":"write"}}},"inspect":"mcp","requires":"allow","whenTainted":{"default":"deny","labels":{"other":"review"}}}]}         req {"method":"FOO","host":"sub.wild.test","path":"/acme/widgets/git-upload-pack","query":"","websocket":false,"tunnel":false,"mcp":{"method":"tools/list","tool":""}} FAIL FAIL	github.com/countersign/countersign/internal/classify	5.803s FAIL 
+CHECK C5.2.2 PASS
+CHECK C5.2.3 FAIL —     classes_test.go:161: row l-c523-9: requires = "allow", want "deny"     classes_test.go:161: row l-c523-11: requires = "allow", want "deny"     classes_test.go:161: row l-eq-review: requires = "review", want "deny" FAIL FAIL	github.com/countersign/countersign/internal/classify	0.080s FAIL 
+CHECK C5.2.4 PASS
+CHECK C5.2.5 BLOCKED — broker wiring and C5.2.5 wait for M2.4 (lane broker2)
+M5.2 suite: FAILURES
+check-M5.2: FAIL (exit 1, evidence: evidence/M5.2/20261120T073228Z)
+make[1]: *** [Makefile:37: check-M5.2] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-classify/.check-work/sabotage-M5.2-grant-requires-overrides-autonomy-downward'

@@ -1,0 +1,10 @@
+make[1]: Entering directory '/home/csbuild/src/cs-classify/.check-work/sabotage-M5.2-post-treated-as-safe'
+CHECK C5.2.1 FAIL —         grant g0         spec {"mode":"enforce","scenario":"agent","autonomy":{"control":"deny"},"grants":[{"id":"g0","match":{"hosts":["chat.test"],"methods":["GET","HEAD"]}}]}         req {"method":"POST","host":"mcp.test","path":"/v1/x","query":"service=git-upload-pack","websocket":false,"tunnel":false,"mcp":null} FAIL FAIL	github.com/countersign/countersign/internal/classify	5.617s FAIL 
+CHECK C5.2.2 FAIL — --- FAIL: TestNoRuleIrreversible (0.04s)     classes_test.go:397: POST /x: class = "safe", want irreversible FAIL FAIL	github.com/countersign/countersign/internal/classify	0.102s FAIL 
+CHECK C5.2.3 FAIL —     classes_test.go:158: row v-a-outbox: class = "safe", want "staged"     classes_test.go:161: row v-a-outbox: requires = "allow", want "review"     classes_test.go:158: row v-a-mcp-ser: class = "safe", want "control" FAIL FAIL	github.com/countersign/countersign/internal/classify	0.059s FAIL 
+CHECK C5.2.4 PASS
+CHECK C5.2.5 BLOCKED — broker wiring and C5.2.5 wait for M2.4 (lane broker2)
+M5.2 suite: FAILURES
+check-M5.2: FAIL (exit 1, evidence: evidence/M5.2/20261120T073237Z)
+make[1]: *** [Makefile:37: check-M5.2] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-classify/.check-work/sabotage-M5.2-post-treated-as-safe'

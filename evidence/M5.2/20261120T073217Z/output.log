@@ -1,0 +1,6 @@
+CHECK C5.2.1 PASS
+CHECK C5.2.2 PASS
+CHECK C5.2.3 PASS
+CHECK C5.2.4 PASS
+CHECK C5.2.5 BLOCKED — broker wiring and C5.2.5 wait for M2.4 (lane broker2)
+M5.2 suite: FAILURES

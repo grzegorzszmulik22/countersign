@@ -1,0 +1,4 @@
+SABOTAGE grant-requires-overrides-autonomy-downward: caught (exit 2) by C5.2.1 C5.2.3 
+SABOTAGE post-treated-as-safe: caught (exit 2) by C5.2.1 C5.2.2 C5.2.3 
+SABOTAGE unclassified-defaults-to-safe: caught (exit 2) by C5.2.1 C5.2.2 C5.2.3 
+sabotage-M5.2: 3 caught, 0 uncaught (evidence: evidence/M5.2/20261120T073225Z/sabotage)
