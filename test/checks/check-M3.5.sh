@@ -48,7 +48,9 @@ job_C3.5.3() {
         echo "go toolchain missing: run make tools"
         return 1
     fi
-    if "$GO" test -tags fixtures -race -count=200 -run '^TestC353' \
+    # -race -count=200 runs ~10+ min under the regress fan-out; Go's
+    # default 10m test timeout kills it mid-run, so give real headroom.
+    if "$GO" test -tags fixtures -race -count=200 -timeout=30m -run '^TestC353' \
         ./internal/proxy >"$WORK/$1.full.log" 2>&1; then
         return 0
     fi

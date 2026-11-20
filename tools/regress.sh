@@ -67,7 +67,19 @@ done
 
 tmpd=$(mktemp -d)
 declare -A pids=()
+# CS_REGRESS_JOBS caps the parallel fan-out. Default is 2*nproc: on the
+# 2-core/11GB oci-free-a1 the full ~25-suite fan-out OOMed and pushed
+# suites past their timeouts; on bigger hosts the default still leaves
+# plenty of parallelism. Set 0 for unlimited (the historical fan-out).
+default_jobs=$(( $(nproc 2>/dev/null || echo 4) * 2 ))
+max_jobs=${CS_REGRESS_JOBS:-$default_jobs}
 for c in ${par[@]+"${par[@]}"}; do
+    if [ "$max_jobs" -gt 0 ]; then
+        # Throttle without reaping: `wait -n` would consume the finished
+        # suite's status, so poll the live-job count instead. The real
+        # exit codes are collected per-suite below.
+        while [ "$(jobs -pr | wc -l)" -ge "$max_jobs" ]; do sleep 1; done
+    fi
     "${MAKE:-make}" "check-$c" >"$tmpd/$c.log" 2>&1 &
     pids[$c]=$!
 done
