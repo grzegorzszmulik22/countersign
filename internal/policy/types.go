@@ -27,9 +27,9 @@ type Metadata struct {
 	Name string `yaml:"name" json:"name"`
 }
 
-// Spec is the session-level policy body. The 05 fields (autonomy, world,
-// commit, budgets, tape, attest) are intentionally not represented yet; the
-// strict loader rejects them as unknown until their milestones land.
+// Spec is the session-level policy body. The 05 fields world, commit,
+// budgets, tape and attest are intentionally not represented yet; the strict
+// loader rejects them as unknown until their milestones land.
 type Spec struct {
 	Mode                 string            `yaml:"mode,omitempty" json:"mode,omitempty"`
 	Scenario             string            `yaml:"scenario,omitempty" json:"scenario,omitempty"`
@@ -40,6 +40,7 @@ type Spec struct {
 	MaxIntentOpenSeconds *int              `yaml:"maxIntentOpenSeconds,omitempty" json:"maxIntentOpenSeconds,omitempty"`
 	CommandField         string            `yaml:"commandField,omitempty" json:"commandField,omitempty"`
 	ToolClasses          map[string]string `yaml:"toolClasses,omitempty" json:"toolClasses,omitempty"`
+	Autonomy             map[string]string `yaml:"autonomy,omitempty" json:"autonomy,omitempty"`
 	Grants               []Grant           `yaml:"grants,omitempty" json:"grants,omitempty"`
 }
 
@@ -53,24 +54,92 @@ type Privacy struct {
 	Previews *bool `yaml:"previews,omitempty" json:"previews,omitempty"`
 }
 
-// Grant is one grant entry. Fields defined by 05 (class, stager, compensate,
-// tools, egress) are rejected as unknown for now.
+// Grant is one grant entry. The 05 field egress is rejected as unknown for
+// now (M13).
 type Grant struct {
-	ID          string       `yaml:"id" json:"id"`
-	Action      string       `yaml:"action,omitempty" json:"action,omitempty"`
-	Match       *Match       `yaml:"match" json:"match"`
-	Mode        string       `yaml:"mode,omitempty" json:"mode,omitempty"`
-	Upgrade     []string     `yaml:"upgrade,omitempty" json:"upgrade,omitempty"`
-	Network     string       `yaml:"network,omitempty" json:"network,omitempty"`
-	Inspect     string       `yaml:"inspect,omitempty" json:"inspect,omitempty"`
-	Trust       string       `yaml:"trust,omitempty" json:"trust,omitempty"`
-	Requires    string       `yaml:"requires,omitempty" json:"requires,omitempty"`
-	IntentMatch string       `yaml:"intentMatch,omitempty" json:"intentMatch,omitempty"`
-	Lineage     string       `yaml:"lineage,omitempty" json:"lineage,omitempty"`
-	WhenTainted *WhenTainted `yaml:"whenTainted,omitempty" json:"whenTainted,omitempty"`
-	BufferLimit string       `yaml:"bufferLimit,omitempty" json:"bufferLimit,omitempty"`
-	Limits      *Limits      `yaml:"limits,omitempty" json:"limits,omitempty"`
-	Credential  *Credential  `yaml:"credential,omitempty" json:"credential,omitempty"`
+	ID          string            `yaml:"id" json:"id"`
+	Action      string            `yaml:"action,omitempty" json:"action,omitempty"`
+	Match       *Match            `yaml:"match" json:"match"`
+	Mode        string            `yaml:"mode,omitempty" json:"mode,omitempty"`
+	Upgrade     []string          `yaml:"upgrade,omitempty" json:"upgrade,omitempty"`
+	Network     string            `yaml:"network,omitempty" json:"network,omitempty"`
+	Inspect     string            `yaml:"inspect,omitempty" json:"inspect,omitempty"`
+	Trust       string            `yaml:"trust,omitempty" json:"trust,omitempty"`
+	Class       string            `yaml:"class,omitempty" json:"class,omitempty"`
+	Stager      *Stager           `yaml:"stager,omitempty" json:"stager,omitempty"`
+	Compensate  *Compensate       `yaml:"compensate,omitempty" json:"compensate,omitempty"`
+	Tools       map[string]string `yaml:"tools,omitempty" json:"tools,omitempty"`
+	Calls       string            `yaml:"calls,omitempty" json:"calls,omitempty"`
+	Requires    string            `yaml:"requires,omitempty" json:"requires,omitempty"`
+	IntentMatch string            `yaml:"intentMatch,omitempty" json:"intentMatch,omitempty"`
+	Lineage     string            `yaml:"lineage,omitempty" json:"lineage,omitempty"`
+	WhenTainted *WhenTainted      `yaml:"whenTainted,omitempty" json:"whenTainted,omitempty"`
+	BufferLimit string            `yaml:"bufferLimit,omitempty" json:"bufferLimit,omitempty"`
+	Limits      *Limits           `yaml:"limits,omitempty" json:"limits,omitempty"`
+	Credential  *Credential       `yaml:"credential,omitempty" json:"credential,omitempty"`
+}
+
+// Stager picks the staging mechanism for matching writes (05 §4-§5):
+// exactly one of git or outbox.
+type Stager struct {
+	Git    *GitStager    `yaml:"git,omitempty" json:"git,omitempty"`
+	Outbox *OutboxStager `yaml:"outbox,omitempty" json:"outbox,omitempty"`
+}
+
+// GitStager stages smart-HTTP writes into the world's shadow repository
+// (05 §4).
+type GitStager struct {
+	Refs                []string `yaml:"refs" json:"refs"`
+	AllowDelete         bool     `yaml:"allowDelete,omitempty" json:"allowDelete,omitempty"`
+	AllowNonFastForward bool     `yaml:"allowNonFastForward,omitempty" json:"allowNonFastForward,omitempty"`
+	MaxPackBytes        string   `yaml:"maxPackBytes,omitempty" json:"maxPackBytes,omitempty"`
+}
+
+// OutboxStager defers a write and answers with a synthetic response (05 §5).
+type OutboxStager struct {
+	Respond           *OutboxRespond `yaml:"respond" json:"respond"`
+	IDMap             *OutboxIDMap   `yaml:"idMap" json:"idMap"`
+	IdempotencyHeader string         `yaml:"idempotencyHeader,omitempty" json:"idempotencyHeader,omitempty"`
+}
+
+// OutboxRespond is the synthetic response template (05 §5).
+type OutboxRespond struct {
+	Status      int    `yaml:"status" json:"status"`
+	ContentType string `yaml:"contentType" json:"contentType"`
+	Body        string `yaml:"body" json:"body"`
+}
+
+// OutboxIDMap maps the provisional ID to the real one at apply (05 §5).
+type OutboxIDMap struct {
+	Provisional string `yaml:"provisional" json:"provisional"`
+	Real        string `yaml:"real" json:"real"`
+}
+
+// Compensate holds the grant's compensation rules (05 §10). A rule applies
+// to a request when its methods list contains the request method (05 §1
+// rule 9).
+type Compensate struct {
+	Restore       *CompensateRule `yaml:"restore,omitempty" json:"restore,omitempty"`
+	DeleteCreated *DeleteCreated  `yaml:"deleteCreated,omitempty" json:"deleteCreated,omitempty"`
+	StateDigest   *StateDigest    `yaml:"stateDigest,omitempty" json:"stateDigest,omitempty"`
+}
+
+// CompensateRule puts the prior representation back for its methods.
+type CompensateRule struct {
+	Methods []string `yaml:"methods" json:"methods"`
+}
+
+// DeleteCreated deletes the created resource: from locates it ("location"
+// or {jsonPointer: ...}); urlTemplate builds it from response JSON.
+type DeleteCreated struct {
+	Methods     []string `yaml:"methods" json:"methods"`
+	From        any      `yaml:"from,omitempty" json:"from,omitempty"`
+	URLTemplate string   `yaml:"urlTemplate,omitempty" json:"urlTemplate,omitempty"`
+}
+
+// StateDigest lists body pointers excluded when comparing states.
+type StateDigest struct {
+	Ignore []string `yaml:"ignore,omitempty" json:"ignore,omitempty"`
 }
 
 // Match selects the requests a grant applies to (04 §1 defaults table).

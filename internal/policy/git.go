@@ -20,41 +20,53 @@ import "strings"
 // path is the already-unreserved-decoded request path; query is the raw
 // query string without "?".
 func gitSmartHTTPMatch(git *GitSmartHTTP, method, path, query string) bool {
+	access, owner, repo, ok := GitRequestOp(method, path, query)
+	return ok && git.Covers(access, owner, repo)
+}
+
+// GitRequestOp parses a request as a git smart-HTTP endpoint per 04 §2
+// (M3.6) and reports the operation's access class and repository coordinate.
+// ok is false for any other path, method or query shape.
+func GitRequestOp(method, path, query string) (access, owner, repo string, ok bool) {
 	segs := strings.Split(path, "/")
 	if len(segs) > 0 && segs[0] == "" {
 		segs = segs[1:]
 	}
-	var need string
 	switch {
 	case len(segs) == 4 && segs[2] == "info" && segs[3] == "refs":
 		if method != "GET" {
-			return false
+			return "", "", "", false
 		}
 		switch query {
 		case "service=git-upload-pack":
-			need = "read"
+			access = "read"
 		case "service=git-receive-pack":
-			need = "write"
+			access = "write"
 		default:
-			return false
+			return "", "", "", false
 		}
 	case len(segs) == 3 && (segs[2] == "git-upload-pack" || segs[2] == "git-receive-pack"):
 		if method != "POST" || query != "" {
-			return false
+			return "", "", "", false
 		}
-		if segs[2] == "git-upload-pack" {
-			need = "read"
-		} else {
-			need = "write"
+		access = "read"
+		if segs[2] == "git-receive-pack" {
+			access = "write"
 		}
 	default:
-		return false
+		return "", "", "", false
 	}
-	if need == "write" && git.Access != "write" {
-		return false
+	owner, repo = segs[0], gitRepoSeg(segs[1])
+	if owner == "" || repo == "" {
+		return "", "", "", false
 	}
-	owner, name := segs[0], gitRepoSeg(segs[1])
-	if owner == "" || name == "" {
+	return access, owner, repo, true
+}
+
+// Covers reports whether the matcher's repos list contains the repository
+// and admits the operation's access class (write requires access: write).
+func (git *GitSmartHTTP) Covers(access, owner, repo string) bool {
+	if access == "write" && git.Access != "write" {
 		return false
 	}
 	for _, e := range git.Repos {
@@ -62,7 +74,7 @@ func gitSmartHTTPMatch(git *GitSmartHTTP, method, path, query string) bool {
 		if !ok || strings.Contains(name2, "/") {
 			continue
 		}
-		if owner2 == owner && gitRepoSeg(name2) == name {
+		if owner2 == owner && gitRepoSeg(name2) == repo {
 			return true
 		}
 	}

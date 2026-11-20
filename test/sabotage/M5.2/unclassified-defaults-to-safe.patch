@@ -1,0 +1,9 @@
+--- a/internal/classify/classify.go
++++ b/internal/classify/classify.go
+@@ -122,5 +122,5 @@
+ 		}
+ 	}
+ 	// 10. Otherwise the effect is irreversible.
+-	return "irreversible"
++	return "safe"
+ }

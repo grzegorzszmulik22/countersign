@@ -20,6 +20,9 @@ var (
 	hostRe    = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$`)
 	repoRe    = regexp.MustCompile(`^[^/]+/[^/]+$`)
 	classEnum = map[string]bool{"exec": true, "http": true, "mcp": true, "local": true, "other": true}
+	// revClasses are the 05 §1 reversibility classes usable on records, in
+	// spec.autonomy keys, grant class and grant tools values.
+	revClasses = map[string]bool{"control": true, "safe": true, "staged": true, "compensable": true, "irreversible": true}
 )
 
 func errf(path, format string, args ...any) error {
@@ -130,6 +133,14 @@ func validate(p *SessionPolicy) error {
 			return errf("spec.toolClasses", "invalid class %q for tool %q", class, tool)
 		}
 	}
+	for cls, cond := range s.Autonomy {
+		if !revClasses[cls] {
+			return errf("spec.autonomy", "unknown class %q", cls)
+		}
+		if err := oneOf("spec.autonomy", cond, "allow", "review", "deny"); err != nil {
+			return err
+		}
+	}
 	seen := map[string]int{}
 	for i, g := range s.Grants {
 		if err := validateGrant(i, g, mode); err != nil {
@@ -224,7 +235,48 @@ func validateGrant(i int, g Grant, specMode string) error {
 			return err
 		}
 	}
-	if err := oneOfDefault(base+".requires", g.Requires, "allow", "allow", "intent", "review", "deny"); err != nil {
+	if g.Class != "" {
+		if !revClasses[g.Class] {
+			return errf(base+".class", "unknown class %q", g.Class)
+		}
+		if g.Class == "staged" && g.Stager == nil {
+			return errf(base+".class", "staged requires a stager")
+		}
+	}
+	if g.Stager != nil {
+		if err := validateStager(base+".stager", g.Stager); err != nil {
+			return err
+		}
+	}
+	if g.Compensate != nil {
+		if err := validateCompensate(base+".compensate", g.Compensate); err != nil {
+			return err
+		}
+	}
+	for tool, cls := range g.Tools {
+		if tool == "" {
+			return errf(base+".tools", "empty tool name")
+		}
+		if g.Inspect != "mcp" {
+			return errf(base+".tools", "requires inspect: mcp")
+		}
+		if !revClasses[cls] {
+			return errf(base+".tools", "unknown class %q for tool %q", cls, tool)
+		}
+		if cls == "staged" && g.Stager == nil {
+			return errf(base+".tools", "staged requires a stager")
+		}
+	}
+	if g.Calls != "" {
+		if g.Calls != "serialized" {
+			return errf(base+".calls", "unknown calls mode %q", g.Calls)
+		}
+		if g.Inspect != "mcp" {
+			return errf(base+".calls", "requires inspect: mcp")
+		}
+	}
+	// 05 §2: the intent condition is rejected at validation until M9.
+	if err := oneOfDefault(base+".requires", g.Requires, "allow", "allow", "review", "deny"); err != nil {
 		return err
 	}
 	if err := oneOfDefault(base+".intentMatch", g.IntentMatch, "window", "window", "exact"); err != nil {
@@ -276,6 +328,18 @@ func validateGrant(i int, g Grant, specMode string) error {
 		if len(m.Methods) > 0 {
 			return errf(base+".match.methods", "not allowed with mode passthrough")
 		}
+		if g.Stager != nil {
+			return errf(base+".stager", "not allowed with mode passthrough")
+		}
+		if g.Compensate != nil {
+			return errf(base+".compensate", "not allowed with mode passthrough")
+		}
+		if len(g.Tools) > 0 {
+			return errf(base+".tools", "not allowed with mode passthrough")
+		}
+		if g.Calls != "" {
+			return errf(base+".calls", "not allowed with mode passthrough")
+		}
 	}
 	if g.Credential != nil {
 		if err := validateCredential(base, g.Credential); err != nil {
@@ -283,6 +347,102 @@ func validateGrant(i int, g Grant, specMode string) error {
 		}
 		if star && specMode != "learn" {
 			return errf(base+".match.hosts", "host \"*\" is rejected on a credentialed grant unless spec.mode is learn")
+		}
+	}
+	return nil
+}
+
+func validateStager(base string, s *Stager) error {
+	if (s.Git == nil) == (s.Outbox == nil) {
+		return errf(base, "exactly one of git or outbox required")
+	}
+	if g := s.Git; g != nil {
+		if len(g.Refs) == 0 {
+			return errf(base+".git.refs", "required")
+		}
+		for _, r := range g.Refs {
+			if !strings.HasPrefix(r, "refs/") {
+				return errf(base+".git.refs", "invalid ref pattern %q", r)
+			}
+		}
+		if err := checkSize(base+".git.maxPackBytes", g.MaxPackBytes); err != nil {
+			return err
+		}
+		return nil
+	}
+	o := s.Outbox
+	if o.Respond == nil {
+		return errf(base+".outbox.respond", "required")
+	}
+	if o.Respond.Status < 100 || o.Respond.Status > 599 {
+		return errf(base+".outbox.respond.status", "invalid status %d", o.Respond.Status)
+	}
+	if o.Respond.ContentType == "" {
+		return errf(base+".outbox.respond.contentType", "required")
+	}
+	if o.IDMap == nil {
+		return errf(base+".outbox.idMap", "required")
+	}
+	for _, ptr := range []string{o.IDMap.Provisional, o.IDMap.Real} {
+		if !strings.HasPrefix(ptr, "/") {
+			return errf(base+".outbox.idMap", "invalid JSON pointer %q", ptr)
+		}
+	}
+	if o.IdempotencyHeader != "" && !tokenRe.MatchString(o.IdempotencyHeader) {
+		return errf(base+".outbox.idempotencyHeader", "invalid header name %q", o.IdempotencyHeader)
+	}
+	return nil
+}
+
+func validateCompensate(base string, c *Compensate) error {
+	if c.Restore == nil && c.DeleteCreated == nil {
+		return errf(base, "restore or deleteCreated required")
+	}
+	if r := c.Restore; r != nil {
+		if err := checkMethods(base+".restore.methods", r.Methods); err != nil {
+			return err
+		}
+	}
+	if d := c.DeleteCreated; d != nil {
+		if err := checkMethods(base+".deleteCreated.methods", d.Methods); err != nil {
+			return err
+		}
+		if (d.From == nil) == (d.URLTemplate == "") {
+			return errf(base+".deleteCreated", "exactly one of from or urlTemplate required")
+		}
+		if d.From != nil {
+			switch f := d.From.(type) {
+			case string:
+				if f != "location" {
+					return errf(base+".deleteCreated.from", "unknown form %q", f)
+				}
+			case map[string]any:
+				ptr, ok := f["jsonPointer"].(string)
+				if len(f) != 1 || !ok || !strings.HasPrefix(ptr, "/") {
+					return errf(base+".deleteCreated.from", "must be \"location\" or {jsonPointer: ...}")
+				}
+			default:
+				return errf(base+".deleteCreated.from", "must be \"location\" or {jsonPointer: ...}")
+			}
+		}
+	}
+	if sd := c.StateDigest; sd != nil {
+		for _, ptr := range sd.Ignore {
+			if !strings.HasPrefix(ptr, "/") {
+				return errf(base+".stateDigest.ignore", "invalid JSON pointer %q", ptr)
+			}
+		}
+	}
+	return nil
+}
+
+func checkMethods(path string, methods []string) error {
+	if len(methods) == 0 {
+		return errf(path, "required")
+	}
+	for _, m := range methods {
+		if !tokenRe.MatchString(m) {
+			return errf(path, "invalid method %q", m)
 		}
 	}
 	return nil

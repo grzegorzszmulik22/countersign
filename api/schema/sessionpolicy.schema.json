@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://countersign.dev/schema/sessionpolicy.v1alpha1.schema.json",
   "title": "SessionPolicy",
-  "description": "spec/04-policy-and-reconciliation.md §1 (M3.1 scope). Fields defined by spec/05 (autonomy, world, commit, budgets, tape, attest; grant class, stager, compensate, tools, egress) are not yet admitted: additionalProperties is false throughout, so they are rejected as unknown and can be added later without breaking the schema.",
+  "description": "spec/04-policy-and-reconciliation.md §1 plus spec/05 autonomy/class fields (M5.2 scope). The 05 spec fields world, commit, budgets, tape, attest and the grant field egress are not yet admitted: additionalProperties is false throughout, so they are rejected as unknown and can be added later without breaking the schema.",
   "type": "object",
   "additionalProperties": false,
   "required": ["apiVersion", "kind", "metadata", "spec"],
@@ -43,6 +43,11 @@
           "type": "object",
           "additionalProperties": {"enum": ["exec", "http", "mcp", "local", "other"]}
         },
+        "autonomy": {
+          "type": "object",
+          "propertyNames": {"enum": ["control", "safe", "staged", "compensable", "irreversible"]},
+          "additionalProperties": {"enum": ["allow", "review", "deny"]}
+        },
         "grants": {
           "type": "array",
           "items": {"$ref": "#/$defs/grant"}
@@ -64,7 +69,15 @@
         "network": {"enum": ["public", "cluster"], "default": "public"},
         "inspect": {"enum": ["none", "inference", "mcp"], "default": "none"},
         "trust": {"type": "string", "pattern": "^(trusted|[a-z][a-z0-9-]*)$"},
-        "requires": {"enum": ["allow", "intent", "review", "deny"]},
+        "class": {"enum": ["control", "safe", "staged", "compensable", "irreversible"]},
+        "stager": {"$ref": "#/$defs/stager"},
+        "compensate": {"$ref": "#/$defs/compensate"},
+        "tools": {
+          "type": "object",
+          "additionalProperties": {"enum": ["control", "safe", "staged", "compensable", "irreversible"]}
+        },
+        "calls": {"const": "serialized"},
+        "requires": {"enum": ["allow", "review", "deny"]},
         "intentMatch": {"enum": ["window", "exact"], "default": "window"},
         "lineage": {"enum": ["off", "preferred", "required"], "default": "preferred"},
         "whenTainted": {
@@ -118,6 +131,88 @@
               }
             },
             "placeholderEnv": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"}
+          }
+        }
+      }
+    },
+    "stager": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "maxProperties": 1,
+      "properties": {
+        "git": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["refs"],
+          "properties": {
+            "refs": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^refs/"}},
+            "allowDelete": {"type": "boolean"},
+            "allowNonFastForward": {"type": "boolean"},
+            "maxPackBytes": {"type": "string", "pattern": "^[0-9]+(B|K|Ki|M|Mi|G|Gi)?$"}
+          }
+        },
+        "outbox": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["respond", "idMap"],
+          "properties": {
+            "respond": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "contentType", "body"],
+              "properties": {
+                "status": {"type": "integer", "minimum": 100, "maximum": 599},
+                "contentType": {"type": "string", "minLength": 1},
+                "body": {"type": "string"}
+              }
+            },
+            "idMap": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["provisional", "real"],
+              "properties": {
+                "provisional": {"type": "string", "pattern": "^/"},
+                "real": {"type": "string", "pattern": "^/"}
+              }
+            },
+            "idempotencyHeader": {"type": "string", "pattern": "^[!#$%&'*+\\-.^_|~0-9A-Za-z]+$"}
+          }
+        }
+      }
+    },
+    "compensate": {
+      "type": "object",
+      "additionalProperties": false,
+      "anyOf": [{"required": ["restore"]}, {"required": ["deleteCreated"]}],
+      "properties": {
+        "restore": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["methods"],
+          "properties": {
+            "methods": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^[!#$%&'*+\\-.^_|~0-9A-Za-z]+$"}}
+          }
+        },
+        "deleteCreated": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["methods"],
+          "properties": {
+            "methods": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^[!#$%&'*+\\-.^_|~0-9A-Za-z]+$"}},
+            "from": {"oneOf": [
+              {"const": "location"},
+              {"type": "object", "additionalProperties": false, "required": ["jsonPointer"],
+               "properties": {"jsonPointer": {"type": "string", "pattern": "^/"}}}
+            ]},
+            "urlTemplate": {"type": "string", "minLength": 1}
+          }
+        },
+        "stateDigest": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ignore": {"type": "array", "items": {"type": "string", "pattern": "^/"}}
           }
         }
       }

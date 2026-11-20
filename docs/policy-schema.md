@@ -1,21 +1,21 @@
 <!-- Copyright 2026 The Countersign Authors
      SPDX-License-Identifier: Apache-2.0 -->
 
-# SessionPolicy schema and request matcher (M3.1, M3.6)
+# SessionPolicy schema and request matcher (M3.1, M3.6, M5.2)
 
 `internal/policy` implements the `SessionPolicy` document of spec/04 §1 and
-request matching per §2 steps 1–2, still in local mode.
+request matching per §2 steps 1–2, still in local mode. `internal/classify`
+implements the reversibility classes and autonomy conditions of spec/05 §1–§2.
 
 ## What is implemented
 
 - **Strict loading.** `policy.Load` parses one YAML document, rejects unknown
   fields and applies the defaults table of 04 §1. Validation failure names the
   offending field (`policy: spec.grants[i].match.hosts: …`).
-- **Scope.** Fields defined by spec/05 — session-level `autonomy`, `world`,
-  `commit`, `budgets`, `tape`, `attest` and grant-level `class`, `stager`,
-  `compensate`, `tools`, `egress` — are unknown keys and rejected; the Go types
-  and `api/schema/sessionpolicy.schema.json` are additive-only so those fields
-  can be added later without breaking the schema.
+- **Scope.** The spec/05 fields `world`, `commit`, `budgets`, `tape`,
+  `attest` and grant-level `egress` remain unknown keys and are rejected;
+  `autonomy`, `class`, `requires`, `stager`, `tools`, `calls` and
+  `compensate` landed with M5.2 (below).
 - **Digest.** `policy.Digest` is the SHA-256 of the exact file bytes, so a
   whitespace-only change alters it.
 - **Matcher.** `(*SessionPolicy).Match(r *Request)` evaluates §2 step 1
@@ -61,6 +61,52 @@ Matching rules:
   gate against the fakehub fixture (C3.6.1, C3.6.2).
 - `test/gateproxy` — the test-only CONNECT gate used by the e2e tests.
 - Run: `make check-M3.6`, `make sabotage-M3.6`.
+
+## Reversibility classes and autonomy (M5.2)
+
+New policy fields (spec/05 §1–§2):
+
+- `spec.autonomy`: map from class (`control`, `safe`, `staged`,
+  `compensable`, `irreversible`) to a condition (`allow`, `review`, `deny`).
+  Missing entries default to `allow`. The `intent` condition is rejected at
+  validation until M9.
+- `grant.class`: an explicit class; wins over every computed rule except
+  `control` sources. `class: staged` requires a `stager`.
+- `grant.requires`: the grant's own condition (`allow`, `review`, `deny`;
+  `intent` rejected until M9). The imposed condition is the **strictest** of
+  `autonomy[class]`, `requires` and — for `compensable`/`irreversible`
+  effects only — the grant's `whenTainted` outcome for the taint labels
+  present (04 §8). A looser `requires` never weakens `autonomy`.
+- `grant.stager`: exactly one of `git` (`refs` patterns, `allowDelete`,
+  `allowNonFastForward`, `maxPackBytes`) or `outbox` (`respond`, `idMap` JSON
+  pointers, `idempotencyHeader`). Git stagers stage smart-HTTP writes inside
+  the grant's matcher; outbox stagers stage every non-GET/HEAD/OPTIONS
+  request.
+- `grant.tools` (`inspect: mcp` only): per-tool class for `tools/call`;
+  a missing tool is `irreversible`; server annotations are never trusted.
+- `grant.calls: serialized` (`inspect: mcp` only): `tools/call` on the
+  brokered server is `control`.
+- `grant.compensate`: `restore` or `deleteCreated` method lists; a matching
+  request is `compensable`.
+
+Classification (`classify.Classify`) applies 05 §1's ten rules in order —
+control sources, explicit class, passthrough/WebSocket, stager, git read,
+GET/HEAD/OPTIONS, serialized MCP, per-tool class, compensation, else
+`irreversible` — and returns `{class, requires, declared_safe}`.
+`declared_safe` flags a `class: safe` declaration on a non-GET method, a
+tunnel or a WebSocket; it lands on the shared `decision` block of
+`effect.http`/`effect.tunnel` records. Recording `class` and
+`decision.requires` per effect, and `review`→`REVIEW_REQUIRED`, is the
+broker wiring of M2.4.
+
+## Checks and vectors (M5.2)
+
+- Decision table: `test/vectors/policy/classes.yaml` (≥ 250 rows; expected
+  column derived from spec/05 §1–§2 by `test/gen/classes_table.py`).
+- Reference classifier: `ref/python/refclassify` (spec-derived, stdlib only);
+  a 10,000-case Go-vs-Python differential runs in
+  `internal/classify/diff_test.go`.
+- Run: `make check-M5.2`, `make sabotage-M5.2`.
 
 ## Checks and vectors (M3.1)
 

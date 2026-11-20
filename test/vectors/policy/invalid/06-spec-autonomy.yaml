@@ -1,11 +1,11 @@
-# field: autonomy
-# rule: fields defined by 05 (autonomy et al.) are unknown for now
+# field: spec.autonomy
+# rule: the intent condition is rejected at validation until M9 (05 §2)
 apiVersion: "countersign.dev/v1alpha1"
 kind: "SessionPolicy"
 metadata: {name: bad}
 spec:
   mode: "enforce"
   scenario: "agent"
-  autonomy: {safe: "allow"}
+  autonomy: {safe: "intent"}
   grants:
     - {id: g1, match: {hosts: ["api.example.com"]}}

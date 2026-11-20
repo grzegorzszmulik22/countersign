@@ -1,5 +1,5 @@
 # field: stager
-# rule: grant fields defined by 05 (stager et al.) are unknown for now
+# rule: a git stager without a refs list is invalid (05 §4; M5.2 validation)
 apiVersion: "countersign.dev/v1alpha1"
 kind: "SessionPolicy"
 metadata: {name: bad}
@@ -7,4 +7,4 @@ spec:
   mode: "enforce"
   scenario: "agent"
   grants:
-    - {id: g1, match: {hosts: ["api.example.com"]}, stager: {git: {refs: ["refs/heads/*"]}}}
+    - {id: g1, match: {hosts: ["api.example.com"]}, stager: {git: {}}}

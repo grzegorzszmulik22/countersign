@@ -1,0 +1,13 @@
+--- a/internal/classify/classify.go
++++ b/internal/classify/classify.go
+@@ -147,7 +147,7 @@
+ func condition(p *policy.SessionPolicy, g *policy.Grant, cls string, taint []string) string {
+ 	best := condOrder[condOrAllow(p.Spec.Autonomy[cls])]
+-	if r := condOrder[condOrAllow(g.Requires)]; r > best {
+-		best = r
+-	}
++	if g.Requires != "" {
++		best = condOrder[condOrAllow(g.Requires)]
++	}
+ 	if (cls == "compensable" || cls == "irreversible") && len(taint) > 0 {
+ 		if r := condOrder[taintCond(g, taint)]; r > best {

@@ -82,6 +82,7 @@
             "action",
             "reason",
             "requires",
+            "declared_safe",
             "grant",
             "credentials",
             "would_deny"
@@ -107,6 +108,9 @@
                 "review",
                 "deny"
               ]
+            },
+            "declared_safe": {
+              "type": "boolean"
             },
             "grant": {
               "anyOf": [

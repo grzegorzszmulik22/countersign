@@ -1,0 +1,9 @@
+--- a/internal/classify/classify.go
++++ b/internal/classify/classify.go
+@@ -22,5 +22,5 @@
+ // readMethods are the methods classified safe by 05 §1 rule 6 and treated
+ // as non-writes by the outbox stager (05 §5).
+-var readMethods = map[string]bool{"GET": true, "HEAD": true, "OPTIONS": true}
++var readMethods = map[string]bool{"GET": true, "HEAD": true, "OPTIONS": true, "POST": true}
+ 
+ // condOrder is 05 §2's strictness order (deny most strict).

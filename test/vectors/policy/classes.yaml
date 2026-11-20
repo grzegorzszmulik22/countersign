@@ -1,0 +1,829 @@
+# test/vectors/policy/classes.yaml — decision table for spec/05
+# transactions §1 ordered reversibility classes and §2 strictest
+# condition (M5.2). At least 250 rows.
+#
+# The expected column was derived by reasoning from the spec text
+# (05 §1 rules 1-10, §2 strictest-wins, the rule-2 declared_safe flag),
+# never by running the Go classifier or the Python reference:
+# test/gen/classes_table.py contains an independent expression of the
+# rules and this file was reviewed by reading after generation.
+#
+# Row format: {name, policy, grant, request, taint?, c523?,
+#   expected:{class, requires, declared_safe}}. The row's request
+# additionally passes through 04 §2 grant selection and must select the
+# named grant; class is that of the effect, requires the condition
+# imposed (allow|intent|review|deny), declared_safe the §1 rule-2 flag.
+# Rows with c523 assert the autonomy table wins against a looser grant
+# requires (C5.2.3).
+# invalid entries: {name, field, policy} — policy.Load must reject with
+# an error naming field (C5.2.2).
+policies:
+  base: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "t"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "llm", match: {hosts: ["api.anthropic.test"], methods: ["POST"]}, inspect: "inference"}
+        - {id: "boundary-decl", match: {hosts: ["countersign.internal"], paths: ["/decl/**"]}, class: "safe"}
+        - {id: "boundary", match: {hosts: ["countersign.internal"], ports: [443, 8443]}}
+        - {id: "repo", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/widgets", "acme/lib"], access: "write"}}}, stager: {git: {refs: ["refs/heads/agent/*"], allowDelete: false, allowNonFastForward: false, maxPackBytes: "512Mi"}}}
+        - {id: "repo-ro", match: {hosts: ["ro.test"], matcher: {git-smart-http: {repos: ["acme/widgets"], access: "read"}}}}
+        - {id: "repo-nows", match: {hosts: ["ws.test"], matcher: {git-smart-http: {repos: ["acme/widgets", "acme/lib"], access: "write"}}}}
+        - {id: "api", match: {hosts: ["api.test"]}}
+        - {id: "api-meth", match: {hosts: ["m.test"], methods: ["GET", "HEAD", "OPTIONS", "POST", "PUT", "DELETE", "PATCH", "TRACE", "PURGE"]}}
+        - {id: "ws", match: {hosts: ["rt.test"], methods: ["GET"], paths: ["/feed"]}, upgrade: ["websocket"]}
+        - {id: "pt", match: {hosts: ["vpn.test"]}, mode: "passthrough"}
+        - {id: "mcp-map", match: {hosts: ["mcp.map.test"], methods: ["POST", "GET"]}, inspect: "mcp", tools: {search: "safe", issue: "irreversible", note: "compensable", halt: "control"}}
+        - {id: "mcp-ser", match: {hosts: ["mcp.ser.test"], methods: ["POST", "GET"]}, inspect: "mcp", calls: "serialized"}
+        - {id: "mcp-bare", match: {hosts: ["mcp.bare.test"], methods: ["POST"]}, inspect: "mcp"}
+        - {id: "notify", match: {hosts: ["chat.test"], methods: ["POST", "PUT", "DELETE"], paths: ["/api/messages"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "ob-read", match: {hosts: ["chat.test"], methods: ["GET", "HEAD"], paths: ["/api/messages"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "comp-put", match: {hosts: ["c.test"], methods: ["GET", "PUT", "PATCH", "POST", "DELETE"], paths: ["/things/**"]}, compensate: {restore: {methods: ["PUT", "PATCH"]}, stateDigest: {ignore: ["/updated_at"]}}}
+        - {id: "comp-del", match: {hosts: ["c.test"], methods: ["POST"], paths: ["/items"]}, compensate: {deleteCreated: {methods: ["POST"], from: "location"}}}
+        - {id: "comp-del2", match: {hosts: ["c.test"], methods: ["GET", "DELETE"], paths: ["/old"]}, compensate: {restore: {methods: ["DELETE"]}}}
+        - {id: "notify-comp", match: {hosts: ["chat.test"], methods: ["POST", "PUT"], paths: ["/nc"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}, compensate: {restore: {methods: ["PUT"]}}}
+        - {id: "repo-ros", match: {hosts: ["ros.test"], matcher: {git-smart-http: {repos: ["acme/widgets"], access: "read"}}}, stager: {git: {refs: ["refs/heads/agent/*"], allowDelete: false, allowNonFastForward: false, maxPackBytes: "512Mi"}}}
+        - {id: "inf-stager", match: {hosts: ["infs.test"], methods: ["POST"]}, inspect: "inference", stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "mcp-sertools", match: {hosts: ["mcp.st.test"], methods: ["POST"]}, inspect: "mcp", calls: "serialized", tools: {x: "safe"}}
+        - {id: "ws2", match: {hosts: ["rt3.test"], methods: ["POST"], paths: ["/u"]}, upgrade: ["websocket"]}
+        - {id: "ws-decl2", match: {hosts: ["rt4.test"], methods: ["GET", "POST"], paths: ["/g"]}, upgrade: ["websocket"], class: "safe"}
+        - {id: "pt-ctl", match: {hosts: ["vpn4.test"]}, mode: "passthrough", class: "control"}
+        - {id: "notify-opt", match: {hosts: ["chat.test"], methods: ["OPTIONS", "HEAD"], paths: ["/api/messages"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "notify-all", match: {hosts: ["chat.test"], methods: ["TRACE", "PURGE", "FOO", "PATCH"], paths: ["/t"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "decl-req", match: {hosts: ["dr.test"], methods: ["GET", "POST"], paths: ["/r/**"]}, class: "safe", requires: "review"}
+        - {id: "decl-safe", match: {hosts: ["d.test"], methods: ["GET", "HEAD", "OPTIONS", "POST", "PUT", "DELETE", "PATCH"], paths: ["/s/**"]}, class: "safe"}
+        - {id: "decl-staged", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/st/**"]}, class: "staged", stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "decl-comp", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/c/**"]}, class: "compensable"}
+        - {id: "decl-irr", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/i/**"]}, class: "irreversible"}
+        - {id: "decl-ctl", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/x/**"]}, class: "control"}
+        - {id: "inf-decl", match: {hosts: ["inf.test"], methods: ["POST", "GET"]}, inspect: "inference", class: "safe"}
+        - {id: "pt-decl", match: {hosts: ["vpn2.test"]}, mode: "passthrough", class: "safe"}
+        - {id: "pt-comp", match: {hosts: ["vpn3.test"]}, mode: "passthrough", class: "compensable"}
+        - {id: "ws-decl", match: {hosts: ["rt2.test"], methods: ["GET"], paths: ["/f"]}, upgrade: ["websocket"], class: "safe"}
+        - {id: "ob-irr", match: {hosts: ["chat.test"], methods: ["POST"], paths: ["/irr"]}, class: "irreversible", stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "mcp-decl", match: {hosts: ["mcp.d.test"], methods: ["POST"]}, inspect: "mcp", class: "safe"}
+  autoA: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "t"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      autonomy: {safe: "allow", control: "allow", staged: "review", compensable: "review", irreversible: "review"}
+      grants:
+        - {id: "llm", match: {hosts: ["api.anthropic.test"], methods: ["POST"]}, inspect: "inference"}
+        - {id: "boundary-decl", match: {hosts: ["countersign.internal"], paths: ["/decl/**"]}, class: "safe"}
+        - {id: "boundary", match: {hosts: ["countersign.internal"], ports: [443, 8443]}}
+        - {id: "repo", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/widgets", "acme/lib"], access: "write"}}}, stager: {git: {refs: ["refs/heads/agent/*"], allowDelete: false, allowNonFastForward: false, maxPackBytes: "512Mi"}}}
+        - {id: "repo-ro", match: {hosts: ["ro.test"], matcher: {git-smart-http: {repos: ["acme/widgets"], access: "read"}}}}
+        - {id: "repo-nows", match: {hosts: ["ws.test"], matcher: {git-smart-http: {repos: ["acme/widgets", "acme/lib"], access: "write"}}}}
+        - {id: "api", match: {hosts: ["api.test"]}}
+        - {id: "api-meth", match: {hosts: ["m.test"], methods: ["GET", "HEAD", "OPTIONS", "POST", "PUT", "DELETE", "PATCH", "TRACE", "PURGE"]}}
+        - {id: "ws", match: {hosts: ["rt.test"], methods: ["GET"], paths: ["/feed"]}, upgrade: ["websocket"]}
+        - {id: "pt", match: {hosts: ["vpn.test"]}, mode: "passthrough"}
+        - {id: "mcp-map", match: {hosts: ["mcp.map.test"], methods: ["POST", "GET"]}, inspect: "mcp", tools: {search: "safe", issue: "irreversible", note: "compensable", halt: "control"}}
+        - {id: "mcp-ser", match: {hosts: ["mcp.ser.test"], methods: ["POST", "GET"]}, inspect: "mcp", calls: "serialized"}
+        - {id: "mcp-bare", match: {hosts: ["mcp.bare.test"], methods: ["POST"]}, inspect: "mcp"}
+        - {id: "notify", match: {hosts: ["chat.test"], methods: ["POST", "PUT", "DELETE"], paths: ["/api/messages"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "ob-read", match: {hosts: ["chat.test"], methods: ["GET", "HEAD"], paths: ["/api/messages"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "comp-put", match: {hosts: ["c.test"], methods: ["GET", "PUT", "PATCH", "POST", "DELETE"], paths: ["/things/**"]}, compensate: {restore: {methods: ["PUT", "PATCH"]}, stateDigest: {ignore: ["/updated_at"]}}}
+        - {id: "comp-del", match: {hosts: ["c.test"], methods: ["POST"], paths: ["/items"]}, compensate: {deleteCreated: {methods: ["POST"], from: "location"}}}
+        - {id: "comp-del2", match: {hosts: ["c.test"], methods: ["GET", "DELETE"], paths: ["/old"]}, compensate: {restore: {methods: ["DELETE"]}}}
+        - {id: "notify-comp", match: {hosts: ["chat.test"], methods: ["POST", "PUT"], paths: ["/nc"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}, compensate: {restore: {methods: ["PUT"]}}}
+        - {id: "repo-ros", match: {hosts: ["ros.test"], matcher: {git-smart-http: {repos: ["acme/widgets"], access: "read"}}}, stager: {git: {refs: ["refs/heads/agent/*"], allowDelete: false, allowNonFastForward: false, maxPackBytes: "512Mi"}}}
+        - {id: "inf-stager", match: {hosts: ["infs.test"], methods: ["POST"]}, inspect: "inference", stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "mcp-sertools", match: {hosts: ["mcp.st.test"], methods: ["POST"]}, inspect: "mcp", calls: "serialized", tools: {x: "safe"}}
+        - {id: "ws2", match: {hosts: ["rt3.test"], methods: ["POST"], paths: ["/u"]}, upgrade: ["websocket"]}
+        - {id: "ws-decl2", match: {hosts: ["rt4.test"], methods: ["GET", "POST"], paths: ["/g"]}, upgrade: ["websocket"], class: "safe"}
+        - {id: "pt-ctl", match: {hosts: ["vpn4.test"]}, mode: "passthrough", class: "control"}
+        - {id: "notify-opt", match: {hosts: ["chat.test"], methods: ["OPTIONS", "HEAD"], paths: ["/api/messages"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "notify-all", match: {hosts: ["chat.test"], methods: ["TRACE", "PURGE", "FOO", "PATCH"], paths: ["/t"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "decl-req", match: {hosts: ["dr.test"], methods: ["GET", "POST"], paths: ["/r/**"]}, class: "safe", requires: "review"}
+        - {id: "decl-safe", match: {hosts: ["d.test"], methods: ["GET", "HEAD", "OPTIONS", "POST", "PUT", "DELETE", "PATCH"], paths: ["/s/**"]}, class: "safe"}
+        - {id: "decl-staged", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/st/**"]}, class: "staged", stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "decl-comp", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/c/**"]}, class: "compensable"}
+        - {id: "decl-irr", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/i/**"]}, class: "irreversible"}
+        - {id: "decl-ctl", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/x/**"]}, class: "control"}
+        - {id: "inf-decl", match: {hosts: ["inf.test"], methods: ["POST", "GET"]}, inspect: "inference", class: "safe"}
+        - {id: "pt-decl", match: {hosts: ["vpn2.test"]}, mode: "passthrough", class: "safe"}
+        - {id: "pt-comp", match: {hosts: ["vpn3.test"]}, mode: "passthrough", class: "compensable"}
+        - {id: "ws-decl", match: {hosts: ["rt2.test"], methods: ["GET"], paths: ["/f"]}, upgrade: ["websocket"], class: "safe"}
+        - {id: "ob-irr", match: {hosts: ["chat.test"], methods: ["POST"], paths: ["/irr"]}, class: "irreversible", stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "mcp-decl", match: {hosts: ["mcp.d.test"], methods: ["POST"]}, inspect: "mcp", class: "safe"}
+  autoB: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "t"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      autonomy: {safe: "deny", control: "deny", staged: "allow", compensable: "deny", irreversible: "deny"}
+      grants:
+        - {id: "llm", match: {hosts: ["api.anthropic.test"], methods: ["POST"]}, inspect: "inference"}
+        - {id: "boundary-decl", match: {hosts: ["countersign.internal"], paths: ["/decl/**"]}, class: "safe"}
+        - {id: "boundary", match: {hosts: ["countersign.internal"], ports: [443, 8443]}}
+        - {id: "repo", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/widgets", "acme/lib"], access: "write"}}}, stager: {git: {refs: ["refs/heads/agent/*"], allowDelete: false, allowNonFastForward: false, maxPackBytes: "512Mi"}}}
+        - {id: "repo-ro", match: {hosts: ["ro.test"], matcher: {git-smart-http: {repos: ["acme/widgets"], access: "read"}}}}
+        - {id: "repo-nows", match: {hosts: ["ws.test"], matcher: {git-smart-http: {repos: ["acme/widgets", "acme/lib"], access: "write"}}}}
+        - {id: "api", match: {hosts: ["api.test"]}}
+        - {id: "api-meth", match: {hosts: ["m.test"], methods: ["GET", "HEAD", "OPTIONS", "POST", "PUT", "DELETE", "PATCH", "TRACE", "PURGE"]}}
+        - {id: "ws", match: {hosts: ["rt.test"], methods: ["GET"], paths: ["/feed"]}, upgrade: ["websocket"]}
+        - {id: "pt", match: {hosts: ["vpn.test"]}, mode: "passthrough"}
+        - {id: "mcp-map", match: {hosts: ["mcp.map.test"], methods: ["POST", "GET"]}, inspect: "mcp", tools: {search: "safe", issue: "irreversible", note: "compensable", halt: "control"}}
+        - {id: "mcp-ser", match: {hosts: ["mcp.ser.test"], methods: ["POST", "GET"]}, inspect: "mcp", calls: "serialized"}
+        - {id: "mcp-bare", match: {hosts: ["mcp.bare.test"], methods: ["POST"]}, inspect: "mcp"}
+        - {id: "notify", match: {hosts: ["chat.test"], methods: ["POST", "PUT", "DELETE"], paths: ["/api/messages"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "ob-read", match: {hosts: ["chat.test"], methods: ["GET", "HEAD"], paths: ["/api/messages"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "comp-put", match: {hosts: ["c.test"], methods: ["GET", "PUT", "PATCH", "POST", "DELETE"], paths: ["/things/**"]}, compensate: {restore: {methods: ["PUT", "PATCH"]}, stateDigest: {ignore: ["/updated_at"]}}}
+        - {id: "comp-del", match: {hosts: ["c.test"], methods: ["POST"], paths: ["/items"]}, compensate: {deleteCreated: {methods: ["POST"], from: "location"}}}
+        - {id: "comp-del2", match: {hosts: ["c.test"], methods: ["GET", "DELETE"], paths: ["/old"]}, compensate: {restore: {methods: ["DELETE"]}}}
+        - {id: "notify-comp", match: {hosts: ["chat.test"], methods: ["POST", "PUT"], paths: ["/nc"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}, compensate: {restore: {methods: ["PUT"]}}}
+        - {id: "repo-ros", match: {hosts: ["ros.test"], matcher: {git-smart-http: {repos: ["acme/widgets"], access: "read"}}}, stager: {git: {refs: ["refs/heads/agent/*"], allowDelete: false, allowNonFastForward: false, maxPackBytes: "512Mi"}}}
+        - {id: "inf-stager", match: {hosts: ["infs.test"], methods: ["POST"]}, inspect: "inference", stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "mcp-sertools", match: {hosts: ["mcp.st.test"], methods: ["POST"]}, inspect: "mcp", calls: "serialized", tools: {x: "safe"}}
+        - {id: "ws2", match: {hosts: ["rt3.test"], methods: ["POST"], paths: ["/u"]}, upgrade: ["websocket"]}
+        - {id: "ws-decl2", match: {hosts: ["rt4.test"], methods: ["GET", "POST"], paths: ["/g"]}, upgrade: ["websocket"], class: "safe"}
+        - {id: "pt-ctl", match: {hosts: ["vpn4.test"]}, mode: "passthrough", class: "control"}
+        - {id: "notify-opt", match: {hosts: ["chat.test"], methods: ["OPTIONS", "HEAD"], paths: ["/api/messages"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "notify-all", match: {hosts: ["chat.test"], methods: ["TRACE", "PURGE", "FOO", "PATCH"], paths: ["/t"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "decl-req", match: {hosts: ["dr.test"], methods: ["GET", "POST"], paths: ["/r/**"]}, class: "safe", requires: "review"}
+        - {id: "decl-safe", match: {hosts: ["d.test"], methods: ["GET", "HEAD", "OPTIONS", "POST", "PUT", "DELETE", "PATCH"], paths: ["/s/**"]}, class: "safe"}
+        - {id: "decl-staged", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/st/**"]}, class: "staged", stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "decl-comp", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/c/**"]}, class: "compensable"}
+        - {id: "decl-irr", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/i/**"]}, class: "irreversible"}
+        - {id: "decl-ctl", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/x/**"]}, class: "control"}
+        - {id: "inf-decl", match: {hosts: ["inf.test"], methods: ["POST", "GET"]}, inspect: "inference", class: "safe"}
+        - {id: "pt-decl", match: {hosts: ["vpn2.test"]}, mode: "passthrough", class: "safe"}
+        - {id: "pt-comp", match: {hosts: ["vpn3.test"]}, mode: "passthrough", class: "compensable"}
+        - {id: "ws-decl", match: {hosts: ["rt2.test"], methods: ["GET"], paths: ["/f"]}, upgrade: ["websocket"], class: "safe"}
+        - {id: "ob-irr", match: {hosts: ["chat.test"], methods: ["POST"], paths: ["/irr"]}, class: "irreversible", stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "mcp-decl", match: {hosts: ["mcp.d.test"], methods: ["POST"]}, inspect: "mcp", class: "safe"}
+  autoC: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "t"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      autonomy: {safe: "review", control: "allow", staged: "deny", compensable: "allow", irreversible: "review"}
+      grants:
+        - {id: "llm", match: {hosts: ["api.anthropic.test"], methods: ["POST"]}, inspect: "inference"}
+        - {id: "boundary-decl", match: {hosts: ["countersign.internal"], paths: ["/decl/**"]}, class: "safe"}
+        - {id: "boundary", match: {hosts: ["countersign.internal"], ports: [443, 8443]}}
+        - {id: "repo", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/widgets", "acme/lib"], access: "write"}}}, stager: {git: {refs: ["refs/heads/agent/*"], allowDelete: false, allowNonFastForward: false, maxPackBytes: "512Mi"}}}
+        - {id: "repo-ro", match: {hosts: ["ro.test"], matcher: {git-smart-http: {repos: ["acme/widgets"], access: "read"}}}}
+        - {id: "repo-nows", match: {hosts: ["ws.test"], matcher: {git-smart-http: {repos: ["acme/widgets", "acme/lib"], access: "write"}}}}
+        - {id: "api", match: {hosts: ["api.test"]}}
+        - {id: "api-meth", match: {hosts: ["m.test"], methods: ["GET", "HEAD", "OPTIONS", "POST", "PUT", "DELETE", "PATCH", "TRACE", "PURGE"]}}
+        - {id: "ws", match: {hosts: ["rt.test"], methods: ["GET"], paths: ["/feed"]}, upgrade: ["websocket"]}
+        - {id: "pt", match: {hosts: ["vpn.test"]}, mode: "passthrough"}
+        - {id: "mcp-map", match: {hosts: ["mcp.map.test"], methods: ["POST", "GET"]}, inspect: "mcp", tools: {search: "safe", issue: "irreversible", note: "compensable", halt: "control"}}
+        - {id: "mcp-ser", match: {hosts: ["mcp.ser.test"], methods: ["POST", "GET"]}, inspect: "mcp", calls: "serialized"}
+        - {id: "mcp-bare", match: {hosts: ["mcp.bare.test"], methods: ["POST"]}, inspect: "mcp"}
+        - {id: "notify", match: {hosts: ["chat.test"], methods: ["POST", "PUT", "DELETE"], paths: ["/api/messages"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "ob-read", match: {hosts: ["chat.test"], methods: ["GET", "HEAD"], paths: ["/api/messages"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "comp-put", match: {hosts: ["c.test"], methods: ["GET", "PUT", "PATCH", "POST", "DELETE"], paths: ["/things/**"]}, compensate: {restore: {methods: ["PUT", "PATCH"]}, stateDigest: {ignore: ["/updated_at"]}}}
+        - {id: "comp-del", match: {hosts: ["c.test"], methods: ["POST"], paths: ["/items"]}, compensate: {deleteCreated: {methods: ["POST"], from: "location"}}}
+        - {id: "comp-del2", match: {hosts: ["c.test"], methods: ["GET", "DELETE"], paths: ["/old"]}, compensate: {restore: {methods: ["DELETE"]}}}
+        - {id: "notify-comp", match: {hosts: ["chat.test"], methods: ["POST", "PUT"], paths: ["/nc"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}, compensate: {restore: {methods: ["PUT"]}}}
+        - {id: "repo-ros", match: {hosts: ["ros.test"], matcher: {git-smart-http: {repos: ["acme/widgets"], access: "read"}}}, stager: {git: {refs: ["refs/heads/agent/*"], allowDelete: false, allowNonFastForward: false, maxPackBytes: "512Mi"}}}
+        - {id: "inf-stager", match: {hosts: ["infs.test"], methods: ["POST"]}, inspect: "inference", stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "mcp-sertools", match: {hosts: ["mcp.st.test"], methods: ["POST"]}, inspect: "mcp", calls: "serialized", tools: {x: "safe"}}
+        - {id: "ws2", match: {hosts: ["rt3.test"], methods: ["POST"], paths: ["/u"]}, upgrade: ["websocket"]}
+        - {id: "ws-decl2", match: {hosts: ["rt4.test"], methods: ["GET", "POST"], paths: ["/g"]}, upgrade: ["websocket"], class: "safe"}
+        - {id: "pt-ctl", match: {hosts: ["vpn4.test"]}, mode: "passthrough", class: "control"}
+        - {id: "notify-opt", match: {hosts: ["chat.test"], methods: ["OPTIONS", "HEAD"], paths: ["/api/messages"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "notify-all", match: {hosts: ["chat.test"], methods: ["TRACE", "PURGE", "FOO", "PATCH"], paths: ["/t"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "decl-req", match: {hosts: ["dr.test"], methods: ["GET", "POST"], paths: ["/r/**"]}, class: "safe", requires: "review"}
+        - {id: "decl-safe", match: {hosts: ["d.test"], methods: ["GET", "HEAD", "OPTIONS", "POST", "PUT", "DELETE", "PATCH"], paths: ["/s/**"]}, class: "safe"}
+        - {id: "decl-staged", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/st/**"]}, class: "staged", stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "decl-comp", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/c/**"]}, class: "compensable"}
+        - {id: "decl-irr", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/i/**"]}, class: "irreversible"}
+        - {id: "decl-ctl", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/x/**"]}, class: "control"}
+        - {id: "inf-decl", match: {hosts: ["inf.test"], methods: ["POST", "GET"]}, inspect: "inference", class: "safe"}
+        - {id: "pt-decl", match: {hosts: ["vpn2.test"]}, mode: "passthrough", class: "safe"}
+        - {id: "pt-comp", match: {hosts: ["vpn3.test"]}, mode: "passthrough", class: "compensable"}
+        - {id: "ws-decl", match: {hosts: ["rt2.test"], methods: ["GET"], paths: ["/f"]}, upgrade: ["websocket"], class: "safe"}
+        - {id: "ob-irr", match: {hosts: ["chat.test"], methods: ["POST"], paths: ["/irr"]}, class: "irreversible", stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "mcp-decl", match: {hosts: ["mcp.d.test"], methods: ["POST"]}, inspect: "mcp", class: "safe"}
+  strict: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "t"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      autonomy: {safe: "review", control: "deny", staged: "deny", compensable: "review", irreversible: "deny"}
+      grants:
+        - {id: "llm", match: {hosts: ["api.anthropic.test"], methods: ["POST"]}, inspect: "inference"}
+        - {id: "boundary-decl", match: {hosts: ["countersign.internal"], paths: ["/decl/**"]}, class: "safe"}
+        - {id: "boundary", match: {hosts: ["countersign.internal"], ports: [443, 8443]}}
+        - {id: "repo", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/widgets", "acme/lib"], access: "write"}}}, stager: {git: {refs: ["refs/heads/agent/*"], allowDelete: false, allowNonFastForward: false, maxPackBytes: "512Mi"}}}
+        - {id: "repo-ro", match: {hosts: ["ro.test"], matcher: {git-smart-http: {repos: ["acme/widgets"], access: "read"}}}}
+        - {id: "repo-nows", match: {hosts: ["ws.test"], matcher: {git-smart-http: {repos: ["acme/widgets", "acme/lib"], access: "write"}}}}
+        - {id: "api", match: {hosts: ["api.test"]}}
+        - {id: "api-meth", match: {hosts: ["m.test"], methods: ["GET", "HEAD", "OPTIONS", "POST", "PUT", "DELETE", "PATCH", "TRACE", "PURGE"]}}
+        - {id: "ws", match: {hosts: ["rt.test"], methods: ["GET"], paths: ["/feed"]}, upgrade: ["websocket"]}
+        - {id: "pt", match: {hosts: ["vpn.test"]}, mode: "passthrough"}
+        - {id: "mcp-map", match: {hosts: ["mcp.map.test"], methods: ["POST", "GET"]}, inspect: "mcp", tools: {search: "safe", issue: "irreversible", note: "compensable", halt: "control"}}
+        - {id: "mcp-ser", match: {hosts: ["mcp.ser.test"], methods: ["POST", "GET"]}, inspect: "mcp", calls: "serialized"}
+        - {id: "mcp-bare", match: {hosts: ["mcp.bare.test"], methods: ["POST"]}, inspect: "mcp"}
+        - {id: "notify", match: {hosts: ["chat.test"], methods: ["POST", "PUT", "DELETE"], paths: ["/api/messages"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "ob-read", match: {hosts: ["chat.test"], methods: ["GET", "HEAD"], paths: ["/api/messages"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "comp-put", match: {hosts: ["c.test"], methods: ["GET", "PUT", "PATCH", "POST", "DELETE"], paths: ["/things/**"]}, compensate: {restore: {methods: ["PUT", "PATCH"]}, stateDigest: {ignore: ["/updated_at"]}}}
+        - {id: "comp-del", match: {hosts: ["c.test"], methods: ["POST"], paths: ["/items"]}, compensate: {deleteCreated: {methods: ["POST"], from: "location"}}}
+        - {id: "comp-del2", match: {hosts: ["c.test"], methods: ["GET", "DELETE"], paths: ["/old"]}, compensate: {restore: {methods: ["DELETE"]}}}
+        - {id: "notify-comp", match: {hosts: ["chat.test"], methods: ["POST", "PUT"], paths: ["/nc"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}, compensate: {restore: {methods: ["PUT"]}}}
+        - {id: "repo-ros", match: {hosts: ["ros.test"], matcher: {git-smart-http: {repos: ["acme/widgets"], access: "read"}}}, stager: {git: {refs: ["refs/heads/agent/*"], allowDelete: false, allowNonFastForward: false, maxPackBytes: "512Mi"}}}
+        - {id: "inf-stager", match: {hosts: ["infs.test"], methods: ["POST"]}, inspect: "inference", stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "mcp-sertools", match: {hosts: ["mcp.st.test"], methods: ["POST"]}, inspect: "mcp", calls: "serialized", tools: {x: "safe"}}
+        - {id: "ws2", match: {hosts: ["rt3.test"], methods: ["POST"], paths: ["/u"]}, upgrade: ["websocket"]}
+        - {id: "ws-decl2", match: {hosts: ["rt4.test"], methods: ["GET", "POST"], paths: ["/g"]}, upgrade: ["websocket"], class: "safe"}
+        - {id: "pt-ctl", match: {hosts: ["vpn4.test"]}, mode: "passthrough", class: "control"}
+        - {id: "notify-opt", match: {hosts: ["chat.test"], methods: ["OPTIONS", "HEAD"], paths: ["/api/messages"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "notify-all", match: {hosts: ["chat.test"], methods: ["TRACE", "PURGE", "FOO", "PATCH"], paths: ["/t"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "decl-req", match: {hosts: ["dr.test"], methods: ["GET", "POST"], paths: ["/r/**"]}, class: "safe", requires: "review"}
+        - {id: "decl-safe", match: {hosts: ["d.test"], methods: ["GET", "HEAD", "OPTIONS", "POST", "PUT", "DELETE", "PATCH"], paths: ["/s/**"]}, class: "safe"}
+        - {id: "decl-staged", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/st/**"]}, class: "staged", stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "decl-comp", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/c/**"]}, class: "compensable"}
+        - {id: "decl-irr", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/i/**"]}, class: "irreversible"}
+        - {id: "decl-ctl", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/x/**"]}, class: "control"}
+        - {id: "inf-decl", match: {hosts: ["inf.test"], methods: ["POST", "GET"]}, inspect: "inference", class: "safe"}
+        - {id: "pt-decl", match: {hosts: ["vpn2.test"]}, mode: "passthrough", class: "safe"}
+        - {id: "pt-comp", match: {hosts: ["vpn3.test"]}, mode: "passthrough", class: "compensable"}
+        - {id: "ws-decl", match: {hosts: ["rt2.test"], methods: ["GET"], paths: ["/f"]}, upgrade: ["websocket"], class: "safe"}
+        - {id: "ob-irr", match: {hosts: ["chat.test"], methods: ["POST"], paths: ["/irr"]}, class: "irreversible", stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "mcp-decl", match: {hosts: ["mcp.d.test"], methods: ["POST"]}, inspect: "mcp", class: "safe"}
+        - {id: "rq-allow", match: {hosts: ["r.test"], methods: ["GET", "POST", "PUT"]}, requires: "allow"}
+        - {id: "rq-none", match: {hosts: ["r2.test"], methods: ["GET", "POST", "PUT"]}}
+        - {id: "rq-review", match: {hosts: ["r3.test"], methods: ["GET", "POST", "PUT"]}, requires: "review"}
+        - {id: "rq-deny", match: {hosts: ["r4.test"], methods: ["GET", "POST", "PUT"]}, requires: "deny"}
+        - {id: "rq-repo", match: {hosts: ["rcode.test"], matcher: {git-smart-http: {repos: ["acme/widgets", "acme/lib"], access: "write"}}}, stager: {git: {refs: ["refs/heads/agent/*"], allowDelete: false, allowNonFastForward: false, maxPackBytes: "512Mi"}}, requires: "allow"}
+        - {id: "rq-comp", match: {hosts: ["rc.test"], methods: ["GET", "PUT"], paths: ["/t/**"]}, compensate: {restore: {methods: ["PUT"]}}, requires: "allow"}
+        - {id: "rq-llm", match: {hosts: ["rinf.test"], methods: ["POST"]}, inspect: "inference", requires: "allow"}
+  lax: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "t"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      autonomy: {safe: "allow", control: "allow", staged: "allow", compensable: "allow", irreversible: "allow"}
+      grants:
+        - {id: "llm", match: {hosts: ["api.anthropic.test"], methods: ["POST"]}, inspect: "inference"}
+        - {id: "boundary-decl", match: {hosts: ["countersign.internal"], paths: ["/decl/**"]}, class: "safe"}
+        - {id: "boundary", match: {hosts: ["countersign.internal"], ports: [443, 8443]}}
+        - {id: "repo", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/widgets", "acme/lib"], access: "write"}}}, stager: {git: {refs: ["refs/heads/agent/*"], allowDelete: false, allowNonFastForward: false, maxPackBytes: "512Mi"}}}
+        - {id: "repo-ro", match: {hosts: ["ro.test"], matcher: {git-smart-http: {repos: ["acme/widgets"], access: "read"}}}}
+        - {id: "repo-nows", match: {hosts: ["ws.test"], matcher: {git-smart-http: {repos: ["acme/widgets", "acme/lib"], access: "write"}}}}
+        - {id: "api", match: {hosts: ["api.test"]}}
+        - {id: "api-meth", match: {hosts: ["m.test"], methods: ["GET", "HEAD", "OPTIONS", "POST", "PUT", "DELETE", "PATCH", "TRACE", "PURGE"]}}
+        - {id: "ws", match: {hosts: ["rt.test"], methods: ["GET"], paths: ["/feed"]}, upgrade: ["websocket"]}
+        - {id: "pt", match: {hosts: ["vpn.test"]}, mode: "passthrough"}
+        - {id: "mcp-map", match: {hosts: ["mcp.map.test"], methods: ["POST", "GET"]}, inspect: "mcp", tools: {search: "safe", issue: "irreversible", note: "compensable", halt: "control"}}
+        - {id: "mcp-ser", match: {hosts: ["mcp.ser.test"], methods: ["POST", "GET"]}, inspect: "mcp", calls: "serialized"}
+        - {id: "mcp-bare", match: {hosts: ["mcp.bare.test"], methods: ["POST"]}, inspect: "mcp"}
+        - {id: "notify", match: {hosts: ["chat.test"], methods: ["POST", "PUT", "DELETE"], paths: ["/api/messages"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "ob-read", match: {hosts: ["chat.test"], methods: ["GET", "HEAD"], paths: ["/api/messages"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "comp-put", match: {hosts: ["c.test"], methods: ["GET", "PUT", "PATCH", "POST", "DELETE"], paths: ["/things/**"]}, compensate: {restore: {methods: ["PUT", "PATCH"]}, stateDigest: {ignore: ["/updated_at"]}}}
+        - {id: "comp-del", match: {hosts: ["c.test"], methods: ["POST"], paths: ["/items"]}, compensate: {deleteCreated: {methods: ["POST"], from: "location"}}}
+        - {id: "comp-del2", match: {hosts: ["c.test"], methods: ["GET", "DELETE"], paths: ["/old"]}, compensate: {restore: {methods: ["DELETE"]}}}
+        - {id: "notify-comp", match: {hosts: ["chat.test"], methods: ["POST", "PUT"], paths: ["/nc"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}, compensate: {restore: {methods: ["PUT"]}}}
+        - {id: "repo-ros", match: {hosts: ["ros.test"], matcher: {git-smart-http: {repos: ["acme/widgets"], access: "read"}}}, stager: {git: {refs: ["refs/heads/agent/*"], allowDelete: false, allowNonFastForward: false, maxPackBytes: "512Mi"}}}
+        - {id: "inf-stager", match: {hosts: ["infs.test"], methods: ["POST"]}, inspect: "inference", stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "mcp-sertools", match: {hosts: ["mcp.st.test"], methods: ["POST"]}, inspect: "mcp", calls: "serialized", tools: {x: "safe"}}
+        - {id: "ws2", match: {hosts: ["rt3.test"], methods: ["POST"], paths: ["/u"]}, upgrade: ["websocket"]}
+        - {id: "ws-decl2", match: {hosts: ["rt4.test"], methods: ["GET", "POST"], paths: ["/g"]}, upgrade: ["websocket"], class: "safe"}
+        - {id: "pt-ctl", match: {hosts: ["vpn4.test"]}, mode: "passthrough", class: "control"}
+        - {id: "notify-opt", match: {hosts: ["chat.test"], methods: ["OPTIONS", "HEAD"], paths: ["/api/messages"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "notify-all", match: {hosts: ["chat.test"], methods: ["TRACE", "PURGE", "FOO", "PATCH"], paths: ["/t"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "decl-req", match: {hosts: ["dr.test"], methods: ["GET", "POST"], paths: ["/r/**"]}, class: "safe", requires: "review"}
+        - {id: "decl-safe", match: {hosts: ["d.test"], methods: ["GET", "HEAD", "OPTIONS", "POST", "PUT", "DELETE", "PATCH"], paths: ["/s/**"]}, class: "safe"}
+        - {id: "decl-staged", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/st/**"]}, class: "staged", stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "decl-comp", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/c/**"]}, class: "compensable"}
+        - {id: "decl-irr", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/i/**"]}, class: "irreversible"}
+        - {id: "decl-ctl", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/x/**"]}, class: "control"}
+        - {id: "inf-decl", match: {hosts: ["inf.test"], methods: ["POST", "GET"]}, inspect: "inference", class: "safe"}
+        - {id: "pt-decl", match: {hosts: ["vpn2.test"]}, mode: "passthrough", class: "safe"}
+        - {id: "pt-comp", match: {hosts: ["vpn3.test"]}, mode: "passthrough", class: "compensable"}
+        - {id: "ws-decl", match: {hosts: ["rt2.test"], methods: ["GET"], paths: ["/f"]}, upgrade: ["websocket"], class: "safe"}
+        - {id: "ob-irr", match: {hosts: ["chat.test"], methods: ["POST"], paths: ["/irr"]}, class: "irreversible", stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "mcp-decl", match: {hosts: ["mcp.d.test"], methods: ["POST"]}, inspect: "mcp", class: "safe"}
+        - {id: "rq-review", match: {hosts: ["r3.test"], methods: ["GET", "POST", "PUT"]}, requires: "review"}
+        - {id: "rq-deny", match: {hosts: ["r4.test"], methods: ["GET", "POST", "PUT"]}, requires: "deny"}
+        - {id: "rq-repo", match: {hosts: ["rcode.test"], matcher: {git-smart-http: {repos: ["acme/widgets", "acme/lib"], access: "write"}}}, stager: {git: {refs: ["refs/heads/agent/*"], allowDelete: false, allowNonFastForward: false, maxPackBytes: "512Mi"}}, requires: "review"}
+        - {id: "rq-comp", match: {hosts: ["rc.test"], methods: ["GET", "PUT"], paths: ["/t/**"]}, compensate: {restore: {methods: ["PUT"]}}, requires: "deny"}
+  taint: |
+    apiVersion: "countersign.dev/v1alpha1"
+    kind: "SessionPolicy"
+    metadata: {name: "t"}
+    spec:
+      mode: "enforce"
+      scenario: "agent"
+      grants:
+        - {id: "llm", match: {hosts: ["api.anthropic.test"], methods: ["POST"]}, inspect: "inference"}
+        - {id: "boundary-decl", match: {hosts: ["countersign.internal"], paths: ["/decl/**"]}, class: "safe"}
+        - {id: "boundary", match: {hosts: ["countersign.internal"], ports: [443, 8443]}}
+        - {id: "repo", match: {hosts: ["code.test"], matcher: {git-smart-http: {repos: ["acme/widgets", "acme/lib"], access: "write"}}}, stager: {git: {refs: ["refs/heads/agent/*"], allowDelete: false, allowNonFastForward: false, maxPackBytes: "512Mi"}}}
+        - {id: "repo-ro", match: {hosts: ["ro.test"], matcher: {git-smart-http: {repos: ["acme/widgets"], access: "read"}}}}
+        - {id: "repo-nows", match: {hosts: ["ws.test"], matcher: {git-smart-http: {repos: ["acme/widgets", "acme/lib"], access: "write"}}}}
+        - {id: "api", match: {hosts: ["api.test"]}}
+        - {id: "api-meth", match: {hosts: ["m.test"], methods: ["GET", "HEAD", "OPTIONS", "POST", "PUT", "DELETE", "PATCH", "TRACE", "PURGE"]}}
+        - {id: "ws", match: {hosts: ["rt.test"], methods: ["GET"], paths: ["/feed"]}, upgrade: ["websocket"]}
+        - {id: "pt", match: {hosts: ["vpn.test"]}, mode: "passthrough"}
+        - {id: "mcp-map", match: {hosts: ["mcp.map.test"], methods: ["POST", "GET"]}, inspect: "mcp", tools: {search: "safe", issue: "irreversible", note: "compensable", halt: "control"}}
+        - {id: "mcp-ser", match: {hosts: ["mcp.ser.test"], methods: ["POST", "GET"]}, inspect: "mcp", calls: "serialized"}
+        - {id: "mcp-bare", match: {hosts: ["mcp.bare.test"], methods: ["POST"]}, inspect: "mcp"}
+        - {id: "notify", match: {hosts: ["chat.test"], methods: ["POST", "PUT", "DELETE"], paths: ["/api/messages"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "ob-read", match: {hosts: ["chat.test"], methods: ["GET", "HEAD"], paths: ["/api/messages"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "comp-put", match: {hosts: ["c.test"], methods: ["GET", "PUT", "PATCH", "POST", "DELETE"], paths: ["/things/**"]}, compensate: {restore: {methods: ["PUT", "PATCH"]}, stateDigest: {ignore: ["/updated_at"]}}}
+        - {id: "comp-del", match: {hosts: ["c.test"], methods: ["POST"], paths: ["/items"]}, compensate: {deleteCreated: {methods: ["POST"], from: "location"}}}
+        - {id: "comp-del2", match: {hosts: ["c.test"], methods: ["GET", "DELETE"], paths: ["/old"]}, compensate: {restore: {methods: ["DELETE"]}}}
+        - {id: "notify-comp", match: {hosts: ["chat.test"], methods: ["POST", "PUT"], paths: ["/nc"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}, compensate: {restore: {methods: ["PUT"]}}}
+        - {id: "repo-ros", match: {hosts: ["ros.test"], matcher: {git-smart-http: {repos: ["acme/widgets"], access: "read"}}}, stager: {git: {refs: ["refs/heads/agent/*"], allowDelete: false, allowNonFastForward: false, maxPackBytes: "512Mi"}}}
+        - {id: "inf-stager", match: {hosts: ["infs.test"], methods: ["POST"]}, inspect: "inference", stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "mcp-sertools", match: {hosts: ["mcp.st.test"], methods: ["POST"]}, inspect: "mcp", calls: "serialized", tools: {x: "safe"}}
+        - {id: "ws2", match: {hosts: ["rt3.test"], methods: ["POST"], paths: ["/u"]}, upgrade: ["websocket"]}
+        - {id: "ws-decl2", match: {hosts: ["rt4.test"], methods: ["GET", "POST"], paths: ["/g"]}, upgrade: ["websocket"], class: "safe"}
+        - {id: "pt-ctl", match: {hosts: ["vpn4.test"]}, mode: "passthrough", class: "control"}
+        - {id: "notify-opt", match: {hosts: ["chat.test"], methods: ["OPTIONS", "HEAD"], paths: ["/api/messages"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "notify-all", match: {hosts: ["chat.test"], methods: ["TRACE", "PURGE", "FOO", "PATCH"], paths: ["/t"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "decl-req", match: {hosts: ["dr.test"], methods: ["GET", "POST"], paths: ["/r/**"]}, class: "safe", requires: "review"}
+        - {id: "decl-safe", match: {hosts: ["d.test"], methods: ["GET", "HEAD", "OPTIONS", "POST", "PUT", "DELETE", "PATCH"], paths: ["/s/**"]}, class: "safe"}
+        - {id: "decl-staged", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/st/**"]}, class: "staged", stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "decl-comp", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/c/**"]}, class: "compensable"}
+        - {id: "decl-irr", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/i/**"]}, class: "irreversible"}
+        - {id: "decl-ctl", match: {hosts: ["d.test"], methods: ["GET", "POST"], paths: ["/x/**"]}, class: "control"}
+        - {id: "inf-decl", match: {hosts: ["inf.test"], methods: ["POST", "GET"]}, inspect: "inference", class: "safe"}
+        - {id: "pt-decl", match: {hosts: ["vpn2.test"]}, mode: "passthrough", class: "safe"}
+        - {id: "pt-comp", match: {hosts: ["vpn3.test"]}, mode: "passthrough", class: "compensable"}
+        - {id: "ws-decl", match: {hosts: ["rt2.test"], methods: ["GET"], paths: ["/f"]}, upgrade: ["websocket"], class: "safe"}
+        - {id: "ob-irr", match: {hosts: ["chat.test"], methods: ["POST"], paths: ["/irr"]}, class: "irreversible", stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+        - {id: "mcp-decl", match: {hosts: ["mcp.d.test"], methods: ["POST"]}, inspect: "mcp", class: "safe"}
+        - {id: "tw-web", match: {hosts: ["tw.test"], methods: ["GET", "POST", "PUT"]}, whenTainted: {default: "review", labels: {web: "deny", packages: "allow"}}}
+        - {id: "tw-nodef", match: {hosts: ["tw2.test"], methods: ["GET", "POST", "PUT"]}, whenTainted: {labels: {web: "deny"}}}
+        - {id: "tw-ro", match: {hosts: ["tw3.test"], methods: ["GET", "HEAD"]}, class: "irreversible", whenTainted: {labels: {web: "deny"}}}
+        - {id: "tw-comp", match: {hosts: ["tw4.test"], methods: ["PUT", "POST"]}, compensate: {restore: {methods: ["PUT"]}}, whenTainted: {default: "deny", labels: {packages: "allow"}}}
+        - {id: "tw-staged", match: {hosts: ["tw5.test"], methods: ["POST", "PUT"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}, whenTainted: {default: "deny"}}
+rows:
+  - {name: "a-ctl-inference", policy: "base", grant: "llm", request: {method: "POST", host: "api.anthropic.test", path: "/v1/messages"}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "a-ctl-inference-get", policy: "base", grant: "inf-decl", request: {method: "GET", host: "inf.test", path: "/m"}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "a-ctl-inference-decl", policy: "base", grant: "inf-decl", request: {method: "POST", host: "inf.test", path: "/m"}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "a-ctl-boundary-get", policy: "base", grant: "boundary", request: {method: "GET", host: "countersign.internal", path: "/self"}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "a-ctl-boundary-post", policy: "base", grant: "boundary", request: {method: "POST", host: "countersign.internal", path: "/w"}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "a-ctl-boundary-port", policy: "base", grant: "boundary", request: {method: "POST", host: "countersign.internal", path: "/w", port: 8443}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "a-ctl-boundary-case", policy: "base", grant: "boundary", request: {method: "POST", host: "Countersign.Internal", path: "/w"}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "a-ctl-boundary-dot", policy: "base", grant: "boundary", request: {method: "POST", host: "countersign.internal.", path: "/w"}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "a-ctl-mcpproto-list", policy: "base", grant: "mcp-map", request: {method: "POST", host: "mcp.map.test", path: "/", mcp: {method: "tools/list"}}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "a-ctl-mcpproto-decl", policy: "base", grant: "mcp-decl", request: {method: "POST", host: "mcp.d.test", path: "/", mcp: {method: "notifications/x"}}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "a-ctl-mcpproto-ser", policy: "base", grant: "mcp-ser", request: {method: "POST", host: "mcp.ser.test", path: "/", mcp: {method: "tools/list"}}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "a-decl-vs-ws", policy: "base", grant: "ws-decl", request: {method: "GET", host: "rt2.test", path: "/f", websocket: true}, expected: {class: "safe", requires: "allow", declared_safe: true}}
+  - {name: "a-decl-vs-pt", policy: "base", grant: "pt-decl", request: {method: "POST", host: "vpn2.test", path: "/x", tunnel: true}, expected: {class: "safe", requires: "allow", declared_safe: true}}
+  - {name: "a-decl-vs-pt-comp", policy: "base", grant: "pt-comp", request: {method: "POST", host: "vpn3.test", path: "/x", tunnel: true}, expected: {class: "compensable", requires: "allow", declared_safe: false}}
+  - {name: "a-decl-vs-stager", policy: "base", grant: "ob-irr", request: {method: "POST", host: "chat.test", path: "/irr"}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "a-decl-staged-vs-m6", policy: "base", grant: "decl-staged", request: {method: "GET", host: "d.test", path: "/st/x"}, expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "a-pt-any", policy: "base", grant: "pt", request: {method: "GET", host: "vpn.test", path: "/deep/path", tunnel: true}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "a-pt-post", policy: "base", grant: "pt", request: {method: "POST", host: "vpn.test", path: "/x", tunnel: true}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "a-ws-irr", policy: "base", grant: "ws", request: {method: "GET", host: "rt.test", path: "/feed", websocket: true}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "a-stager-vs-get", policy: "base", grant: "repo", request: {method: "GET", host: "code.test", path: "/acme/widgets/info/refs", query: "service=git-receive-pack"}, expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "a-stager-vs-del", policy: "base", grant: "notify", request: {method: "DELETE", host: "chat.test", path: "/api/messages"}, expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "a-read-shadow", policy: "base", grant: "repo", request: {method: "GET", host: "code.test", path: "/acme/widgets/info/refs", query: "service=git-upload-pack"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "a-read-post", policy: "base", grant: "repo", request: {method: "POST", host: "code.test", path: "/acme/widgets/git-upload-pack"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "a-get-vs-mcp", policy: "base", grant: "mcp-map", request: {method: "GET", host: "mcp.map.test", path: "/", mcp: {method: "tools/call", tool: "issue"}}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "a-get-vs-comp", policy: "base", grant: "comp-put", request: {method: "GET", host: "c.test", path: "/things/1"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "a-mcpcall-ser", policy: "base", grant: "mcp-ser", request: {method: "POST", host: "mcp.ser.test", path: "/", mcp: {method: "tools/call", tool: "anything"}}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "a-mcpcall-tool", policy: "base", grant: "mcp-map", request: {method: "POST", host: "mcp.map.test", path: "/", mcp: {method: "tools/call", tool: "search"}}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "a-comp-vs-irr", policy: "base", grant: "comp-put", request: {method: "PUT", host: "c.test", path: "/things/1"}, expected: {class: "compensable", requires: "allow", declared_safe: false}}
+  - {name: "b-method-get", policy: "base", grant: "api-meth", request: {method: "GET", host: "m.test", path: "/p"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "b-method-head", policy: "base", grant: "api-meth", request: {method: "HEAD", host: "m.test", path: "/p"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "b-method-options", policy: "base", grant: "api-meth", request: {method: "OPTIONS", host: "m.test", path: "/p"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "b-method-post", policy: "base", grant: "api-meth", request: {method: "POST", host: "m.test", path: "/p"}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "b-method-put", policy: "base", grant: "api-meth", request: {method: "PUT", host: "m.test", path: "/p"}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "b-method-delete", policy: "base", grant: "api-meth", request: {method: "DELETE", host: "m.test", path: "/p"}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "b-method-patch", policy: "base", grant: "api-meth", request: {method: "PATCH", host: "m.test", path: "/p"}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "b-method-trace", policy: "base", grant: "api-meth", request: {method: "TRACE", host: "m.test", path: "/p"}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "b-method-purge", policy: "base", grant: "api-meth", request: {method: "PURGE", host: "m.test", path: "/p"}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "c-repo-info-r", policy: "base", grant: "repo", request: {method: "GET", host: "code.test", path: "/acme/widgets/info/refs", query: "service=git-upload-pack"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "c-repo-info-w", policy: "base", grant: "repo", request: {method: "GET", host: "code.test", path: "/acme/widgets/info/refs", query: "service=git-receive-pack"}, expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "c-repo-post-up", policy: "base", grant: "repo", request: {method: "POST", host: "code.test", path: "/acme/widgets/git-upload-pack"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "c-repo-post-recv", policy: "base", grant: "repo", request: {method: "POST", host: "code.test", path: "/acme/widgets/git-receive-pack"}, expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "c-repo-dotgit", policy: "base", grant: "repo", request: {method: "POST", host: "code.test", path: "/acme/widgets.git/git-receive-pack"}, expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "c-repo-owner-repo", policy: "base", grant: "repo", request: {method: "POST", host: "code.test", path: "/acme/lib/git-receive-pack"}, expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "c-repo-lib-info-r", policy: "base", grant: "repo", request: {method: "GET", host: "code.test", path: "/acme/lib/info/refs", query: "service=git-upload-pack"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "c-repo-lib-post-up", policy: "base", grant: "repo", request: {method: "POST", host: "code.test", path: "/acme/lib/git-upload-pack"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "c-ro-info-r", policy: "base", grant: "repo-ro", request: {method: "GET", host: "ro.test", path: "/acme/widgets/info/refs", query: "service=git-upload-pack"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "c-ro-post-up", policy: "base", grant: "repo-ro", request: {method: "POST", host: "ro.test", path: "/acme/widgets/git-upload-pack"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "c-nows-info-r", policy: "base", grant: "repo-nows", request: {method: "GET", host: "ws.test", path: "/acme/widgets/info/refs", query: "service=git-upload-pack"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "c-nows-info-w", policy: "base", grant: "repo-nows", request: {method: "GET", host: "ws.test", path: "/acme/widgets/info/refs", query: "service=git-receive-pack"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "c-nows-post-up", policy: "base", grant: "repo-nows", request: {method: "POST", host: "ws.test", path: "/acme/widgets/git-upload-pack"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "c-nows-post-recv", policy: "base", grant: "repo-nows", request: {method: "POST", host: "ws.test", path: "/acme/widgets/git-receive-pack"}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "c-nows-lib-recv", policy: "base", grant: "repo-nows", request: {method: "POST", host: "ws.test", path: "/acme/lib/git-receive-pack"}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "d-outbox-post", policy: "base", grant: "notify", request: {method: "POST", host: "chat.test", path: "/api/messages"}, expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "d-outbox-put", policy: "base", grant: "notify", request: {method: "PUT", host: "chat.test", path: "/api/messages"}, expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "d-outbox-delete", policy: "base", grant: "notify", request: {method: "DELETE", host: "chat.test", path: "/api/messages"}, expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "d-outbox-get", policy: "base", grant: "ob-read", request: {method: "GET", host: "chat.test", path: "/api/messages"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "d-outbox-head", policy: "base", grant: "ob-read", request: {method: "HEAD", host: "chat.test", path: "/api/messages"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "d-git-staged-post", policy: "base", grant: "repo", request: {method: "POST", host: "code.test", path: "/acme/widgets/git-receive-pack"}, expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "d-git-read", policy: "base", grant: "repo", request: {method: "POST", host: "code.test", path: "/acme/widgets/git-upload-pack"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "d-outbox-ws-post", policy: "base", grant: "notify", request: {method: "POST", host: "chat.test", path: "/api/messages", websocket: true}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "d-outbox-ws-del", policy: "base", grant: "notify", request: {method: "DELETE", host: "chat.test", path: "/api/messages", websocket: true}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "e-call-ser", policy: "base", grant: "mcp-ser", request: {method: "POST", host: "mcp.ser.test", path: "/", mcp: {method: "tools/call", tool: "x"}}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "e-list-ser", policy: "base", grant: "mcp-ser", request: {method: "POST", host: "mcp.ser.test", path: "/", mcp: {method: "tools/list"}}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "e-call-map-safe", policy: "base", grant: "mcp-map", request: {method: "POST", host: "mcp.map.test", path: "/", mcp: {method: "tools/call", tool: "search"}}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "e-call-map-irr", policy: "base", grant: "mcp-map", request: {method: "POST", host: "mcp.map.test", path: "/", mcp: {method: "tools/call", tool: "issue"}}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "e-call-map-comp", policy: "base", grant: "mcp-map", request: {method: "POST", host: "mcp.map.test", path: "/", mcp: {method: "tools/call", tool: "note"}}, expected: {class: "compensable", requires: "allow", declared_safe: false}}
+  - {name: "e-call-map-ctl", policy: "base", grant: "mcp-map", request: {method: "POST", host: "mcp.map.test", path: "/", mcp: {method: "tools/call", tool: "halt"}}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "e-call-map-miss", policy: "base", grant: "mcp-map", request: {method: "POST", host: "mcp.map.test", path: "/", mcp: {method: "tools/call", tool: "unknown"}}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "e-call-bare", policy: "base", grant: "mcp-bare", request: {method: "POST", host: "mcp.bare.test", path: "/", mcp: {method: "tools/call", tool: "x"}}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "e-notify-mcp", policy: "base", grant: "mcp-map", request: {method: "POST", host: "mcp.map.test", path: "/", mcp: {method: "notifications/progress"}}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "e-list-bare", policy: "base", grant: "mcp-bare", request: {method: "POST", host: "mcp.bare.test", path: "/", mcp: {method: "tools/list"}}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "e-call-noinspect", policy: "base", grant: "api", request: {method: "POST", host: "api.test", path: "/rpc", mcp: {method: "tools/call", tool: "x"}}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "e-call-get-noinspect", policy: "base", grant: "api", request: {method: "GET", host: "api.test", path: "/rpc", mcp: {method: "tools/call", tool: "x"}}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "e-resp-msg", policy: "base", grant: "mcp-map", request: {method: "POST", host: "mcp.map.test", path: "/", mcp: {method: ""}}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "e-call-decl", policy: "base", grant: "mcp-decl", request: {method: "POST", host: "mcp.d.test", path: "/", mcp: {method: "tools/call", tool: "y"}}, expected: {class: "safe", requires: "allow", declared_safe: true}}
+  - {name: "f-pt-get", policy: "base", grant: "pt", request: {method: "GET", host: "vpn.test", path: "/a", tunnel: true}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "f-pt-delete", policy: "base", grant: "pt", request: {method: "DELETE", host: "vpn.test", path: "/a", tunnel: true}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "f-ws-get", policy: "base", grant: "ws", request: {method: "GET", host: "rt.test", path: "/feed", websocket: true}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "f-no-ws-get", policy: "base", grant: "ws", request: {method: "GET", host: "rt.test", path: "/feed"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "f-tunnel-intercept", policy: "base", grant: "api", request: {method: "POST", host: "api.test", path: "/a", tunnel: true}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "f-ws-decl", policy: "base", grant: "ws-decl", request: {method: "GET", host: "rt2.test", path: "/f", websocket: true}, expected: {class: "safe", requires: "allow", declared_safe: true}}
+  - {name: "f-pt-decl-post", policy: "base", grant: "pt-decl", request: {method: "POST", host: "vpn2.test", path: "/x", tunnel: true}, expected: {class: "safe", requires: "allow", declared_safe: true}}
+  - {name: "f-pt-decl-get", policy: "base", grant: "pt-decl", request: {method: "GET", host: "vpn2.test", path: "/x", tunnel: true}, expected: {class: "safe", requires: "allow", declared_safe: true}}
+  - {name: "g-declsafe-get", policy: "base", grant: "decl-safe", request: {method: "GET", host: "d.test", path: "/s/x"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "g-declsafe-head", policy: "base", grant: "decl-safe", request: {method: "HEAD", host: "d.test", path: "/s/x"}, expected: {class: "safe", requires: "allow", declared_safe: true}}
+  - {name: "g-declsafe-options", policy: "base", grant: "decl-safe", request: {method: "OPTIONS", host: "d.test", path: "/s/x"}, expected: {class: "safe", requires: "allow", declared_safe: true}}
+  - {name: "g-declsafe-post", policy: "base", grant: "decl-safe", request: {method: "POST", host: "d.test", path: "/s/x"}, expected: {class: "safe", requires: "allow", declared_safe: true}}
+  - {name: "g-declsafe-put", policy: "base", grant: "decl-safe", request: {method: "PUT", host: "d.test", path: "/s/x"}, expected: {class: "safe", requires: "allow", declared_safe: true}}
+  - {name: "g-declsafe-delete", policy: "base", grant: "decl-safe", request: {method: "DELETE", host: "d.test", path: "/s/x"}, expected: {class: "safe", requires: "allow", declared_safe: true}}
+  - {name: "g-declsafe-patch", policy: "base", grant: "decl-safe", request: {method: "PATCH", host: "d.test", path: "/s/x"}, expected: {class: "safe", requires: "allow", declared_safe: true}}
+  - {name: "g-decl-staged", policy: "base", grant: "decl-staged", request: {method: "POST", host: "d.test", path: "/st/x"}, expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "g-decl-staged-get", policy: "base", grant: "decl-staged", request: {method: "GET", host: "d.test", path: "/st/x"}, expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "g-decl-comp", policy: "base", grant: "decl-comp", request: {method: "POST", host: "d.test", path: "/c/x"}, expected: {class: "compensable", requires: "allow", declared_safe: false}}
+  - {name: "g-decl-comp-get", policy: "base", grant: "decl-comp", request: {method: "GET", host: "d.test", path: "/c/x"}, expected: {class: "compensable", requires: "allow", declared_safe: false}}
+  - {name: "g-decl-irr", policy: "base", grant: "decl-irr", request: {method: "POST", host: "d.test", path: "/i/x"}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "g-decl-irr-get", policy: "base", grant: "decl-irr", request: {method: "GET", host: "d.test", path: "/i/x"}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "g-decl-ctl", policy: "base", grant: "decl-ctl", request: {method: "POST", host: "d.test", path: "/x/y"}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "g-decl-ctl-get", policy: "base", grant: "decl-ctl", request: {method: "GET", host: "d.test", path: "/x/y"}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "g-decl-ws", policy: "base", grant: "ws-decl", request: {method: "GET", host: "rt2.test", path: "/f", websocket: true}, expected: {class: "safe", requires: "allow", declared_safe: true}}
+  - {name: "g-decl-tunnel", policy: "base", grant: "pt-decl", request: {method: "POST", host: "vpn2.test", path: "/x", tunnel: true}, expected: {class: "safe", requires: "allow", declared_safe: true}}
+  - {name: "g-decl-tunnel-get", policy: "base", grant: "pt-decl", request: {method: "GET", host: "vpn2.test", path: "/x", tunnel: true}, expected: {class: "safe", requires: "allow", declared_safe: true}}
+  - {name: "g-decl-safe-post-flag", policy: "base", grant: "decl-safe", request: {method: "POST", host: "d.test", path: "/s/new"}, expected: {class: "safe", requires: "allow", declared_safe: true}}
+  - {name: "h-comp-put", policy: "base", grant: "comp-put", request: {method: "PUT", host: "c.test", path: "/things/1"}, expected: {class: "compensable", requires: "allow", declared_safe: false}}
+  - {name: "h-comp-patch", policy: "base", grant: "comp-put", request: {method: "PATCH", host: "c.test", path: "/things/1"}, expected: {class: "compensable", requires: "allow", declared_safe: false}}
+  - {name: "h-comp-post-nocov", policy: "base", grant: "comp-put", request: {method: "POST", host: "c.test", path: "/things/1"}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "h-comp-del-nocov", policy: "base", grant: "comp-put", request: {method: "DELETE", host: "c.test", path: "/things/1"}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "h-comp-del-created", policy: "base", grant: "comp-del", request: {method: "POST", host: "c.test", path: "/items"}, expected: {class: "compensable", requires: "allow", declared_safe: false}}
+  - {name: "h-comp-get", policy: "base", grant: "comp-put", request: {method: "GET", host: "c.test", path: "/things/1"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "h-comp-shadow", policy: "base", grant: "notify-comp", request: {method: "PUT", host: "chat.test", path: "/nc"}, expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "h-comp-shadow2", policy: "base", grant: "notify-comp", request: {method: "POST", host: "chat.test", path: "/nc"}, expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "h-comp-delmeth", policy: "base", grant: "comp-del2", request: {method: "DELETE", host: "c.test", path: "/old"}, expected: {class: "compensable", requires: "allow", declared_safe: false}}
+  - {name: "h-comp-delmeth-get", policy: "base", grant: "comp-del2", request: {method: "GET", host: "c.test", path: "/old"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "i-boundary-get", policy: "base", grant: "boundary", request: {method: "GET", host: "countersign.internal", path: "/p"}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "i-boundary-post", policy: "base", grant: "boundary", request: {method: "POST", host: "countersign.internal", path: "/p"}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "i-boundary-delete", policy: "base", grant: "boundary", request: {method: "DELETE", host: "countersign.internal", path: "/p"}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "j-irr-post", policy: "base", grant: "api", request: {method: "POST", host: "api.test", path: "/x"}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "j-irr-delete", policy: "base", grant: "api", request: {method: "DELETE", host: "api.test", path: "/x"}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "j-irr-put", policy: "base", grant: "api", request: {method: "PUT", host: "api.test", path: "/x"}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "j-irr-post-q", policy: "base", grant: "api", request: {method: "POST", host: "api.test", path: "/x", query: "a=b"}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "j-irr-nogit", policy: "base", grant: "api", request: {method: "POST", host: "api.test", path: "/acme/widgets/git-receive-pack"}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "k-a-safe", policy: "autoA", grant: "api", request: {method: "GET", host: "api.test", path: "/x"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "k-a-staged", policy: "autoA", grant: "repo", request: {method: "POST", host: "code.test", path: "/acme/widgets/git-receive-pack"}, expected: {class: "staged", requires: "review", declared_safe: false}}
+  - {name: "k-a-comp", policy: "autoA", grant: "comp-put", request: {method: "PUT", host: "c.test", path: "/things/1"}, expected: {class: "compensable", requires: "review", declared_safe: false}}
+  - {name: "k-a-irr", policy: "autoA", grant: "api", request: {method: "POST", host: "api.test", path: "/x"}, expected: {class: "irreversible", requires: "review", declared_safe: false}}
+  - {name: "k-a-ctl", policy: "autoA", grant: "llm", request: {method: "POST", host: "api.anthropic.test", path: "/v1/messages"}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "k-a-boundary", policy: "autoA", grant: "boundary", request: {method: "GET", host: "countersign.internal", path: "/s"}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "k-b-safe", policy: "autoB", grant: "api", request: {method: "GET", host: "api.test", path: "/x"}, expected: {class: "safe", requires: "deny", declared_safe: false}}
+  - {name: "k-b-staged", policy: "autoB", grant: "repo", request: {method: "POST", host: "code.test", path: "/acme/widgets/git-receive-pack"}, expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "k-b-comp", policy: "autoB", grant: "comp-put", request: {method: "PUT", host: "c.test", path: "/things/1"}, expected: {class: "compensable", requires: "deny", declared_safe: false}}
+  - {name: "k-b-irr", policy: "autoB", grant: "api", request: {method: "POST", host: "api.test", path: "/x"}, expected: {class: "irreversible", requires: "deny", declared_safe: false}}
+  - {name: "k-b-ctl", policy: "autoB", grant: "llm", request: {method: "POST", host: "api.anthropic.test", path: "/v1/messages"}, expected: {class: "control", requires: "deny", declared_safe: false}}
+  - {name: "k-b-mcp-tool", policy: "autoB", grant: "mcp-map", request: {method: "POST", host: "mcp.map.test", path: "/", mcp: {method: "tools/call", tool: "search"}}, expected: {class: "safe", requires: "deny", declared_safe: false}}
+  - {name: "k-b-decl", policy: "autoB", grant: "decl-irr", request: {method: "POST", host: "d.test", path: "/i/x"}, expected: {class: "irreversible", requires: "deny", declared_safe: false}}
+  - {name: "l-c523-0", policy: "strict", grant: "rq-allow", request: {method: "GET", host: "r.test", path: "/a"}, c523: true, expected: {class: "safe", requires: "review", declared_safe: false}}
+  - {name: "l-c523-1", policy: "strict", grant: "rq-allow", request: {method: "POST", host: "r.test", path: "/a"}, c523: true, expected: {class: "irreversible", requires: "deny", declared_safe: false}}
+  - {name: "l-c523-2", policy: "strict", grant: "rq-allow", request: {method: "PUT", host: "r.test", path: "/a"}, c523: true, expected: {class: "irreversible", requires: "deny", declared_safe: false}}
+  - {name: "l-c523-3", policy: "strict", grant: "rq-none", request: {method: "GET", host: "r2.test", path: "/a"}, c523: true, expected: {class: "safe", requires: "review", declared_safe: false}}
+  - {name: "l-c523-4", policy: "strict", grant: "rq-none", request: {method: "POST", host: "r2.test", path: "/a"}, c523: true, expected: {class: "irreversible", requires: "deny", declared_safe: false}}
+  - {name: "l-c523-5", policy: "strict", grant: "rq-none", request: {method: "PUT", host: "r2.test", path: "/a"}, c523: true, expected: {class: "irreversible", requires: "deny", declared_safe: false}}
+  - {name: "l-c523-6", policy: "strict", grant: "rq-repo", request: {method: "POST", host: "rcode.test", path: "/acme/widgets/git-receive-pack"}, c523: true, expected: {class: "staged", requires: "deny", declared_safe: false}}
+  - {name: "l-c523-7", policy: "strict", grant: "rq-comp", request: {method: "PUT", host: "rc.test", path: "/t/1"}, c523: true, expected: {class: "compensable", requires: "review", declared_safe: false}}
+  - {name: "l-c523-8", policy: "strict", grant: "rq-llm", request: {method: "POST", host: "rinf.test", path: "/m"}, c523: true, expected: {class: "control", requires: "deny", declared_safe: false}}
+  - {name: "l-c523-9", policy: "strict", grant: "rq-allow", request: {method: "POST", host: "r.test", path: "/a"}, c523: true, expected: {class: "irreversible", requires: "deny", declared_safe: false}}
+  - {name: "l-c523-10", policy: "strict", grant: "rq-none", request: {method: "GET", host: "r2.test", path: "/b"}, c523: true, expected: {class: "safe", requires: "review", declared_safe: false}}
+  - {name: "l-c523-11", policy: "strict", grant: "rq-allow", request: {method: "PUT", host: "r.test", path: "/a"}, c523: true, expected: {class: "irreversible", requires: "deny", declared_safe: false}}
+  - {name: "l-strict-base-0", policy: "strict", grant: "api", request: {method: "GET", host: "api.test", path: "/x"}, c523: true, expected: {class: "safe", requires: "review", declared_safe: false}}
+  - {name: "l-strict-base-1", policy: "strict", grant: "api", request: {method: "POST", host: "api.test", path: "/x"}, c523: true, expected: {class: "irreversible", requires: "deny", declared_safe: false}}
+  - {name: "l-strict-base-2", policy: "strict", grant: "repo", request: {method: "POST", host: "code.test", path: "/acme/widgets/git-receive-pack"}, c523: true, expected: {class: "staged", requires: "deny", declared_safe: false}}
+  - {name: "l-strict-base-3", policy: "strict", grant: "comp-put", request: {method: "PUT", host: "c.test", path: "/things/1"}, c523: true, expected: {class: "compensable", requires: "review", declared_safe: false}}
+  - {name: "l-strict-base-4", policy: "strict", grant: "llm", request: {method: "POST", host: "api.anthropic.test", path: "/v1/messages"}, c523: true, expected: {class: "control", requires: "deny", declared_safe: false}}
+  - {name: "l-strict-base-5", policy: "strict", grant: "boundary", request: {method: "POST", host: "countersign.internal", path: "/w"}, c523: true, expected: {class: "control", requires: "deny", declared_safe: false}}
+  - {name: "l-strict-base-6", policy: "strict", grant: "notify", request: {method: "POST", host: "chat.test", path: "/api/messages"}, c523: true, expected: {class: "staged", requires: "deny", declared_safe: false}}
+  - {name: "l-strict-base-7", policy: "strict", grant: "decl-irr", request: {method: "POST", host: "d.test", path: "/i/x"}, c523: true, expected: {class: "irreversible", requires: "deny", declared_safe: false}}
+  - {name: "l-lax-rev-post", policy: "lax", grant: "rq-review", request: {method: "POST", host: "r3.test", path: "/a"}, expected: {class: "irreversible", requires: "review", declared_safe: false}}
+  - {name: "l-lax-rev-get", policy: "lax", grant: "rq-review", request: {method: "GET", host: "r3.test", path: "/a"}, expected: {class: "safe", requires: "review", declared_safe: false}}
+  - {name: "l-lax-deny-post", policy: "lax", grant: "rq-deny", request: {method: "POST", host: "r4.test", path: "/a"}, expected: {class: "irreversible", requires: "deny", declared_safe: false}}
+  - {name: "l-lax-deny-get", policy: "lax", grant: "rq-deny", request: {method: "GET", host: "r4.test", path: "/a"}, expected: {class: "safe", requires: "deny", declared_safe: false}}
+  - {name: "l-lax-repo", policy: "lax", grant: "rq-repo", request: {method: "POST", host: "rcode.test", path: "/acme/widgets/git-receive-pack"}, expected: {class: "staged", requires: "review", declared_safe: false}}
+  - {name: "l-lax-comp", policy: "lax", grant: "rq-comp", request: {method: "PUT", host: "rc.test", path: "/t/1"}, expected: {class: "compensable", requires: "deny", declared_safe: false}}
+  - {name: "l-eq-review", policy: "strict", grant: "rq-review", request: {method: "POST", host: "r3.test", path: "/a"}, expected: {class: "irreversible", requires: "deny", declared_safe: false}}
+  - {name: "l-eq-deny", policy: "strict", grant: "rq-deny", request: {method: "POST", host: "r4.test", path: "/a"}, expected: {class: "irreversible", requires: "deny", declared_safe: false}}
+  - {name: "m-taint-web-irr", policy: "taint", grant: "tw-web", request: {method: "POST", host: "tw.test", path: "/a"}, taint: ["web"], expected: {class: "irreversible", requires: "deny", declared_safe: false}}
+  - {name: "m-taint-pkg-irr", policy: "taint", grant: "tw-web", request: {method: "POST", host: "tw.test", path: "/a"}, taint: ["packages"], expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "m-taint-none-irr", policy: "taint", grant: "tw-web", request: {method: "POST", host: "tw.test", path: "/a"}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "m-taint-miss-irr", policy: "taint", grant: "tw-web", request: {method: "POST", host: "tw.test", path: "/a"}, taint: ["other"], expected: {class: "irreversible", requires: "review", declared_safe: false}}
+  - {name: "m-taint-two-irr", policy: "taint", grant: "tw-web", request: {method: "POST", host: "tw.test", path: "/a"}, taint: ["web", "packages"], expected: {class: "irreversible", requires: "deny", declared_safe: false}}
+  - {name: "m-taint-safe-ignored", policy: "taint", grant: "tw-web", request: {method: "GET", host: "tw.test", path: "/a"}, taint: ["web"], expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "m-nodef-web", policy: "taint", grant: "tw-nodef", request: {method: "POST", host: "tw2.test", path: "/a"}, taint: ["web"], expected: {class: "irreversible", requires: "deny", declared_safe: false}}
+  - {name: "m-nodef-miss", policy: "taint", grant: "tw-nodef", request: {method: "POST", host: "tw2.test", path: "/a"}, taint: ["other"], expected: {class: "irreversible", requires: "review", declared_safe: false}}
+  - {name: "m-nodef-get-miss", policy: "taint", grant: "tw-nodef", request: {method: "GET", host: "tw2.test", path: "/a"}, taint: ["other"], expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "m-ro-miss", policy: "taint", grant: "tw-ro", request: {method: "GET", host: "tw3.test", path: "/a"}, taint: ["other"], expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "m-ro-web", policy: "taint", grant: "tw-ro", request: {method: "GET", host: "tw3.test", path: "/a"}, taint: ["web"], expected: {class: "irreversible", requires: "deny", declared_safe: false}}
+  - {name: "m-comp-web", policy: "taint", grant: "tw-comp", request: {method: "PUT", host: "tw4.test", path: "/a"}, taint: ["web"], expected: {class: "compensable", requires: "deny", declared_safe: false}}
+  - {name: "m-comp-pkg", policy: "taint", grant: "tw-comp", request: {method: "PUT", host: "tw4.test", path: "/a"}, taint: ["packages"], expected: {class: "compensable", requires: "allow", declared_safe: false}}
+  - {name: "m-comp-none", policy: "taint", grant: "tw-comp", request: {method: "PUT", host: "tw4.test", path: "/a"}, expected: {class: "compensable", requires: "allow", declared_safe: false}}
+  - {name: "m-comp-post", policy: "taint", grant: "tw-comp", request: {method: "POST", host: "tw4.test", path: "/a"}, taint: ["packages"], expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "m-taint-staged", policy: "taint", grant: "tw-staged", request: {method: "POST", host: "tw5.test", path: "/a"}, taint: ["web"], expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "m-taint-staged-none", policy: "taint", grant: "tw-staged", request: {method: "PUT", host: "tw5.test", path: "/a"}, expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "n-boundary-decl", policy: "base", grant: "boundary-decl", request: {method: "POST", host: "countersign.internal", path: "/decl/x"}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "n-inf-stager", policy: "base", grant: "inf-stager", request: {method: "POST", host: "infs.test", path: "/m"}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "n-inf-stager-get", policy: "base", grant: "inf-stager", request: {method: "POST", host: "infs.test", path: "/m"}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "n-mcp-sertools", policy: "base", grant: "mcp-sertools", request: {method: "POST", host: "mcp.st.test", path: "/", mcp: {method: "tools/call", tool: "x"}}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "n-mcp-sertools-miss", policy: "base", grant: "mcp-sertools", request: {method: "POST", host: "mcp.st.test", path: "/", mcp: {method: "tools/call", tool: "y"}}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "n-mcp-notool", policy: "base", grant: "mcp-map", request: {method: "POST", host: "mcp.map.test", path: "/", mcp: {method: "tools/call"}}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "n-ws2-post", policy: "base", grant: "ws2", request: {method: "POST", host: "rt3.test", path: "/u", websocket: true}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "n-ws2-no", policy: "base", grant: "ws2", request: {method: "POST", host: "rt3.test", path: "/u"}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "n-ros-read", policy: "base", grant: "repo-ros", request: {method: "GET", host: "ros.test", path: "/acme/widgets/info/refs", query: "service=git-upload-pack"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "n-ros-up", policy: "base", grant: "repo-ros", request: {method: "POST", host: "ros.test", path: "/acme/widgets/git-upload-pack"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "n-mcp-ws-ser", policy: "base", grant: "mcp-ser", request: {method: "POST", host: "mcp.ser.test", path: "/", websocket: true, mcp: {method: "tools/call", tool: "x"}}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "o-c-safe", policy: "autoC", grant: "api", request: {method: "GET", host: "api.test", path: "/x"}, expected: {class: "safe", requires: "review", declared_safe: false}}
+  - {name: "o-c-staged", policy: "autoC", grant: "repo", request: {method: "POST", host: "code.test", path: "/acme/widgets/git-receive-pack"}, expected: {class: "staged", requires: "deny", declared_safe: false}}
+  - {name: "o-c-comp", policy: "autoC", grant: "comp-put", request: {method: "PUT", host: "c.test", path: "/things/1"}, expected: {class: "compensable", requires: "allow", declared_safe: false}}
+  - {name: "o-c-irr", policy: "autoC", grant: "api", request: {method: "POST", host: "api.test", path: "/x"}, expected: {class: "irreversible", requires: "review", declared_safe: false}}
+  - {name: "o-c-ctl", policy: "autoC", grant: "llm", request: {method: "POST", host: "api.anthropic.test", path: "/v1/messages"}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "o-c-ws", policy: "autoC", grant: "ws", request: {method: "GET", host: "rt.test", path: "/feed", websocket: true}, expected: {class: "irreversible", requires: "review", declared_safe: false}}
+  - {name: "o-c-pt", policy: "autoC", grant: "pt", request: {method: "POST", host: "vpn.test", path: "/a", tunnel: true}, expected: {class: "irreversible", requires: "review", declared_safe: false}}
+  - {name: "o-c-decl-ctl", policy: "autoC", grant: "decl-ctl", request: {method: "POST", host: "d.test", path: "/x/y"}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "o-c-decl-irr", policy: "autoC", grant: "decl-irr", request: {method: "POST", host: "d.test", path: "/i/x"}, expected: {class: "irreversible", requires: "review", declared_safe: false}}
+  - {name: "o-c-mcp-tool", policy: "autoC", grant: "mcp-map", request: {method: "POST", host: "mcp.map.test", path: "/", mcp: {method: "tools/call", tool: "issue"}}, expected: {class: "irreversible", requires: "review", declared_safe: false}}
+  - {name: "o-c-boundary", policy: "autoC", grant: "boundary", request: {method: "GET", host: "countersign.internal", path: "/s"}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "o-c-outbox", policy: "autoC", grant: "notify", request: {method: "POST", host: "chat.test", path: "/api/messages"}, expected: {class: "staged", requires: "deny", declared_safe: false}}
+  - {name: "p-decl-req-safe", policy: "base", grant: "decl-req", request: {method: "POST", host: "dr.test", path: "/r/x"}, expected: {class: "safe", requires: "review", declared_safe: true}}
+  - {name: "p-decl-req-get", policy: "base", grant: "decl-req", request: {method: "GET", host: "dr.test", path: "/r/x"}, expected: {class: "safe", requires: "review", declared_safe: false}}
+  - {name: "p-decl-req-strict", policy: "strict", grant: "decl-req", request: {method: "POST", host: "dr.test", path: "/r/x"}, expected: {class: "safe", requires: "review", declared_safe: true}}
+  - {name: "p-lax-decl", policy: "lax", grant: "decl-irr", request: {method: "POST", host: "d.test", path: "/i/x"}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "p-lax-decl-safe", policy: "lax", grant: "decl-safe", request: {method: "POST", host: "d.test", path: "/s/x"}, expected: {class: "safe", requires: "allow", declared_safe: true}}
+  - {name: "p-lax-mcp", policy: "lax", grant: "mcp-map", request: {method: "POST", host: "mcp.map.test", path: "/", mcp: {method: "tools/call", tool: "note"}}, expected: {class: "compensable", requires: "allow", declared_safe: false}}
+  - {name: "p-strict-ws", policy: "strict", grant: "ws", request: {method: "GET", host: "rt.test", path: "/feed", websocket: true}, expected: {class: "irreversible", requires: "deny", declared_safe: false}}
+  - {name: "p-strict-pt", policy: "strict", grant: "pt", request: {method: "POST", host: "vpn.test", path: "/a", tunnel: true}, expected: {class: "irreversible", requires: "deny", declared_safe: false}}
+  - {name: "p-strict-declsafe", policy: "strict", grant: "decl-safe", request: {method: "POST", host: "d.test", path: "/s/x"}, c523: true, expected: {class: "safe", requires: "review", declared_safe: true}}
+  - {name: "p-strict-mcp", policy: "strict", grant: "mcp-map", request: {method: "POST", host: "mcp.map.test", path: "/", mcp: {method: "tools/call", tool: "issue"}}, c523: true, expected: {class: "irreversible", requires: "deny", declared_safe: false}}
+  - {name: "p-strict-outbox", policy: "strict", grant: "ob-read", request: {method: "GET", host: "chat.test", path: "/api/messages"}, c523: true, expected: {class: "safe", requires: "review", declared_safe: false}}
+  - {name: "p-strict-mcp-decl", policy: "strict", grant: "mcp-decl", request: {method: "POST", host: "mcp.d.test", path: "/", mcp: {method: "tools/call", tool: "y"}}, expected: {class: "safe", requires: "review", declared_safe: true}}
+  - {name: "q-call-notool-ser", policy: "base", grant: "mcp-ser", request: {method: "POST", host: "mcp.ser.test", path: "/", mcp: {method: "tools/call"}}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "q-ping-map", policy: "base", grant: "mcp-map", request: {method: "POST", host: "mcp.map.test", path: "/", mcp: {method: "ping"}}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "q-initialize", policy: "base", grant: "mcp-map", request: {method: "POST", host: "mcp.map.test", path: "/", mcp: {method: "initialize"}}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "q-get-call-ser", policy: "base", grant: "mcp-ser", request: {method: "GET", host: "mcp.ser.test", path: "/", mcp: {method: "tools/call", tool: "x"}}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "q-delete-call", policy: "base", grant: "api", request: {method: "DELETE", host: "api.test", path: "/rpc", mcp: {method: "tools/call", tool: "issue"}}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "q-call-ctl2", policy: "base", grant: "mcp-map", request: {method: "POST", host: "mcp.map.test", path: "/", mcp: {method: "tools/call", tool: "halt"}}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "q-inf-call", policy: "base", grant: "inf-decl", request: {method: "POST", host: "inf.test", path: "/m", mcp: {method: "tools/call", tool: "z"}}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "r-outbox-options", policy: "base", grant: "notify-opt", request: {method: "OPTIONS", host: "chat.test", path: "/api/messages"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "r-outbox-trace", policy: "base", grant: "notify-all", request: {method: "TRACE", host: "chat.test", path: "/t"}, expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "r-outbox-purge", policy: "base", grant: "notify-all", request: {method: "PURGE", host: "chat.test", path: "/t"}, expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "r-outbox-connect", policy: "base", grant: "notify-all", request: {method: "FOO", host: "chat.test", path: "/t"}, expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "r-outbox-head", policy: "base", grant: "ob-read", request: {method: "HEAD", host: "chat.test", path: "/api/messages"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "r-outbox-patch", policy: "base", grant: "notify-all", request: {method: "PATCH", host: "chat.test", path: "/t"}, expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "s-declsafe-tunnel-get", policy: "base", grant: "pt-decl", request: {method: "GET", host: "vpn2.test", path: "/x", tunnel: true}, expected: {class: "safe", requires: "allow", declared_safe: true}}
+  - {name: "s-declsafe-tunnel-nopost", policy: "base", grant: "pt-decl", request: {method: "CONNECT", host: "vpn2.test", path: "/x", tunnel: true}, expected: {class: "safe", requires: "allow", declared_safe: true}}
+  - {name: "s-declsafe-ws-post", policy: "base", grant: "ws-decl2", request: {method: "POST", host: "rt4.test", path: "/g", websocket: true}, expected: {class: "safe", requires: "allow", declared_safe: true}}
+  - {name: "s-declctl-tunnel", policy: "base", grant: "pt-ctl", request: {method: "POST", host: "vpn4.test", path: "/x", tunnel: true}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "s-decl-staged-get2", policy: "base", grant: "decl-staged", request: {method: "GET", host: "d.test", path: "/st/y"}, expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "s-decl-safe-opt", policy: "base", grant: "decl-safe", request: {method: "OPTIONS", host: "d.test", path: "/s/x"}, expected: {class: "safe", requires: "allow", declared_safe: true}}
+  - {name: "s-ctl-mcp-on-api", policy: "base", grant: "api", request: {method: "POST", host: "api.test", path: "/x", mcp: {method: "tools/call", tool: "t"}}, expected: {class: "irreversible", requires: "allow", declared_safe: false}}
+  - {name: "s-inf-everything", policy: "base", grant: "llm", request: {method: "POST", host: "api.anthropic.test", path: "/v1/anything", mcp: {method: "tools/call", tool: "t"}}, expected: {class: "control", requires: "allow", declared_safe: false}}
+  - {name: "s-decl-staged-lax", policy: "lax", grant: "decl-staged", request: {method: "POST", host: "d.test", path: "/st/x"}, expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "s-decl-comp-autoB", policy: "autoB", grant: "decl-comp", request: {method: "POST", host: "d.test", path: "/c/x"}, expected: {class: "compensable", requires: "deny", declared_safe: false}}
+  - {name: "t-c523-21", policy: "strict", grant: "mcp-ser", request: {method: "POST", host: "mcp.ser.test", path: "/", mcp: {method: "tools/call", tool: "x"}}, c523: true, expected: {class: "control", requires: "deny", declared_safe: false}}
+  - {name: "t-c523-22", policy: "strict", grant: "repo-ro", request: {method: "POST", host: "ro.test", path: "/acme/widgets/git-upload-pack"}, c523: true, expected: {class: "safe", requires: "review", declared_safe: false}}
+  - {name: "t-c523-23", policy: "strict", grant: "comp-del", request: {method: "POST", host: "c.test", path: "/items"}, c523: true, expected: {class: "compensable", requires: "review", declared_safe: false}}
+  - {name: "t-c523-24", policy: "strict", grant: "ws2", request: {method: "POST", host: "rt3.test", path: "/u", websocket: true}, c523: true, expected: {class: "irreversible", requires: "deny", declared_safe: false}}
+  - {name: "u-lib-info-w", policy: "base", grant: "repo", request: {method: "GET", host: "code.test", path: "/acme/lib/info/refs", query: "service=git-receive-pack"}, expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "u-lib-dotgit", policy: "base", grant: "repo", request: {method: "POST", host: "code.test", path: "/acme/lib.git/git-upload-pack"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "u-nows-dotgit-info", policy: "base", grant: "repo-nows", request: {method: "GET", host: "ws.test", path: "/acme/widgets.git/info/refs", query: "service=git-upload-pack"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "u-ros-dotgit", policy: "base", grant: "repo-ros", request: {method: "POST", host: "ros.test", path: "/acme/widgets.git/git-upload-pack"}, expected: {class: "safe", requires: "allow", declared_safe: false}}
+  - {name: "v-b-outbox", policy: "autoB", grant: "notify", request: {method: "POST", host: "chat.test", path: "/api/messages"}, expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "v-b-ws", policy: "autoB", grant: "ws", request: {method: "GET", host: "rt.test", path: "/feed", websocket: true}, expected: {class: "irreversible", requires: "deny", declared_safe: false}}
+  - {name: "v-b-pt", policy: "autoB", grant: "pt", request: {method: "POST", host: "vpn.test", path: "/a", tunnel: true}, expected: {class: "irreversible", requires: "deny", declared_safe: false}}
+  - {name: "v-b-decl-safe", policy: "autoB", grant: "decl-safe", request: {method: "POST", host: "d.test", path: "/s/x"}, expected: {class: "safe", requires: "deny", declared_safe: true}}
+  - {name: "v-b-decl-staged", policy: "autoB", grant: "decl-staged", request: {method: "POST", host: "d.test", path: "/st/x"}, expected: {class: "staged", requires: "allow", declared_safe: false}}
+  - {name: "v-b-git-read", policy: "autoB", grant: "repo", request: {method: "POST", host: "code.test", path: "/acme/widgets/git-upload-pack"}, expected: {class: "safe", requires: "deny", declared_safe: false}}
+  - {name: "v-b-mcp-ser", policy: "autoB", grant: "mcp-ser", request: {method: "POST", host: "mcp.ser.test", path: "/", mcp: {method: "tools/call", tool: "x"}}, expected: {class: "control", requires: "deny", declared_safe: false}}
+  - {name: "v-a-outbox", policy: "autoA", grant: "notify", request: {method: "POST", host: "chat.test", path: "/api/messages"}, expected: {class: "staged", requires: "review", declared_safe: false}}
+  - {name: "v-a-ws", policy: "autoA", grant: "ws", request: {method: "GET", host: "rt.test", path: "/feed", websocket: true}, expected: {class: "irreversible", requires: "review", declared_safe: false}}
+  - {name: "v-a-pt", policy: "autoA", grant: "pt", request: {method: "POST", host: "vpn.test", path: "/a", tunnel: true}, expected: {class: "irreversible", requires: "review", declared_safe: false}}
+  - {name: "v-a-decl-safe", policy: "autoA", grant: "decl-safe", request: {method: "POST", host: "d.test", path: "/s/x"}, expected: {class: "safe", requires: "allow", declared_safe: true}}
+  - {name: "v-a-decl-staged", policy: "autoA", grant: "decl-staged", request: {method: "POST", host: "d.test", path: "/st/x"}, expected: {class: "staged", requires: "review", declared_safe: false}}
+  - {name: "v-a-mcp-ser", policy: "autoA", grant: "mcp-ser", request: {method: "POST", host: "mcp.ser.test", path: "/", mcp: {method: "tools/call", tool: "x"}}, expected: {class: "control", requires: "allow", declared_safe: false}}
+invalid:
+  - name: "v-stager-empty"
+    field: "stager"
+    policy: |
+        apiVersion: "countersign.dev/v1alpha1"
+        kind: "SessionPolicy"
+        metadata: {name: "bad"}
+        spec:
+          mode: "enforce"
+          scenario: "agent"
+          grants:
+            - {id: "g", match: {hosts: ["x.test"]}, stager: {}}
+  - name: "v-stager-both"
+    field: "stager"
+    policy: |
+        apiVersion: "countersign.dev/v1alpha1"
+        kind: "SessionPolicy"
+        metadata: {name: "bad"}
+        spec:
+          mode: "enforce"
+          scenario: "agent"
+          grants:
+            - {id: "g", match: {hosts: ["x.test"]}, stager: {git: {refs: ["refs/heads/agent/*"], allowDelete: false, allowNonFastForward: false, maxPackBytes: "512Mi"}, outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}, idMap: {provisional: "/id", real: "/id"}, idempotencyHeader: "Idempotency-Key"}}}
+  - name: "v-stager-unknown"
+    field: "svn"
+    policy: |
+        apiVersion: "countersign.dev/v1alpha1"
+        kind: "SessionPolicy"
+        metadata: {name: "bad"}
+        spec:
+          mode: "enforce"
+          scenario: "agent"
+          grants:
+            - {id: "g", match: {hosts: ["x.test"]}, stager: {svn: {url: "x"}}}
+  - name: "v-class-staged-nostager"
+    field: "class"
+    policy: |
+        apiVersion: "countersign.dev/v1alpha1"
+        kind: "SessionPolicy"
+        metadata: {name: "bad"}
+        spec:
+          mode: "enforce"
+          scenario: "agent"
+          grants:
+            - {id: "g", match: {hosts: ["x.test"]}, class: "staged"}
+  - name: "v-class-bad"
+    field: "class"
+    policy: |
+        apiVersion: "countersign.dev/v1alpha1"
+        kind: "SessionPolicy"
+        metadata: {name: "bad"}
+        spec:
+          mode: "enforce"
+          scenario: "agent"
+          grants:
+            - {id: "g", match: {hosts: ["x.test"]}, class: "fuzzy"}
+  - name: "v-autonomy-intent"
+    field: "autonomy"
+    policy: |
+        apiVersion: "countersign.dev/v1alpha1"
+        kind: "SessionPolicy"
+        metadata: {name: "bad"}
+        spec:
+          mode: "enforce"
+          scenario: "agent"
+          autonomy: {safe: "intent"}
+          grants:
+            - {id: "g", match: {hosts: ["x.test"]}}
+  - name: "v-autonomy-key"
+    field: "autonomy"
+    policy: |
+        apiVersion: "countersign.dev/v1alpha1"
+        kind: "SessionPolicy"
+        metadata: {name: "bad"}
+        spec:
+          mode: "enforce"
+          scenario: "agent"
+          autonomy: {magic: "allow"}
+          grants:
+            - {id: "g", match: {hosts: ["x.test"]}}
+  - name: "v-requires-intent"
+    field: "requires"
+    policy: |
+        apiVersion: "countersign.dev/v1alpha1"
+        kind: "SessionPolicy"
+        metadata: {name: "bad"}
+        spec:
+          mode: "enforce"
+          scenario: "agent"
+          grants:
+            - {id: "g", match: {hosts: ["x.test"]}, requires: "intent"}
+  - name: "v-tools-notmcp"
+    field: "tools"
+    policy: |
+        apiVersion: "countersign.dev/v1alpha1"
+        kind: "SessionPolicy"
+        metadata: {name: "bad"}
+        spec:
+          mode: "enforce"
+          scenario: "agent"
+          grants:
+            - {id: "g", match: {hosts: ["x.test"]}, tools: {a: "safe"}}
+  - name: "v-tools-badclass"
+    field: "tools"
+    policy: |
+        apiVersion: "countersign.dev/v1alpha1"
+        kind: "SessionPolicy"
+        metadata: {name: "bad"}
+        spec:
+          mode: "enforce"
+          scenario: "agent"
+          grants:
+            - {id: "g", match: {hosts: ["x.test"]}, inspect: "mcp", tools: {a: "fuzzy"}}
+  - name: "v-calls-bad"
+    field: "calls"
+    policy: |
+        apiVersion: "countersign.dev/v1alpha1"
+        kind: "SessionPolicy"
+        metadata: {name: "bad"}
+        spec:
+          mode: "enforce"
+          scenario: "agent"
+          grants:
+            - {id: "g", match: {hosts: ["x.test"]}, inspect: "mcp", calls: "parallel"}
+  - name: "v-calls-notmcp"
+    field: "calls"
+    policy: |
+        apiVersion: "countersign.dev/v1alpha1"
+        kind: "SessionPolicy"
+        metadata: {name: "bad"}
+        spec:
+          mode: "enforce"
+          scenario: "agent"
+          grants:
+            - {id: "g", match: {hosts: ["x.test"]}, calls: "serialized"}
+  - name: "v-stager-pt"
+    field: "stager"
+    policy: |
+        apiVersion: "countersign.dev/v1alpha1"
+        kind: "SessionPolicy"
+        metadata: {name: "bad"}
+        spec:
+          mode: "enforce"
+          scenario: "agent"
+          grants:
+            - {id: "g", match: {hosts: ["x.test"]}, mode: "passthrough", stager: {git: {refs: ["refs/heads/agent/*"], allowDelete: false, allowNonFastForward: false, maxPackBytes: "512Mi"}}}
+  - name: "v-comp-empty"
+    field: "compensate"
+    policy: |
+        apiVersion: "countersign.dev/v1alpha1"
+        kind: "SessionPolicy"
+        metadata: {name: "bad"}
+        spec:
+          mode: "enforce"
+          scenario: "agent"
+          grants:
+            - {id: "g", match: {hosts: ["x.test"]}, compensate: {stateDigest: {ignore: ["/a"]}}}
+  - name: "v-comp-nofrom"
+    field: "deleteCreated"
+    policy: |
+        apiVersion: "countersign.dev/v1alpha1"
+        kind: "SessionPolicy"
+        metadata: {name: "bad"}
+        spec:
+          mode: "enforce"
+          scenario: "agent"
+          grants:
+            - {id: "g", match: {hosts: ["x.test"]}, compensate: {deleteCreated: {methods: ["POST"]}}}
+  - name: "v-stager-outbox-noidmap"
+    field: "idMap"
+    policy: |
+        apiVersion: "countersign.dev/v1alpha1"
+        kind: "SessionPolicy"
+        metadata: {name: "bad"}
+        spec:
+          mode: "enforce"
+          scenario: "agent"
+          grants:
+            - {id: "g", match: {hosts: ["x.test"]}, stager: {outbox: {respond: {status: 200, contentType: "application/json", body: "{\"ok\": true, \"id\": \"{provisional}\"}"}}}}
+  - name: "v-tools-staged-nostager"
+    field: "tools"
+    policy: |
+        apiVersion: "countersign.dev/v1alpha1"
+        kind: "SessionPolicy"
+        metadata: {name: "bad"}
+        spec:
+          mode: "enforce"
+          scenario: "agent"
+          grants:
+            - {id: "g", match: {hosts: ["x.test"]}, inspect: "mcp", tools: {a: "staged"}}
+  - name: "v-gitstager-badref"
+    field: "refs"
+    policy: |
+        apiVersion: "countersign.dev/v1alpha1"
+        kind: "SessionPolicy"
+        metadata: {name: "bad"}
+        spec:
+          mode: "enforce"
+          scenario: "agent"
+          grants:
+            - {id: "g", match: {hosts: ["x.test"], matcher: {git-smart-http: {repos: ["acme/widgets", "acme/lib"], access: "write"}}}, stager: {git: {refs: ["heads/*"]}}}

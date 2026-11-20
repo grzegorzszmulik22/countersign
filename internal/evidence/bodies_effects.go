@@ -23,13 +23,16 @@ type Client struct {
 
 // Decision is the decision block shared by effect.http and effect.tunnel.
 // action ∈ allow|deny|hold|stage; requires ∈ allow|intent|review|deny (03 §4.2).
+// declared_safe is the 05 §1 rule 2 flag: a grant declared `class: safe` on a
+// non-GET method, a tunnel or a WebSocket.
 type Decision struct {
-	Action      string   `json:"action" cs:"enum:allow|deny|hold|stage"`
-	Reason      string   `json:"reason"`
-	Requires    string   `json:"requires" cs:"enum:allow|intent|review|deny"`
-	Grant       *string  `json:"grant"`
-	Credentials []string `json:"credentials"`
-	WouldDeny   *string  `json:"would_deny"`
+	Action       string   `json:"action" cs:"enum:allow|deny|hold|stage"`
+	Reason       string   `json:"reason"`
+	Requires     string   `json:"requires" cs:"enum:allow|intent|review|deny"`
+	DeclaredSafe bool     `json:"declared_safe"`
+	Grant        *string  `json:"grant"`
+	Credentials  []string `json:"credentials"`
+	WouldDeny    *string  `json:"would_deny"`
 }
 
 type Attribution struct {
