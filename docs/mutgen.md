@@ -75,7 +75,13 @@ running every mutant through **both** verifiers (`csverify` and
   a record may claim the ledger's device while its file sits on
   another file system (`calib-accepts-supplied`, `calib-estimated-ok`,
   `calib-any-filesystem`, `calib-dev-trusted`, `wall-bound-loose`
-  sabotages). The judged
+  sabotages). CR-003's numbers are checked as spec constants, never as
+  values read back from the run config: >= 400 samples, the 300-byte
+  `O_APPEND` write+fsync record shape, >= 5 ms pacing, a reported wall
+  >= samples x pacing, and a calibration file holding at least n x 300
+  bytes — a harness configured to take 100 samples fails the same as a
+  fabricated one (`calib-floor-100`, `calib-shape-any`,
+  `calib-wall-self-loose`, `calib-size-unmeasured` sabotages). The judged
   bound must be exactly the median qualified calibration p99 + 5 ms —
   a fixed bound, a swapped-in calibration, or a qualified flag that
   contradicts the run's own load samples all fail

@@ -225,13 +225,13 @@ def _calib(tmpdir, samples=400, pace=5.0, wall=4.0, dev_off=0,
     """A plausible MM1.3 fsync-calibration record: `samples` write+fsync
     latencies (8 ms each) on a real file inside tmpdir."""
     path = os.path.join(tmpdir, name)
+    vals = samples if isinstance(samples, list) else [8.0] * samples
     with open(path, "wb") as f:
-        f.write(b"x" * 300)
+        f.write(b"x" * (len(vals) * 300))
     dev = os.stat(path).st_dev
     if mtime_age:
         old = time.time() - mtime_age
         os.utime(path, (old, old))
-    vals = samples if isinstance(samples, list) else [8.0] * samples
     rec = {"metric": "MM1.3-calib", "source": "measured-in-run",
            "path": path, "st_dev": dev + dev_off, "n": len(vals),
            "record_bytes": 300, "pace_ms": pace, "wall_s": wall,
@@ -306,6 +306,45 @@ def t_mm13_calib_same_filesystem():
         if not ok:
             return False, f"same-device calibration rejected: {why}"
         return True, "foreign-device calibration rejected"
+
+
+def t_mm13_calib_spec_constants():
+    """CR-003: 400 samples, 300-byte O_APPEND write+fsync, >= 5 ms pace
+    and a reported wall >= samples x pacing are SPEC constants — a leg
+    short of any of them was not measured, whatever the harness was
+    configured to take. Violating cases just under each floor reject;
+    the exact boundary accepts."""
+    with tempfile.TemporaryDirectory() as d:
+        for n in (100, 399):  # a harness that accepts either must fail
+            c = _calib(d, samples=n, wall=n * 5.0 / 1000 + 0.5)
+            if ME.fsync_calib_ok(c, d)[0]:
+                return False, f"{n}-sample calibration accepted"
+        c = _calib(d, samples=400)   # boundary: exactly 400
+        ok, why = ME.fsync_calib_ok(c, d)
+        if not ok:
+            return False, f"400-sample boundary rejected: {why}"
+        c = _calib(d, pace=4.9)      # pace under the 5 ms constant
+        if ME.fsync_calib_ok(c, d)[0]:
+            return False, "4.9 ms pacing accepted"
+        c = _calib(d)
+        c["record_bytes"] = 299      # write shape differs from the spec
+        if ME.fsync_calib_ok(c, d)[0]:
+            return False, "299-byte write+fsync shape accepted"
+        c = _calib(d)                # own file too small for the samples
+        with open(c["path"], "wb") as f:
+            f.write(b"x" * 300)
+        if ME.fsync_calib_ok(c, d)[0]:
+            return False, "file too small for 400 x 300-byte appends"
+        # Reported wall just under samples x pacing (2.0 s) but over the
+        # looser (n-1)-floor (1.995 s): only the spec floor rejects it.
+        c = _calib(d, wall=1.998)
+        if ME.fsync_calib_ok(c, d)[0]:
+            return False, "reported wall under samples x pacing accepted"
+        c = _calib(d, wall=2.0)      # boundary: wall == samples x pacing
+        ok, why = ME.fsync_calib_ok(c, d)
+        if not ok:
+            return False, f"wall == samples x pacing rejected: {why}"
+        return True, "spec constants enforced at the boundary"
 
 
 def t_mm13_calib_device_is_measured():
@@ -522,12 +561,14 @@ CASES = [
      t_calib_wall_floor),
     ("mm1.3: file system measured by the calib file's real device",
      t_mm13_calib_device_is_measured),
+    ("mm1.3: 400 samples, 300-byte writes, 5 ms pace, wall are spec constants",
+     t_mm13_calib_spec_constants),
 ]
 
 
 def main():
-    if len(CASES) != 15:
-        print(f"selftest: {len(CASES)} cases registered, need 15 — the "
+    if len(CASES) != 16:
+        print(f"selftest: {len(CASES)} cases registered, need 16 — the "
               "negative-test set itself was tampered with")
         return 1
     print(f"harness negative tests ({len(CASES)} properties):")

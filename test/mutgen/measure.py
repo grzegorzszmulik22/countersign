@@ -64,6 +64,7 @@ MM13_SLACK_MS = 5.0       # append p99 may exceed the measured fsync p99 by
 MM13_ABS_MS = 5.0         # the absolute figure shown at G1 (CR-003)
 MM13_CALIB_MIN = 400      # write+fsync calibration samples
 MM13_CALIB_PACE_MS = 5.0  # minimum ms between calibration sample starts
+MM13_CALIB_REC_BYTES = 300  # bytes per O_APPEND write+fsync sample
 RUNS = 5
 
 
@@ -221,20 +222,24 @@ def fsync_calib_ok(calib, ledger_dir, observed_wall_s=None, since=None):
     pace = calib.get("pace_ms")
     if not isinstance(pace, (int, float)) or pace < MM13_CALIB_PACE_MS:
         return False, f"pace {pace!r} ms < {MM13_CALIB_PACE_MS} ms"
-    floor = (n - 1) * pace / 1000.0
+    rb = calib.get("record_bytes")
+    if rb != MM13_CALIB_REC_BYTES:
+        return False, (f"record_bytes {rb!r} — CR-003 fixes the sample "
+                       f"shape at {MM13_CALIB_REC_BYTES}-byte O_APPEND "
+                       "write+fsync, a constant, never the record's say")
+    floor = n * pace / 1000.0
     wall = calib.get("wall_s")
     if not isinstance(wall, (int, float)) or wall < floor:
         return False, (f"reported wall {wall!r}s cannot contain {n} "
-                       f"samples paced {pace} ms — record is estimated, "
-                       "not measured")
+                       f"samples paced {pace} ms (need >= {floor:.3f}) "
+                       "— record is estimated, not measured")
     # CR-003 clarification: the harness-observed wall is floored at
     # samples x pacing — a command that returned faster could not have
     # run the paced samples, so the record was supplied, not measured.
-    need = n * pace / 1000.0
-    if observed_wall_s is not None and observed_wall_s < need:
+    if observed_wall_s is not None and observed_wall_s < floor:
         return False, (f"calibration command returned in "
                        f"{observed_wall_s:.2f}s but {n} samples paced "
-                       f"{pace} ms need >= {need:.2f}s — record was "
+                       f"{pace} ms need >= {floor:.2f}s — record was "
                        "supplied, not run")
     if not isinstance(calib.get("path"), str):
         return False, "calibration file path not recorded"
@@ -247,6 +252,10 @@ def fsync_calib_ok(calib, ledger_dir, observed_wall_s=None, since=None):
         return False, (f"calibration on device {cst.st_dev} (recorded "
                        f"{calib.get('st_dev')}), ledger on {dev} — "
                        "different file system")
+    if cst.st_size < n * MM13_CALIB_REC_BYTES:
+        return False, (f"calibration file holds {cst.st_size} B but {n} "
+                       f"x {MM13_CALIB_REC_BYTES}-byte appends need >= "
+                       f"{n * MM13_CALIB_REC_BYTES} — samples not written")
     if since is not None and cst.st_mtime < since - 1.0:
         return False, ("calibration file predates this run — a cached "
                        "result was supplied")

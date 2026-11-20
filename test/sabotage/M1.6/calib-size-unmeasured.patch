@@ -1,0 +1,13 @@
+--- a/test/mutgen/measure.py
++++ b/test/mutgen/measure.py
+@@ -252,10 +252,6 @@
+         return False, (f"calibration on device {cst.st_dev} (recorded "
+                        f"{calib.get('st_dev')}), ledger on {dev} — "
+                        "different file system")
+-    if cst.st_size < n * MM13_CALIB_REC_BYTES:
+-        return False, (f"calibration file holds {cst.st_size} B but {n} "
+-                       f"x {MM13_CALIB_REC_BYTES}-byte appends need >= "
+-                       f"{n * MM13_CALIB_REC_BYTES} — samples not written")
+     if since is not None and cst.st_mtime < since - 1.0:
+         return False, ("calibration file predates this run — a cached "
+                        "result was supplied")
