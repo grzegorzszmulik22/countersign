@@ -1,0 +1,17 @@
+diff --git a/internal/inspect/openai.go b/internal/inspect/openai.go
+index c41c009..f4591ef 100644
+--- a/internal/inspect/openai.go
++++ b/internal/inspect/openai.go
+@@ -490,10 +490,10 @@ func (p *chatParser) chunk(ev *sseEvent) ([]Completion, error) {
+ 			p.calls[ch.Index] = map[int]*chatCall{}
+ 		}
+ 		for _, tc := range ch.Delta.ToolCalls {
+-			cc := p.calls[ch.Index][tc.Index]
++			cc := p.calls[ch.Index][0]
+ 			if cc == nil {
+ 				cc = &chatCall{}
+-				p.calls[ch.Index][tc.Index] = cc
++				p.calls[ch.Index][0] = cc
+ 			}
+ 			if tc.ID != "" {
+ 				cc.id = tc.ID

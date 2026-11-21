@@ -1,0 +1,83 @@
+--- C8.1.1: go test ./internal/inspect/ -count=1 -run ^TestVectorsChunkIndependent$ -v
+        --- PASS: TestVectorsChunkIndependent/resp-text-json/shard6 (0.00s)
+        --- PASS: TestVectorsChunkIndependent/resp-text-json/shard5 (0.00s)
+        --- PASS: TestVectorsChunkIndependent/resp-text-json/shard2 (0.00s)
+        --- PASS: TestVectorsChunkIndependent/resp-text-json/shard1 (0.00s)
+    --- PASS: TestVectorsChunkIndependent/resp-unknown-sse (0.00s)
+        --- PASS: TestVectorsChunkIndependent/resp-unknown-sse/shard0 (0.01s)
+        --- PASS: TestVectorsChunkIndependent/resp-unknown-sse/shard4 (0.01s)
+        --- PASS: TestVectorsChunkIndependent/resp-unknown-sse/shard7 (0.01s)
+        --- PASS: TestVectorsChunkIndependent/resp-unknown-sse/shard6 (0.01s)
+        --- PASS: TestVectorsChunkIndependent/resp-unknown-sse/shard5 (0.01s)
+        --- PASS: TestVectorsChunkIndependent/resp-unknown-sse/shard2 (0.01s)
+        --- PASS: TestVectorsChunkIndependent/resp-unknown-sse/shard3 (0.01s)
+        --- PASS: TestVectorsChunkIndependent/resp-unknown-sse/shard1 (0.01s)
+PASS
+ok  	github.com/countersign/countersign/internal/inspect	37.095s
+CHECK C8.1.1 PASS
+--- C8.1.2: go test -tags fixtures ./internal/proxy/ -count=1 -run ^(TestM8E2E_WriteAheadOrdering|TestM8E2E_WriteAheadBoundary|TestM8E2E_WriteAheadBoundaryEOF|TestM8E2E_WriteAheadEverySplit|TestM8E2E_WriteAheadJSON|TestM8E2E_LedgerFailClosed)$ -v
+=== RUN   TestM8E2E_WriteAheadEverySplit/single-call-json
+=== RUN   TestM8E2E_WriteAheadEverySplit/multi-call-sse
+=== RUN   TestM8E2E_WriteAheadEverySplit/resp-single-json
+=== RUN   TestM8E2E_WriteAheadEverySplit/resp-multi-sse
+=== RUN   TestM8E2E_WriteAheadEverySplit/chat-multi-json
+=== RUN   TestM8E2E_WriteAheadEverySplit/chat-interleaved-sse
+--- PASS: TestM8E2E_WriteAheadEverySplit (1.25s)
+    --- PASS: TestM8E2E_WriteAheadEverySplit/single-call-json (0.03s)
+    --- PASS: TestM8E2E_WriteAheadEverySplit/multi-call-sse (0.31s)
+    --- PASS: TestM8E2E_WriteAheadEverySplit/resp-single-json (0.03s)
+    --- PASS: TestM8E2E_WriteAheadEverySplit/resp-multi-sse (0.51s)
+    --- PASS: TestM8E2E_WriteAheadEverySplit/chat-multi-json (0.05s)
+    --- PASS: TestM8E2E_WriteAheadEverySplit/chat-interleaved-sse (0.30s)
+PASS
+ok  	github.com/countersign/countersign/internal/proxy	3.419s
+CHECK C8.1.2 PASS
+--- C8.1.3: go test -tags fixtures ./internal/proxy/ -count=1 -run ^(TestM8E2E_ResponseVectors|TestM8E2E_Latency|TestM8E2E_IntentClassAnchor)$ -v
+    harness_test.go:126: broker: tunnel 01M7YYCERA00X3Y45N1QGJG6KE inner serve: listener closed (conn err: read tcp 127.0.0.1:32999->127.0.0.1:49344: use of closed network connection)
+--- PASS: TestM8E2E_IntentClassAnchor (0.03s)
+=== RUN   TestM8E2E_Latency
+    check_m8_test.go:1139: MM8.3 attempt 1 run 0: median ordinary -0.006 ms, hold 0.063 ms; p99 0.272/0.325 ms
+    check_m8_test.go:1139: MM8.3 attempt 1 run 1: median ordinary 0.002 ms, hold 0.009 ms; p99 0.195/0.125 ms
+    check_m8_test.go:1139: MM8.3 attempt 1 run 2: median ordinary 0.006 ms, hold 0.006 ms; p99 0.318/0.226 ms
+    check_m8_test.go:1139: MM8.3 attempt 1 run 3: median ordinary -0.005 ms, hold 0.013 ms; p99 0.263/0.203 ms
+    check_m8_test.go:1139: MM8.3 attempt 1 run 4: median ordinary -0.003 ms, hold 0.002 ms; p99 0.326/0.182 ms
+    check_m8_test.go:1149: MM8.3 attempt 1: 5 runs, per-run medians ordinary [-0.00584 0.0022 0.00564 -0.00536 -0.00292], hold [0.062521 0.00876 0.00632 0.01252 0.002439]; per-run p99 [0.19464 0.263442 0.271562 0.318363 0.326322]/[0.124561 0.182041 0.202721 0.226482 0.324723]; median-of-p99 0.272/0.203 ms; pooled p99 0.296/0.389 ms; CV 17.2%/30.9% (of per-run p99s)
+    check_m8_test.go:1173: MM8.3 PASS: median-of-p99 0.272/0.203 ms inside bounds (pooled 0.296/0.389 ms)
+    harness_test.go:126: broker: tunnel 01M7YYCES8006TS8QVSE22GFQR inner serve: listener closed (conn err: read tcp 127.0.0.1:46333->127.0.0.1:59254: use of closed network connection)
+    harness_test.go:126: broker: tunnel 01M7YYCES70022BNJBS673V62T inner serve: listener closed (conn err: read tcp 127.0.0.1:46333->127.0.0.1:59244: use of closed network connection)
+--- PASS: TestM8E2E_Latency (19.05s)
+PASS
+ok  	github.com/countersign/countersign/internal/proxy	20.387s
+CHECK C8.1.3 PASS
+--- C8.1.4: go test ./internal/inspect/ -count=1 -run ^TestParseMalformed$ -v
+=== RUN   TestParseMalformed
+--- PASS: TestParseMalformed (0.00s)
+PASS
+ok  	github.com/countersign/countersign/internal/inspect	0.013s
+CHECK C8.1.4 PASS
+--- C8.1.5: go test -tags fixtures ./internal/proxy/ -count=1 -run TestM8E2E_ResponseVectors/anthropic/unknown-sse -v
+=== RUN   TestM8E2E_ResponseVectors
+=== RUN   TestM8E2E_ResponseVectors/anthropic/unknown-sse
+    harness_test.go:126: broker: tunnel 01M7YYD2CF00NDDC4QFZTT8NVM inner serve: listener closed (conn err: read tcp 127.0.0.1:39153->127.0.0.1:36172: use of closed network connection)
+--- PASS: TestM8E2E_ResponseVectors (0.03s)
+    --- PASS: TestM8E2E_ResponseVectors/anthropic/unknown-sse (0.03s)
+PASS
+ok  	github.com/countersign/countersign/internal/proxy	0.052s
+CHECK C8.1.5 PASS
+fuzz: elapsed: 9m30s, execs: 2858076 (0/sec), new interesting: 2 (total: 1454)
+fuzz: elapsed: 9m33s, execs: 2858076 (0/sec), new interesting: 2 (total: 1454)
+fuzz: elapsed: 9m36s, execs: 2858076 (0/sec), new interesting: 2 (total: 1454)
+fuzz: elapsed: 9m39s, execs: 2858076 (0/sec), new interesting: 2 (total: 1454)
+fuzz: elapsed: 9m42s, execs: 2971320 (37925/sec), new interesting: 2 (total: 1454)
+fuzz: elapsed: 9m45s, execs: 2984516 (4398/sec), new interesting: 2 (total: 1454)
+fuzz: elapsed: 9m48s, execs: 2996637 (4040/sec), new interesting: 2 (total: 1454)
+fuzz: elapsed: 9m51s, execs: 3011490 (4951/sec), new interesting: 2 (total: 1454)
+fuzz: elapsed: 9m54s, execs: 3020619 (3043/sec), new interesting: 2 (total: 1454)
+fuzz: elapsed: 9m57s, execs: 3032656 (4013/sec), new interesting: 2 (total: 1454)
+fuzz: elapsed: 10m0s, execs: 3049162 (5501/sec), new interesting: 2 (total: 1454)
+fuzz: elapsed: 10m1s, execs: 3049162 (0/sec), new interesting: 2 (total: 1454)
+PASS
+ok  	github.com/countersign/countersign/internal/inspect	601.474s
+ok  	github.com/countersign/countersign/internal/inspect	1.567s
+CHECK C8.1.6 PASS
+M8.1 suite: all checks passed

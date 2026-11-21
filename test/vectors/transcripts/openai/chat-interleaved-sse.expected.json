@@ -1,0 +1,24 @@
+{
+  "provider": "chat",
+  "format": "sse",
+  "model": "gpt-5.2-2025-12-11",
+  "intents": [
+    {
+      "intent_id": "call_0Ch4tInt3rL34v3dC4llA",
+      "tool": "run",
+      "executor": "sandbox",
+      "input_sha256": "85fd86bde2a0dc877512107a05bf5bb502d37d01672f4b9508dc9576ab473791",
+      "input_len": 17
+    },
+    {
+      "intent_id": "call_0Ch4tInt3rL34v3dC4llB",
+      "tool": "fetch",
+      "executor": "sandbox",
+      "input_sha256": "ab7ff91ff001b689b60ebfb339a98df81dbf8bad78b1b91a92d93f7f01b8585b",
+      "input_len": 30
+    }
+  ],
+  "unparsed": false,
+  "detail_substring": "",
+  "markers": []
+}

@@ -1,0 +1,27 @@
+{
+  "provider": "anthropic",
+  "format": "sse",
+  "model": "claude-opus-4-1-20250805",
+  "intents": [
+    {
+      "intent_id": "toolu_03Int0rL3av3dC4ll0000a",
+      "tool": "Read",
+      "executor": "sandbox",
+      "input_sha256": "21d4862e025f3d188e989f9d42455baa5d3d88de06ab34781d4558ed236e2761",
+      "input_len": 26
+    },
+    {
+      "intent_id": "toolu_03Int0rL3av3dC4ll0000b",
+      "tool": "Bash",
+      "executor": "sandbox",
+      "input_sha256": "2b2876ec9cbb132fb0f98e053cc44ac53a85a413ce9b99219a131b01a7bcdea6",
+      "input_len": 28
+    }
+  ],
+  "unparsed": false,
+  "detail_substring": "",
+  "markers": [
+    "Reading the file for you MK5d9e620d89ce-a",
+    "Done MK5d9e620d89ce-b"
+  ]
+}

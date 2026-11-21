@@ -1,0 +1,17 @@
+{
+  "provider": "chat",
+  "format": "sse",
+  "model": "gpt-5.2-2025-12-11",
+  "intents": [
+    {
+      "intent_id": "call_0Ch4tErr0rM1dStr34m0",
+      "tool": "run",
+      "executor": "sandbox",
+      "input_sha256": "18e6c35fd86182c8301f8e23f58cfa2aa87bdf6e8dba802db165043079069eae",
+      "input_len": 7
+    }
+  ],
+  "unparsed": true,
+  "detail_substring": "error",
+  "markers": []
+}

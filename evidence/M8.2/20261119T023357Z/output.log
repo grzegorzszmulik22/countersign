@@ -1,0 +1,30 @@
+--- C8.2.1: go test ./internal/inspect/ -count=1 -run ^TestVectorsChunkIndependent$ -v
+=== RUN   TestVectorsChunkIndependent
+--- PASS: TestVectorsChunkIndependent (89.60s)
+PASS
+ok  	github.com/countersign/countersign/internal/inspect	89.676s
+CHECK C8.2.1 PASS
+--- C8.2.2: go test ./internal/inspect/ -count=1 -run ^TestVectorsChunkIndependent$ -v
+=== RUN   TestVectorsChunkIndependent
+--- PASS: TestVectorsChunkIndependent (95.39s)
+PASS
+ok  	github.com/countersign/countersign/internal/inspect	95.668s
+CHECK C8.2.2 PASS
+--- C8.2.3: go test -tags fixtures ./internal/proxy/ -count=1 -run ^(TestM8E2E_ResponseVectors|TestM8E2E_WriteAheadOrdering)$ -v
+    --- PASS: TestM8E2E_ResponseVectors/openai/resp-error-sse (0.08s)
+    --- PASS: TestM8E2E_ResponseVectors/openai/resp-fragments-sse (0.34s)
+    --- PASS: TestM8E2E_ResponseVectors/openai/resp-hosted-sse (0.17s)
+    --- PASS: TestM8E2E_ResponseVectors/openai/resp-large-args-sse (0.70s)
+    --- PASS: TestM8E2E_ResponseVectors/openai/resp-multi-sse (0.03s)
+    --- PASS: TestM8E2E_ResponseVectors/openai/resp-single-json (0.02s)
+    --- PASS: TestM8E2E_ResponseVectors/openai/resp-single-sse (0.38s)
+    --- PASS: TestM8E2E_ResponseVectors/openai/resp-text-json (0.58s)
+    --- PASS: TestM8E2E_ResponseVectors/openai/resp-unknown-sse (0.30s)
+=== RUN   TestM8E2E_WriteAheadOrdering
+    harness_test.go:126: broker: tunnel 01M7RV2NQE0008764BMS5EAS3G inner serve: listener closed (conn err: read tcp 127.0.0.1:41785->127.0.0.1:51872: use of closed network connection)
+--- PASS: TestM8E2E_WriteAheadOrdering (1.36s)
+FAIL
+FAIL	github.com/countersign/countersign/internal/proxy	10.836s
+FAIL
+CHECK C8.2.3 FAIL — go test failed
+M8.2 suite: FAILURES

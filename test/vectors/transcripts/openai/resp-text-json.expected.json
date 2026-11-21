@@ -1,0 +1,11 @@
+{
+  "provider": "responses",
+  "format": "json",
+  "model": "gpt-5.2-2025-12-11",
+  "intents": [],
+  "unparsed": false,
+  "detail_substring": "",
+  "markers": [
+    "hi MK5d9e620d89ce-oj"
+  ]
+}

@@ -1,0 +1,137 @@
+{
+  "declared": [
+    {
+      "step": 0,
+      "intent_id": "toolu_par_A",
+      "tool": "Bash",
+      "executor": "sandbox",
+      "input_sha256": "e50e5a32d073f447861d50221b154fd327abf9f59018a003734300292500c2c2",
+      "input_len": 15
+    },
+    {
+      "step": 0,
+      "intent_id": "toolu_par_B",
+      "tool": "Bash",
+      "executor": "sandbox",
+      "input_sha256": "b0b8a1e4429163acb53d8662611b3f307d0914719e47b7334a422f52154fd846",
+      "input_len": 15
+    },
+    {
+      "step": 0,
+      "intent_id": "toolu_par_C",
+      "tool": "Bash",
+      "executor": "sandbox",
+      "input_sha256": "5e1d45b64a6a0db1a556894e6be0f1a47c432856031453d04acd76ae3f16f058",
+      "input_len": 15
+    }
+  ],
+  "results": [
+    {
+      "step": 1,
+      "closed_by": "tool_result",
+      "intent_id": "toolu_par_C",
+      "content_sha256": "206d04dbcb68f47279014d318377ce58fc8b6678bfaa7425054ba156835bdaca",
+      "content_len": 3,
+      "has_content": true,
+      "is_error": null
+    },
+    {
+      "step": 1,
+      "closed_by": "tool_result",
+      "intent_id": "toolu_par_A",
+      "content_sha256": "a91d0d70d6aa50f3e30cc13b578667dc238f27d10c89e1496a2aa9d1b19358ec",
+      "content_len": 3,
+      "has_content": true,
+      "is_error": null
+    },
+    {
+      "step": 2,
+      "closed_by": "tool_result",
+      "intent_id": "toolu_par_B",
+      "content_sha256": "5d942153e7c2a76948b31cd20e1c2306bd964624a4e7b8a9f97826b5478d0267",
+      "content_len": 3,
+      "has_content": true,
+      "is_error": null
+    }
+  ],
+  "context": [
+    {
+      "step": 0,
+      "new_blocks": [
+        {
+          "index": 0,
+          "role": "user",
+          "kind": "text",
+          "sha256": "91576729ef5b57da800f1b7e86afb289c40f55c5a29da5db6d3757049d765e55",
+          "len": 29,
+          "intent_id": ""
+        }
+      ],
+      "block_count": 1,
+      "context_sha256": "e27ae61d25fef179e0ed5f86c57de2fbab4f410d950ae78a0c1978b75a2bed2b"
+    },
+    {
+      "step": 1,
+      "new_blocks": [
+        {
+          "index": 1,
+          "role": "assistant",
+          "kind": "tool_use",
+          "sha256": "8a7eb612cd12d553c05c52a43285215c9752afc95c289b0c9cf06f577be7c154",
+          "len": 76,
+          "intent_id": "toolu_par_A"
+        },
+        {
+          "index": 2,
+          "role": "assistant",
+          "kind": "tool_use",
+          "sha256": "8af848b4aa7cba89363ed26408de75a4c814d22983a045e91484513920951ca6",
+          "len": 76,
+          "intent_id": "toolu_par_B"
+        },
+        {
+          "index": 3,
+          "role": "assistant",
+          "kind": "tool_use",
+          "sha256": "97d2c9a29b73574942ef58be582598e7a881d4baef68f571bbf555bbd32b2855",
+          "len": 76,
+          "intent_id": "toolu_par_C"
+        },
+        {
+          "index": 4,
+          "role": "user",
+          "kind": "tool_result",
+          "sha256": "38d56ddb2bcddfc7eb1a483b4b472245f6f27c8662237fea1a14ad070f17907c",
+          "len": 66,
+          "intent_id": "toolu_par_C"
+        },
+        {
+          "index": 5,
+          "role": "user",
+          "kind": "tool_result",
+          "sha256": "e4523ea63914a8963818143611541dbf96de4142bfe30c4e8176da5471c98f86",
+          "len": 66,
+          "intent_id": "toolu_par_A"
+        }
+      ],
+      "block_count": 6,
+      "context_sha256": "627c05c8978f97382d24643d822ce096891d4f20cdc04de9a3a698aae615c97a"
+    },
+    {
+      "step": 2,
+      "new_blocks": [
+        {
+          "index": 6,
+          "role": "user",
+          "kind": "tool_result",
+          "sha256": "a54566fd5115e37d1d201487af098d87f773c8818f69b3f87c7b6061390705e6",
+          "len": 66,
+          "intent_id": "toolu_par_B"
+        }
+      ],
+      "block_count": 7,
+      "context_sha256": "24e6fc62fe00b8e33f6968777b03c3b1f91b7d104cb8d3274cf2e918179b1f06"
+    }
+  ],
+  "unparsed": []
+}

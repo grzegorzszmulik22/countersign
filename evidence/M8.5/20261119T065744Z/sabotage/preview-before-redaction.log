@@ -1,0 +1,51 @@
+make[1]: Entering directory '/home/opc/src/cs-intent/.check-work/sabotage-M8.5-preview-before-redaction'
+--- C8.5.1: go test ./internal/inspect/ -count=1 -run ^TestPreview -v
+=== RUN   TestPreviewRedacts
+--- PASS: TestPreviewRedacts (0.00s)
+=== RUN   TestPreviewCap
+--- PASS: TestPreviewCap (0.00s)
+=== RUN   TestPreviewDisabled
+--- PASS: TestPreviewDisabled (0.00s)
+=== RUN   TestPreviewBoundaryInputs
+--- PASS: TestPreviewBoundaryInputs (0.00s)
+PASS
+ok  	github.com/countersign/countersign/internal/inspect	0.017s
+CHECK C8.5.1 PASS
+--- C8.5.2: go test -tags fixtures ./internal/proxy/ -count=1 -run ^TestM8E2E_Privacy$ -v
+=== RUN   TestM8E2E_Privacy
+    check_m8_test.go:853: preview lacks redaction marker: "{\"command\":\"aws s3 ls xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx AKIAIOSFODNN7EXAMP"
+    harness_test.go:126: broker: tunnel 01M7SA448Q001D6BCXMZ16ASTC inner serve: listener closed (conn err: read tcp 127.0.0.1:33491->127.0.0.1:58128: use of closed network connection)
+--- FAIL: TestM8E2E_Privacy (0.13s)
+FAIL
+FAIL	github.com/countersign/countersign/internal/proxy	0.179s
+FAIL
+CHECK C8.5.2 FAIL — go test failed
+--- C8.5.3: go test ./internal/inspect/ -count=1 -run ^(TestPreviewCap|TestPreviewBoundaryInputs)$ -v
+=== RUN   TestPreviewCap
+--- PASS: TestPreviewCap (0.00s)
+=== RUN   TestPreviewBoundaryInputs
+--- PASS: TestPreviewBoundaryInputs (0.00s)
+PASS
+ok  	github.com/countersign/countersign/internal/inspect	0.039s
+CHECK C8.5.3 PASS
+--- C8.5.4: go test -tags fixtures ./internal/proxy/ -count=1 -run ^(TestM8E2E_Privacy|TestM8E2E_TrackingCorpus)$ -v
+--- PASS: TestM8E2E_TrackingCorpus (5.34s)
+    --- PASS: TestM8E2E_TrackingCorpus/fifty-turn (2.70s)
+    --- PASS: TestM8E2E_TrackingCorpus/interleaved-conversations (0.11s)
+    --- PASS: TestM8E2E_TrackingCorpus/parallel-outoforder (0.07s)
+    --- PASS: TestM8E2E_TrackingCorpus/resend-result (0.10s)
+    --- PASS: TestM8E2E_TrackingCorpus/sequential (0.06s)
+    --- PASS: TestM8E2E_TrackingCorpus/timeout (2.25s)
+    --- PASS: TestM8E2E_TrackingCorpus/unknown-result (0.04s)
+=== RUN   TestM8E2E_Privacy
+    check_m8_test.go:853: preview lacks redaction marker: "{\"command\":\"aws s3 ls xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx AKIAIOSFODNN7EXAMP"
+    harness_test.go:126: broker: tunnel 01M7SA4ED800BGVAW73T0H64T5 inner serve: listener closed (conn err: read tcp 127.0.0.1:33355->127.0.0.1:59916: use of closed network connection)
+--- FAIL: TestM8E2E_Privacy (0.07s)
+FAIL
+FAIL	github.com/countersign/countersign/internal/proxy	5.699s
+FAIL
+CHECK C8.5.4 FAIL — go test failed
+M8.5 suite: FAILURES
+check-M8.5: FAIL (exit 1, evidence: evidence/M8.5/20261119T070102Z)
+make[1]: *** [Makefile:37: check-M8.5] Error 1
+make[1]: Leaving directory '/home/opc/src/cs-intent/.check-work/sabotage-M8.5-preview-before-redaction'

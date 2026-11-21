@@ -1,0 +1,80 @@
+{
+  "declared": [
+    {
+      "step": 0,
+      "intent_id": "toolu_unk_A",
+      "tool": "Bash",
+      "executor": "sandbox",
+      "input_sha256": "cf35b664f0e85cbf24dfda38ea6991fa01d9d315e402baacd2c02f2e92d0947a",
+      "input_len": 15
+    }
+  ],
+  "results": [
+    {
+      "step": 1,
+      "intent_id": "toolu_unk_A",
+      "closed_by": "tool_result",
+      "content_sha256": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+      "content_len": 1,
+      "has_content": true,
+      "is_error": null
+    }
+  ],
+  "context": [
+    {
+      "step": 0,
+      "new_blocks": [
+        {
+          "index": 0,
+          "role": "user",
+          "kind": "text",
+          "sha256": "16fda99d247e77817874046a41232099236b17931ecdee0fd6c131d6e157c003",
+          "len": 22,
+          "intent_id": ""
+        }
+      ],
+      "block_count": 1,
+      "context_sha256": "ab286b891bfe66a2a2a46478d301bd3140bf11781432864b928f1db1aa79366b"
+    },
+    {
+      "step": 1,
+      "new_blocks": [
+        {
+          "index": 1,
+          "role": "assistant",
+          "kind": "tool_use",
+          "sha256": "539cd3d07583476d6105cb46179f31876f1349d5f53e5ede09788c041bbb98f5",
+          "len": 76,
+          "intent_id": "toolu_unk_A"
+        },
+        {
+          "index": 2,
+          "role": "assistant",
+          "kind": "tool_use",
+          "sha256": "9d2331c438e1f3234c33086fbe2b56e52d86e04752437e87422fadc6d9a6ed90",
+          "len": 80,
+          "intent_id": "toolu_unk_GHOST"
+        },
+        {
+          "index": 3,
+          "role": "user",
+          "kind": "tool_result",
+          "sha256": "c5c13700a55bd21c1e497b2c966be8731e50f3afbcd4a59447666f0e05a6edbd",
+          "len": 64,
+          "intent_id": "toolu_unk_A"
+        },
+        {
+          "index": 4,
+          "role": "user",
+          "kind": "tool_result",
+          "sha256": "bacb5b6ad42bc5874039f1c44d6e28c327276841ea76f87f53fe5055f5a08c9b",
+          "len": 72,
+          "intent_id": "toolu_unk_GHOST"
+        }
+      ],
+      "block_count": 5,
+      "context_sha256": "f98a195c81f443e5db128c55ca3e6f7b8878ae86aff376d6fa89978f45546737"
+    }
+  ],
+  "unparsed": []
+}

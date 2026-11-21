@@ -1,0 +1,26 @@
+{
+  "provider": "responses",
+  "format": "sse",
+  "model": "gpt-5.2-2025-12-11",
+  "intents": [
+    {
+      "intent_id": "call_0R3spMult1C4ll000000a",
+      "tool": "run",
+      "executor": "sandbox",
+      "input_sha256": "5fbd49e7a9d1f5ce08950916421a340a74f0f46be2c67ce4172d6c55c63af7d8",
+      "input_len": 19
+    },
+    {
+      "intent_id": "call_0R3spMult1C4ll000000b",
+      "tool": "fetch",
+      "executor": "sandbox",
+      "input_sha256": "03b871d6b5e5d609225be2b19d007f4fb761ca22efd1ed938355c1553d1a8cd3",
+      "input_len": 25
+    }
+  ],
+  "unparsed": false,
+  "detail_substring": "",
+  "markers": [
+    "Working MK5d9e620d89ce-o"
+  ]
+}

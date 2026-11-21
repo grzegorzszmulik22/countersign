@@ -1,0 +1,9 @@
+{
+  "provider": "anthropic",
+  "format": "sse",
+  "model": "claude-opus-4-1-20250805",
+  "intents": [],
+  "unparsed": true,
+  "detail_substring": "cut",
+  "markers": []
+}

@@ -1,0 +1,16 @@
+--- a/internal/proxy/inspect_hook.go
++++ b/internal/proxy/inspect_hook.go
+@@ -269,6 +269,13 @@
+ 			return err
+ 		}
+ 	}
++	for _, d := range st.tracker.Seal() {
++		if err := s.appendRecord(sess, "intent.result", IntentResultBody{
++			IntentID: d.ID, ViaEffect: d.ViaEffect, ClosedBy: "tool_result",
++		}); err != nil {
++			return err
++		}
++	}
+ 
+ 	// The fold and its append are one atomic step: another request of
+ 	// this session observes only before this fold or after its commit —

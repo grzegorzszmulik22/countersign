@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/countersign/countersign/internal/creds"
+	"github.com/countersign/countersign/internal/inspect"
 	"github.com/countersign/countersign/internal/policy"
 )
 
@@ -127,11 +128,20 @@ func (s *Server) recordDenyEffect(env *forwardEnv, r *http.Request, scheme, auth
 		Attribution: Attribution{Level: "none", Intents: []string{}},
 		Taint:       []string{},
 		Budget:      BudgetRecord{},
-		Inspect:     "none",
+		Inspect:     inspectField(env.sess, grantID),
 	}
 	if err := s.appendRecord(env.sess, "effect.http", body); err != nil {
 		s.Logf("record write failed for deny: %v", err)
 	}
+}
+
+// inspectField reports the grant's inspect mode for effect.http.inspect
+// ("none" when the grant does not inspect or cannot be resolved).
+func inspectField(sess *Session, grantID string) string {
+	if g := grantByID(sess.Policy, grantID); g != nil && g.Inspect != "" {
+		return g.Inspect
+	}
+	return "none"
 }
 
 // forwardTarget is the normalized upstream destination of a request.
@@ -206,6 +216,13 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
 		bodyReader = nil
 	}
 
+	// M8.3 (03 §4.5): an inspected request body must fit the buffer —
+	// what cannot be inspected cannot cross.
+	if grant != nil && grant.Inspect == "inference" && bodyDefer {
+		s.denyRequest(w, r, env, "LIMIT_BODY", tgt.scheme, tgt.authority, tgt.path, tgt.rawQuery, mres.Grant)
+		return
+	}
+
 	outHdr := stripHopByHop(r.Header)
 
 	// 04 §2 step 5 (M3.3): credential rules on the pre-injection request —
@@ -267,7 +284,7 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
 		Attribution: Attribution{Level: "none", Intents: []string{}},
 		Taint:       []string{},
 		Budget:      BudgetRecord{},
-		Inspect:     "none",
+		Inspect:     inspectField(sess, mres.Grant),
 	}
 	if plan.spec != nil {
 		effect.Decision.Creds = []string{plan.refID}
@@ -287,6 +304,19 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
 		plan.injected = true
 		if injectHook != nil {
 			injectHook(sess.ID, mres.Grant, plan.refID)
+		}
+	}
+
+	// M8.3: on an inspected inference grant the buffered request body is
+	// parsed now — intent.result for every carried tool result and one
+	// context.observed are durable before the request crosses (03 §4.5).
+	if st := s.inspectStateFor(sess, grant); st != nil {
+		if ep := inspect.EndpointForPath(tgt.path); ep != inspect.EndpointNone && len(buf) > 0 {
+			if err := s.inspectRequest(sess, st, ep, effectID, buf); err != nil {
+				w.Header().Set("X-Countersign-Reason", "LEDGER_UNAVAILABLE")
+				http.Error(w, "evidence store unavailable", http.StatusBadGateway)
+				return
+			}
 		}
 	}
 
@@ -394,6 +424,25 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, env *forwardEnv
 	}
 	result.Response.HeaderNames = headerNames(outRes)
 	w.WriteHeader(res.StatusCode)
+
+	// M8.1: inspected inference responses flow through the intent parser;
+	// only the bytes completing a tool-use block wait on the
+	// intent.declared append (03 §4.5).
+	if st := s.inspectStateFor(sess, grant); st != nil {
+		if ep := inspect.EndpointForPath(tgt.path); ep != inspect.EndpointNone {
+			if rp, ok := inspect.NewResponseParser(ep, res.Header.Get("Content-Type")); ok {
+				src = newInspectPipe(src, rp,
+					func(it *inspect.Intent) error {
+						return s.declaredIntent(sess, st, ep, effectID, it)
+					},
+					func(detail string) error {
+						return s.appendRecord(sess, "intent.unparsed", IntentUnparsedBody{
+							ViaEffect: effectID, Provider: ep.Provider(), Detail: detail,
+						})
+					})
+			}
+		}
+	}
 
 	respBody := &hashCounter{h: sha256.New()}
 	err = relayResponse(w, src, scr, respBody)

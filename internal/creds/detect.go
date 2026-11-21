@@ -305,3 +305,25 @@ func Redact(b []byte) []byte {
 	out = append(out, b[pos:]...)
 	return out
 }
+
+// RedactNamed is Redact with per-shape markers: every matched span is
+// replaced by "[REDACTED:<shape>]" naming the 04 §4.4 shape that matched
+// (the marker format M8.5 requires in intent previews). Detection and
+// span computation are exactly Redact's.
+func RedactNamed(b []byte) []byte {
+	spans := findShapes(b)
+	if len(spans) == 0 {
+		return append([]byte(nil), b...)
+	}
+	out := make([]byte, 0, len(b))
+	pos := 0
+	for _, s := range spans {
+		out = append(out, b[pos:s.lo]...)
+		out = append(out, "[REDACTED:"...)
+		out = append(out, s.name...)
+		out = append(out, ']')
+		pos = s.hi
+	}
+	out = append(out, b[pos:]...)
+	return out
+}

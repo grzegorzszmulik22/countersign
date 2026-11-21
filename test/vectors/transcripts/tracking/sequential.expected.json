@@ -1,0 +1,104 @@
+{
+  "declared": [
+    {
+      "step": 0,
+      "intent_id": "toolu_seq_A",
+      "tool": "Bash",
+      "executor": "sandbox",
+      "input_sha256": "4cf29611a66934862f29acfcc817e30b905c1ab73d5e65831413eb6b454d49db",
+      "input_len": 16
+    },
+    {
+      "step": 1,
+      "intent_id": "toolu_seq_B",
+      "tool": "Read",
+      "executor": "sandbox",
+      "input_sha256": "e03ca61faf95d4f1c6fae3ba1d77b6d45a326e8c2a1a9835c62c71ceb0d2b20b",
+      "input_len": 23
+    }
+  ],
+  "results": [
+    {
+      "step": 1,
+      "intent_id": "toolu_seq_A",
+      "closed_by": "tool_result",
+      "content_sha256": "37685d4b5c60854fa2d89c0c2eb7a9e4a40e8431c42e2fafc4780d34af47887b",
+      "content_len": 22,
+      "has_content": true,
+      "is_error": null
+    },
+    {
+      "step": 2,
+      "intent_id": "toolu_seq_B",
+      "closed_by": "tool_result",
+      "content_sha256": "e569106f7f1612c7e4b1c9e5c9bcea3447962f8a02172e31668b0c1d2b835d36",
+      "content_len": 22,
+      "has_content": true,
+      "is_error": null
+    }
+  ],
+  "context": [
+    {
+      "step": 0,
+      "new_blocks": [
+        {
+          "index": 0,
+          "role": "user",
+          "kind": "text",
+          "sha256": "dca2fc359054f46cbc8204548cfbb09f63392ed7e410d41c34ad92bc7e872151",
+          "len": 29,
+          "intent_id": ""
+        }
+      ],
+      "block_count": 1,
+      "context_sha256": "83feb156985a59944a82e7d2e9ff5820e4dda1e638c2e8610fa88128282e46c6"
+    },
+    {
+      "step": 1,
+      "new_blocks": [
+        {
+          "index": 1,
+          "role": "assistant",
+          "kind": "tool_use",
+          "sha256": "912cce339d79b6e77622337dff9b6a517fe46c089b5a30126f8f10d8d46fcd95",
+          "len": 77,
+          "intent_id": "toolu_seq_A"
+        },
+        {
+          "index": 2,
+          "role": "user",
+          "kind": "tool_result",
+          "sha256": "9a79b802de281971d41165c67bc8d32e1c8c54b657c125fa274f723fb7b2b92d",
+          "len": 86,
+          "intent_id": "toolu_seq_A"
+        }
+      ],
+      "block_count": 3,
+      "context_sha256": "94ca5687996984e7105dd2d8624cd698c99fa94c29c2702d048c91b564d3a1cd"
+    },
+    {
+      "step": 2,
+      "new_blocks": [
+        {
+          "index": 3,
+          "role": "assistant",
+          "kind": "tool_use",
+          "sha256": "25d37fc6c7aa98d32f87d93260dfdcd5ae03232debb9c4f4b8050d48740830d0",
+          "len": 84,
+          "intent_id": "toolu_seq_B"
+        },
+        {
+          "index": 4,
+          "role": "user",
+          "kind": "tool_result",
+          "sha256": "7a8b1b70ed3b273943b7282d0524a2d4f9248751d92a8411339468cad897d05d",
+          "len": 85,
+          "intent_id": "toolu_seq_B"
+        }
+      ],
+      "block_count": 5,
+      "context_sha256": "0349c5d39742f4ac597dc43e1d298634722b2a6bb2275ce0acc70a3d804427ee"
+    }
+  ],
+  "unparsed": []
+}

@@ -1,0 +1,29 @@
+make[1]: Entering directory '/home/opc/src/cs-intent/.check-work/sabotage-M8.2-openai-merge-interleaved-fragments-by-arrival'
+--- C8.2.1: go test ./internal/inspect/ -count=1 -run ^TestVectorsChunkIndependent$ -v
+=== RUN   TestVectorsChunkIndependent
+    vectors_test.go:158: chat-interleaved-sse chunking [1]: 1 intents, want 2
+--- FAIL: TestVectorsChunkIndependent (28.86s)
+FAIL
+FAIL	github.com/countersign/countersign/internal/inspect	28.877s
+FAIL
+CHECK C8.2.1 FAIL — go test failed
+--- C8.2.2: go test ./internal/inspect/ -count=1 -run ^TestVectorsChunkIndependent$ -v
+=== RUN   TestVectorsChunkIndependent
+    vectors_test.go:158: chat-interleaved-sse chunking [1]: 1 intents, want 2
+--- FAIL: TestVectorsChunkIndependent (32.06s)
+FAIL
+FAIL	github.com/countersign/countersign/internal/inspect	32.078s
+FAIL
+CHECK C8.2.2 FAIL — go test failed
+--- FAIL: TestM8E2E_ResponseVectors (9.27s)
+    --- FAIL: TestM8E2E_ResponseVectors/openai/chat-interleaved-sse (0.02s)
+        check_m8_test.go:257: 1 declared, want 2
+        harness_test.go:126: broker: tunnel 01M7S2JEV5001CXCHTPQDNYW81 inner serve: listener closed (conn err: read tcp 127.0.0.1:36519->127.0.0.1:35360: use of closed network connection)
+FAIL
+FAIL	github.com/countersign/countersign/internal/proxy	11.446s
+FAIL
+CHECK C8.2.3 FAIL — go test failed
+M8.2 suite: FAILURES
+check-M8.2: FAIL (exit 1, evidence: evidence/M8.2/20261119T044902Z)
+make[1]: *** [Makefile:37: check-M8.2] Error 1
+make[1]: Leaving directory '/home/opc/src/cs-intent/.check-work/sabotage-M8.2-openai-merge-interleaved-fragments-by-arrival'

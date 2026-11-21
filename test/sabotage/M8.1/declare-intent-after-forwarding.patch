@@ -1,0 +1,51 @@
+diff --git a/internal/proxy/inspect_hook.go b/internal/proxy/inspect_hook.go
+index 8acc681..f56a13c 100644
+--- a/internal/proxy/inspect_hook.go
++++ b/internal/proxy/inspect_hook.go
+@@ -349,6 +349,7 @@ type inspectPipe struct {
+ 	finished bool // src drained + parser closed
+ 	err      error
+ 	tailErr  error // upstream read error, delivered after out drains
++	pending  []*inspect.Intent
+ }
+ 
+ func newInspectPipe(src io.Reader, p inspect.ResponseParser,
+@@ -402,22 +403,7 @@ func (r *inspectPipe) feed(chunk []byte) {
+ 	comps, err := r.p.Feed(chunk)
+ 	r.fed = append(r.fed, chunk...)
+ 	for _, c := range comps {
+-		rel := int(c.HoldAt - r.relAbs)
+-		if rel < 0 {
+-			rel = 0
+-		}
+-		if rel > len(r.fed) {
+-			rel = len(r.fed)
+-		}
+-		r.out = append(r.out, r.fed[:rel]...)
+-		r.fed = r.fed[rel:]
+-		r.relAbs += int64(rel)
+-		if derr := r.declare(c.Intent); derr != nil {
+-			// Fail closed: the completing bytes never leave the broker.
+-			r.err = derr
+-			r.out = r.out[:0]
+-			return
+-		}
++		r.pending = append(r.pending, c.Intent)
+ 	}
+ 	if err != nil {
+ 		if detail, ok := inspect.ParseError(err); ok {
+@@ -466,6 +452,14 @@ func (r *inspectPipe) finish(cause string) {
+ 		return
+ 	}
+ 	r.finished = true
++	for _, it := range r.pending {
++		if derr := r.declare(it); derr != nil {
++			r.err = derr
++			r.out = r.out[:0]
++			return
++		}
++	}
++	r.pending = nil
+ 	if r.err != nil {
+ 		// The last fed bytes may have failed closed (declare or
+ 		// unparsed append): the held bytes are never released.

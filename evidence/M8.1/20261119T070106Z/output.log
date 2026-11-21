@@ -1,0 +1,67 @@
+--- C8.1.1: go test ./internal/inspect/ -count=1 -run ^TestVectorsChunkIndependent$ -v
+=== RUN   TestVectorsChunkIndependent
+--- PASS: TestVectorsChunkIndependent (111.67s)
+PASS
+ok  	github.com/countersign/countersign/internal/inspect	111.731s
+CHECK C8.1.1 PASS
+--- C8.1.2: go test -tags fixtures ./internal/proxy/ -count=1 -run ^TestM8E2E_WriteAheadOrdering$ -v
+=== RUN   TestM8E2E_WriteAheadOrdering
+=== RUN   TestM8E2E_WriteAheadOrdering/anthropic
+    harness_test.go:126: broker: tunnel 01M7SA77VC00VBS9DAHZX2TBZ4 inner serve: listener closed (conn err: read tcp 127.0.0.1:37051->127.0.0.1:51676: use of closed network connection)
+=== RUN   TestM8E2E_WriteAheadOrdering/responses
+    harness_test.go:126: broker: tunnel 01M7SA7VCQ00WW6P7WPJ2RVRGT inner serve: http: Server closed (conn err: read tcp 127.0.0.1:43641->127.0.0.1:37444: use of closed network connection)
+--- PASS: TestM8E2E_WriteAheadOrdering (2.52s)
+    --- PASS: TestM8E2E_WriteAheadOrdering/anthropic (1.05s)
+    --- PASS: TestM8E2E_WriteAheadOrdering/responses (1.47s)
+PASS
+ok  	github.com/countersign/countersign/internal/proxy	2.548s
+CHECK C8.1.2 PASS
+--- C8.1.3: go test -tags fixtures ./internal/proxy/ -count=1 -run ^(TestM8E2E_ResponseVectors|TestM8E2E_Latency|TestM8E2E_IntentClassAnchor)$ -v
+=== RUN   TestM8E2E_IntentClassAnchor
+    harness_test.go:126: broker: tunnel 01M7SA7DXY005W0GKDTCYRPB8H inner serve: listener closed (conn err: read tcp 127.0.0.1:37105->127.0.0.1:34518: use of closed network connection)
+--- PASS: TestM8E2E_IntentClassAnchor (0.08s)
+=== RUN   TestM8E2E_Latency
+    check_m8_test.go:1040: MM8.3 run 0: p99 ordinary 0.946 ms, p99 hold 1.671 ms
+    check_m8_test.go:1040: MM8.3 run 1: p99 ordinary 1.564 ms, p99 hold 1.655 ms
+    check_m8_test.go:1040: MM8.3 run 2: p99 ordinary 0.977 ms, p99 hold 0.830 ms
+    check_m8_test.go:1040: MM8.3 run 3: p99 ordinary 1.756 ms, p99 hold 7.431 ms
+    check_m8_test.go:1040: MM8.3 run 4: p99 ordinary 2.368 ms, p99 hold 0.350 ms
+    check_m8_test.go:1063: MM8.3: 5 runs, per-run p99 ordinary [0.946127 0.977007 1.564371 1.756133 2.368418], hold [0.349603 0.830087 1.655052 1.670692 7.430575]; pooled p99 1.568/2.313 ms; median 1.564/1.655; CV 34.8%/107.7%
+    harness_test.go:126: broker: tunnel 01M7SA7DZC005G60NQXYPD73H9 inner serve: listener closed (conn err: read tcp 127.0.0.1:36625->127.0.0.1:34874: use of closed network connection)
+    harness_test.go:126: broker: tunnel 01M7SA7DZD00MV986B0WHV2Z8J inner serve: listener closed (conn err: read tcp 127.0.0.1:36625->127.0.0.1:34884: use of closed network connection)
+--- PASS: TestM8E2E_Latency (20.02s)
+PASS
+ok  	github.com/countersign/countersign/internal/proxy	22.042s
+CHECK C8.1.3 PASS
+--- C8.1.4: go test ./internal/inspect/ -count=1 -run ^TestParseMalformed$ -v
+=== RUN   TestParseMalformed
+--- PASS: TestParseMalformed (0.00s)
+PASS
+ok  	github.com/countersign/countersign/internal/inspect	0.033s
+CHECK C8.1.4 PASS
+--- C8.1.5: go test -tags fixtures ./internal/proxy/ -count=1 -run TestM8E2E_ResponseVectors/anthropic/unknown-sse -v
+=== RUN   TestM8E2E_ResponseVectors
+=== RUN   TestM8E2E_ResponseVectors/anthropic/unknown-sse
+    harness_test.go:126: broker: tunnel 01M7SA85E200W7XC13W2006CKS inner serve: listener closed (conn err: read tcp 127.0.0.1:39925->127.0.0.1:51028: use of closed network connection)
+--- PASS: TestM8E2E_ResponseVectors (0.11s)
+    --- PASS: TestM8E2E_ResponseVectors/anthropic/unknown-sse (0.04s)
+PASS
+ok  	github.com/countersign/countersign/internal/proxy	0.161s
+CHECK C8.1.5 PASS
+fuzz: elapsed: 9m30s, execs: 775258 (0/sec), new interesting: 54 (total: 198)
+fuzz: elapsed: 9m33s, execs: 780844 (1862/sec), new interesting: 56 (total: 200)
+fuzz: elapsed: 9m36s, execs: 783303 (818/sec), new interesting: 56 (total: 200)
+fuzz: elapsed: 9m39s, execs: 783303 (0/sec), new interesting: 56 (total: 200)
+fuzz: elapsed: 9m42s, execs: 783303 (0/sec), new interesting: 56 (total: 200)
+fuzz: elapsed: 9m45s, execs: 783303 (0/sec), new interesting: 56 (total: 200)
+fuzz: elapsed: 9m48s, execs: 783303 (0/sec), new interesting: 56 (total: 200)
+fuzz: elapsed: 9m51s, execs: 783303 (0/sec), new interesting: 56 (total: 200)
+fuzz: elapsed: 9m54s, execs: 783303 (0/sec), new interesting: 56 (total: 200)
+fuzz: elapsed: 9m57s, execs: 783303 (0/sec), new interesting: 56 (total: 200)
+fuzz: elapsed: 10m0s, execs: 783303 (0/sec), new interesting: 56 (total: 200)
+fuzz: elapsed: 10m1s, execs: 783303 (0/sec), new interesting: 56 (total: 200)
+PASS
+ok  	github.com/countersign/countersign/internal/inspect	602.568s
+ok  	github.com/countersign/countersign/internal/inspect	2.191s
+CHECK C8.1.6 PASS
+M8.1 suite: all checks passed

@@ -1,0 +1,17 @@
+{
+  "provider": "anthropic",
+  "format": "sse",
+  "model": "claude-opus-4-1-20250805",
+  "intents": [
+    {
+      "intent_id": "toolu_04Fr4gm3nt3dInpUt00000",
+      "tool": "Bash",
+      "executor": "sandbox",
+      "input_sha256": "7a7cfd44a7bbf54e620eaf316f32c9129ccd7737de6c9906e9e97e5ba5aec403",
+      "input_len": 82
+    }
+  ],
+  "unparsed": false,
+  "detail_substring": "",
+  "markers": []
+}

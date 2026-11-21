@@ -1,0 +1,12 @@
+diff --git a/internal/proxy/inspect_hook.go b/internal/proxy/inspect_hook.go
+index 8acc681..9221153 100644
+--- a/internal/proxy/inspect_hook.go
++++ b/internal/proxy/inspect_hook.go
+@@ -422,6 +422,7 @@ func (r *inspectPipe) feed(chunk []byte) {
+ 	if err != nil {
+ 		if detail, ok := inspect.ParseError(err); ok {
+ 			r.dead = true
++			_ = r.declare(&inspect.Intent{ID: "cs-recovered", Tool: "unknown", Executor: inspect.ExecutorSandbox})
+ 			if uerr := r.unparsed(detail); uerr != nil {
+ 				// Fail closed: pass-through without the durable
+ 				// intent.unparsed record is not permitted.

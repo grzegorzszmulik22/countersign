@@ -1,0 +1,182 @@
+{
+  "endpoint": "anthropic",
+  "steps": [
+    {
+      "name": "t1",
+      "request": {
+        "model": "claude-opus-4-1-20250805",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": "hosted tools MK5d9e620d89ce-h0"
+          }
+        ]
+      },
+      "response": {
+        "sse": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01XyZ\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-1-20250805\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":25,\"output_tokens\":1}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"server_tool_use\",\"id\":\"srv_prv_S1\",\"name\":\"WebSearch\",\"input\":{}}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"que\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"ry\\\":\\\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"q1\\\"}\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_prv_A\",\"name\":\"Bash\",\"input\":{}}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"com\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"mand\\\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\":\\\"a\\\"}\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":1}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":2,\"content_block\":{\"type\":\"server_tool_use\",\"id\":\"srv_prv_S2\",\"name\":\"WebSearch\",\"input\":{}}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"que\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"ry\\\":\\\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"q2\\\"}\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":2}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":3,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_prv_B\",\"name\":\"Read\",\"input\":{}}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":3,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"file\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":3,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"_path\\\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":3,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\":\\\"/b\\\"}\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":3}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":4,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_prv_C\",\"name\":\"Bash\",\"input\":{}}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":4,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"com\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":4,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"mand\\\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":4,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\":\\\"c\\\"}\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":4}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":15}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+      }
+    },
+    {
+      "name": "t2",
+      "request": {
+        "model": "claude-opus-4-1-20250805",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": "hosted tools MK5d9e620d89ce-h0"
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "server_tool_use",
+                "id": "srv_prv_S1",
+                "name": "WebSearch",
+                "input": {
+                  "query": "q1"
+                }
+              },
+              {
+                "type": "tool_use",
+                "id": "toolu_prv_A",
+                "name": "Bash",
+                "input": {
+                  "command": "a"
+                }
+              },
+              {
+                "type": "server_tool_use",
+                "id": "srv_prv_S2",
+                "name": "WebSearch",
+                "input": {
+                  "query": "q2"
+                }
+              },
+              {
+                "type": "tool_use",
+                "id": "toolu_prv_B",
+                "name": "Read",
+                "input": {
+                  "file_path": "/b"
+                }
+              },
+              {
+                "type": "tool_use",
+                "id": "toolu_prv_C",
+                "name": "Bash",
+                "input": {
+                  "command": "c"
+                }
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "srv_prv_S1",
+                "content": "hosted MK5d9e620d89ce-h1"
+              },
+              {
+                "type": "tool_result",
+                "tool_use_id": "toolu_prv_A",
+                "content": "outA"
+              }
+            ]
+          }
+        ]
+      },
+      "response": {
+        "sse": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01XyZ\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-1-20250805\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":25,\"output_tokens\":1}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"swept MK5d9e620d89ce-h5\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":15}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+      }
+    },
+    {
+      "name": "t3",
+      "request": {
+        "model": "claude-opus-4-1-20250805",
+        "max_tokens": 1024,
+        "messages": [
+          {
+            "role": "user",
+            "content": "hosted tools MK5d9e620d89ce-h0"
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "server_tool_use",
+                "id": "srv_prv_S1",
+                "name": "WebSearch",
+                "input": {
+                  "query": "q1"
+                }
+              },
+              {
+                "type": "tool_use",
+                "id": "toolu_prv_A",
+                "name": "Bash",
+                "input": {
+                  "command": "a"
+                }
+              },
+              {
+                "type": "server_tool_use",
+                "id": "srv_prv_S2",
+                "name": "WebSearch",
+                "input": {
+                  "query": "q2"
+                }
+              },
+              {
+                "type": "tool_use",
+                "id": "toolu_prv_B",
+                "name": "Read",
+                "input": {
+                  "file_path": "/b"
+                }
+              },
+              {
+                "type": "tool_use",
+                "id": "toolu_prv_C",
+                "name": "Bash",
+                "input": {
+                  "command": "c"
+                }
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "srv_prv_S2",
+                "content": "again MK5d9e620d89ce-h3"
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "content": "ping MK5d9e620d89ce-h4"
+          }
+        ]
+      },
+      "response": {
+        "sse": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01XyZ\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-1-20250805\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":25,\"output_tokens\":1}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"end MK5d9e620d89ce-h6\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":15}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+      }
+    }
+  ],
+  "markers": [
+    "MK5d9e620d89ce-h0",
+    "MK5d9e620d89ce-h1",
+    "MK5d9e620d89ce-h2",
+    "MK5d9e620d89ce-h3",
+    "MK5d9e620d89ce-h4",
+    "MK5d9e620d89ce-h5",
+    "MK5d9e620d89ce-h6"
+  ],
+  "max_intent_open_seconds": 1
+}
