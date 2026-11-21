@@ -1,0 +1,32 @@
+make[1]: Entering directory '/home/csbuild/src/cs-evidence-py/.check-work/sabotage-M1.5-py-skip-chain-check'
+C1.5.1: imports are stdlib + cryptography only
+CHECK C1.5.1 PASS  stdlib+cryptography imports only
+  e_chain: differs in ['errors']
+    csverify  errors: [('E_CHAIN', 1, 'broker/YSBH42XK1Q51YD65RRFS6QXG60: first eseq is 1, want 0'), ('E_CHAIN', 2, 'broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 0 after 0'), ('E_CHAIN', 3, 'broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 2 after 0'), ('E_CHAIN', 4, 'broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 3 after 0'), ('E_CHAIN', 5, 'broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 4 after 0'), ('E_CHAIN', 6, 'broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 5 after 0'), ('E_CHAIN', 7, 'broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 6 after 0'), ('E_CHAIN', 8, 'broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 7 after 0'), ('E_CHAIN', 9, 'broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 8 after 0'), ('E_CHAIN', 11, 'broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 9 after 0'), ('E_CHAIN', 12, 'broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 10 after 0'), ('E_CHAIN', 16, 'broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 11 after 0'), ('E_CHAIN', 17, 'broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 12 after 0'), ('E_CHAIN', 28, 'broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 13 after 0'), ('E_CHAIN', 29, 'broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 14 after 0'), ('E_CHAIN', 32, 'broker/YSBH42XK1Q51YD65RRFS6QXG60: eseq gap or reuse at 15 after 0'), ('E_INCLUSION', 2, 'log_index 1 not strictly increasing'), ('E_SEAL', None, 'seal head broker/YSBH42XK1Q51YD65RRFS6QXG60 eseq 15 hash f44251523ac9fc443153ab29c6b45028c17d567a313ced71377506c970d1ed12 ≠ chain 0 '), ('E_STRUCTURE', 1, 'intent i1 via unknown effect e1')]
+    refverify errors: [('E_INCLUSION', 2, 'log_index 1 not strictly increasing'), ('E_STRUCTURE', 1, 'intent i1 via unknown effect e1')]
+  e_open: differs in ['errors']
+    csverify  errors: [('E_CHAIN', 29, 'controller/M3YCD3ZQYEA7S7H92M0T6QXG60: first eseq is 1, want 0'), ('E_CHAIN', 34, 'controller/M3YCD3ZQYEA7S7H92M0T6QXG60: eseq gap or reuse at 2 after 0'), ('E_OPEN', None, 'first record is not session.open'), ('E_SEAL', None, 'sealer head controller/M3YCD3ZQYEA7S7H92M0T6QXG60 eseq 1 hash e6ba19182680c188b17f91272f757f6a367b4fecdc38ac635b67ea5202726052 ≠ pre-seal 0 e6ba19182680c188b17f91272f757f6a367b4fecdc38ac635b67ea5202726052')]
+    refverify errors: [('E_OPEN', None, 'first record is not session.open')]
+  e_schema: differs in ['errors']
+    csverify  errors: [('E_CHAIN', 2, 'broker/YBVE46YRT1GQKJ4STCWR6QXG60: first eseq is 1, want 0'), ('E_CHAIN', 3, 'broker/YBVE46YRT1GQKJ4STCWR6QXG60: eseq gap or reuse at 2 after 0'), ('E_CHAIN', 4, 'broker/YBVE46YRT1GQKJ4STCWR6QXG60: eseq gap or reuse at 3 after 0'), ('E_CHAIN', 5, 'broker/YBVE46YRT1GQKJ4STCWR6QXG60: eseq gap or reuse at 4 after 0'), ('E_CHAIN', 6, 'broker/YBVE46YRT1GQKJ4STCWR6QXG60: eseq gap or reuse at 5 after 0'), ('E_CHAIN', 7, 'broker/YBVE46YRT1GQKJ4STCWR6QXG60: eseq gap or reuse at 6 after 0'), ('E_CHAIN', 8, 'broker/YBVE46YRT1GQKJ4STCWR6QXG60: eseq gap or reuse at 7 after 0'), ('E_CHAIN', 9, 'broker/YBVE46YRT1GQKJ4STCWR6QXG60: eseq gap or reuse at 8 after 0'), ('E_CHAIN', 11, 'broker/YBVE46YRT1GQKJ4STCWR6QXG60: eseq gap or reuse at 9 after 0'), ('E_CHAIN', 12, 'broker/YBVE46YRT1GQKJ4STCWR6QXG60: eseq gap or reuse at 10 after 0'), ('E_CHAIN', 16, 'broker/YBVE46YRT1GQKJ4STCWR6QXG60: eseq gap or reuse at 11 after 0'), ('E_CHAIN', 17, 'broker/YBVE46YRT1GQKJ4STCWR6QXG60: eseq gap or reuse at 12 after 0'), ('E_CHAIN', 28, 'broker/YBVE46YRT1GQKJ4STCWR6QXG60: eseq gap or reuse at 13 after 0'), ('E_CHAIN', 29, 'broker/YBVE46YRT1GQKJ4STCWR6QXG60: eseq gap or reuse at 14 after 0'), ('E_CHAIN', 32, 'broker/YBVE46YRT1GQKJ4STCWR6QXG60: eseq gap or reuse at 15 after 0'), ('E_INCLUSION', 1, 'inclusion proof root 05f265e4cf751bb4c3e3be0ce4bcfeaab455262953ed827021e8dac93a994bb1 ≠ expected f53fbd14d3a206c208f1c3d66c4142a02821f0943e73e53ecf03e7ae5ad488e2'), ('E_SCHEMA', 1, 'json: unknown field "payloadT{pe"'), ('E_SEAL', None, 'seal head broker/YBVE46YRT1GQKJ4STCWR6QXG60 eseq 15 hash 90100fccac10702dcd3c5810d9a5b24d39ff174afd80abc2d8a0e2928005b04e ≠ chain 0 '), ('E_STRUCTURE', 2, 'intent i1 via unknown effect e1'), ('E_STRUCTURE', 4, 'context.observed via unknown effect e1'), ('E_STRUCTURE', 10, 'prestate via unknown effect e1'), ('E_STRUCTURE', 11, 'result for unknown effect e1')]
+    refverify errors: [('E_INCLUSION', 1, 'inclusion proof root 05f265e4cf751bb4c3e3be0ce4bcfeaab455262953ed827021e8dac93a994bb1 ≠ expected f53fbd14d3a206c208f1c3d66c4142a02821f0943e73e53ecf03e7ae5ad488e2'), ('E_SCHEMA', 1, 'json: unknown field "payloadT{pe"'), ('E_STRUCTURE', 2, 'intent i1 via unknown effect e1'), ('E_STRUCTURE', 4, 'context.observed via unknown effect e1'), ('E_STRUCTURE', 10, 'prestate via unknown effect e1'), ('E_STRUCTURE', 11, 'result for unknown effect e1')]
+C1.5.2: 3/17 bundles differ from csverify
+CHECK C1.5.2 FAIL  golden-bundle differential vs csverify
+C1.5.3: no Go sources read or generated under ref/python/
+CHECK C1.5.3 PASS  no Go sources under ref/python
+  inclusion: 2080 proofs verified across sizes 1..64
+C1.5.4: RFC 6962 and C2SP vectors pass
+CHECK C1.5.4 PASS  RFC 6962 + C2SP vectors
+  verdict-invalid-beats-unsealed: verdict UNSEALED != INVALID; errors [] != ['E_CHAIN']
+  E_SCHEMA-unknown-type: errors ['E_INCLUSION', 'E_SCHEMA'] != ['E_CHAIN', 'E_INCLUSION', 'E_SCHEMA', 'E_SEAL']
+  E_CHAIN-eseq-gap: verdict CLEAN_WITH_DENIALS != INVALID; errors [] != ['E_CHAIN', 'E_SEAL']; exit 0 != 1
+  E_CHAIN-wrong-eprev: verdict CLEAN_WITH_DENIALS != INVALID; errors [] != ['E_CHAIN', 'E_SEAL']; exit 0 != 1
+  E_CHAIN-eprev-nonzero-at-0: verdict CLEAN != INVALID; errors [] != ['E_CHAIN', 'E_SEAL']; exit 0 != 1
+  E_CHAIN-eseq-out-of-order: verdict CLEAN_WITH_DENIALS != INVALID; errors [] != ['E_CHAIN', 'E_SEAL']; exit 0 != 1
+  records-more-than-index-extra-line: errors ['E_BUNDLE'] != ['E_BUNDLE', 'E_CHAIN']
+C1.5.5: 7/65 vectors failed
+CHECK C1.5.5 FAIL  derived bundle vectors beyond the goldens
+check-M1.5: suite FAIL
+check-M1.5: FAIL (exit 1, evidence: evidence/M1.5/20261119T141846Z)
+make[1]: *** [Makefile:37: check-M1.5] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-evidence-py/.check-work/sabotage-M1.5-py-skip-chain-check'

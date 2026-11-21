@@ -1,0 +1,14 @@
+diff --git a/test/mutgen/run_suite.py b/test/mutgen/run_suite.py
+index eca8a7b..7519bf4 100644
+--- a/test/mutgen/run_suite.py
++++ b/test/mutgen/run_suite.py
+@@ -108,8 +108,7 @@ def judge_mutant(cls, gv, pv):
+     clean = (gv.get("verdict") in CLEAN_CLASS or
+              pv.get("verdict") in CLEAN_CLASS)
+     agree = verdicts_agree(gv, pv)
+-    detected = (not clean and agree and
+-                in_expected(cls, gv) and in_expected(cls, pv))
++    detected = not clean and agree
+     return {"clean": clean, "agree": agree, "detected": detected}
+ 
+ 

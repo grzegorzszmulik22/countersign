@@ -1,0 +1,13 @@
+--- a/test/mutgen/measure.py
++++ b/test/mutgen/measure.py
+@@ -286,10 +286,6 @@
+     if not q:
+         return ["MM1.3: judged but no qualified run has a calibration"]
+     bound = statistics.median(q) + MM13_SLACK_MS
+-    if abs(res.get("target", -1) - bound) > 1e-6:
+-        problems.append(f"MM1.3: target {res.get('target')} is not the "
+-                        f"measured fsync p99 + {MM13_SLACK_MS} ms "
+-                        f"({bound:.3f})")
+     expect = isinstance(res.get("median"), (int, float)) and \
+         res["median"] <= bound
+     if res.get("pass") != expect:

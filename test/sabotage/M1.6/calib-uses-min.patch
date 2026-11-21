@@ -1,0 +1,11 @@
+--- a/test/mutgen/measure.py
++++ b/test/mutgen/measure.py
+@@ -312,7 +312,7 @@
+                 problems.append(f"MM1.3 run {i}: calibration overlaps "
+                                 "the latency run — the disk must be "
+                                 "measured alone")
+-            cp99 = max(mm13_calib_p99(pre), mm13_calib_p99(post))
++            cp99 = min(mm13_calib_p99(pre), mm13_calib_p99(post))
+             for val in (cp.get("calib_p99_ms"), r.get("calib_p99_ms")):
+                 if (not isinstance(val, (int, float)) or
+                         abs(val - cp99) > 1e-6):

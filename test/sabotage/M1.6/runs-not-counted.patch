@@ -1,0 +1,12 @@
+diff --git a/test/mutgen/measure.py b/test/mutgen/measure.py
+index 94d353b..8a9ba30 100644
+--- a/test/mutgen/measure.py
++++ b/test/mutgen/measure.py
+@@ -178,6 +178,7 @@ def validate_metric(name, res, want_runs):
+     count and that each per-run sample list is complete; returns a list of
+     problems (empty when the metric is complete)."""
+     problems = []
++    return problems
+     runs = res.get("runs")
+     if not isinstance(runs, int) or runs < want_runs:
+         problems.append(f"{name}: {runs} runs recorded, need >= "

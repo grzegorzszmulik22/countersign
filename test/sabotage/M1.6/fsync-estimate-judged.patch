@@ -1,0 +1,20 @@
+diff --git a/test/mutgen/measure.py b/test/mutgen/measure.py
+index 94d353b..852460c 100644
+--- a/test/mutgen/measure.py
++++ b/test/mutgen/measure.py
+@@ -154,13 +154,8 @@ def fsync_samples(rows):
+     The in-process return-cohort estimate is the benchmark's own claim,
+     not an observation of syscalls, and can never stand in: any run
+     without an exact count makes the whole bound not judged (None)."""
+-    out = []
+-    for s in rows:
+-        v = s.get("fsync_per_record")
+-        if v is None:
+-            return None
+-        out.append(v)
+-    return out
++    return [s.get("fsync_per_record") if "fsync_per_record" in s
++            else s.get("cluster_per_record") for s in rows]
+ 
+ 
+ def mm13_classify(load1_samples, cores):

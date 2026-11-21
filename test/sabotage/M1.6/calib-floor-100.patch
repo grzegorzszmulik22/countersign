@@ -1,0 +1,11 @@
+--- a/test/mutgen/measure.py
++++ b/test/mutgen/measure.py
+@@ -62,7 +62,7 @@
+ MM12_FSYNC = 0.10         # group commits per record
+ MM13_SLACK_MS = 5.0       # append p99 may exceed the measured fsync p99 by
+ MM13_ABS_MS = 5.0         # the absolute figure shown at G1 (CR-003)
+-MM13_CALIB_MIN = 400      # write+fsync calibration samples
++MM13_CALIB_MIN = 100      # write+fsync calibration samples
+ MM13_CALIB_PACE_MS = 5.0  # minimum ms between calibration sample starts
+ MM13_CALIB_REC_BYTES = 300  # bytes per O_APPEND write+fsync sample
+ RUNS = 5

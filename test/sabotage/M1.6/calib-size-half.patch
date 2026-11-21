@@ -1,0 +1,11 @@
+--- a/test/mutgen/measure.py
++++ b/test/mutgen/measure.py
+@@ -253,7 +253,7 @@
+         return False, (f"calibration on device {cst.st_dev} (recorded "
+                        f"{calib.get('st_dev')}), ledger on {dev} — "
+                        "different file system")
+-    if cst.st_size < n * MM13_CALIB_REC_BYTES:
++    if cst.st_size < n * MM13_CALIB_REC_BYTES // 2:
+         return False, (f"calibration file holds {cst.st_size} B but {n} "
+                        f"x {MM13_CALIB_REC_BYTES}-byte appends need >= "
+                        f"{n * MM13_CALIB_REC_BYTES} — samples not written")

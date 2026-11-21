@@ -118,7 +118,11 @@ func (l *Ledger) flusher() {
 	}
 }
 
-// syncFiles fsyncs every open ledger file, then advances durable.
+// syncFiles fsyncs every open ledger file, then advances durable. The
+// fsyncs are issued concurrently: the commit's cost is the longest
+// single fsync, not the sum — on a journaled file system the files'
+// dirty pages ride one journal commit either way, and serially issued
+// fsyncs would each wait out a full flush cycle.
 func (l *Ledger) syncFiles() {
 	l.sessMu.Lock()
 	files := []*os.File{l.entries, l.hashes}
@@ -126,11 +130,22 @@ func (l *Ledger) syncFiles() {
 		files = append(files, f)
 	}
 	l.sessMu.Unlock()
-	var syncErr error
+	var wg sync.WaitGroup
+	errs := make(chan error, len(files))
 	for _, f := range files {
-		if err := f.Sync(); err != nil {
-			syncErr = err
-		}
+		wg.Add(1)
+		go func(f *os.File) {
+			defer wg.Done()
+			if err := f.Sync(); err != nil {
+				errs <- err
+			}
+		}(f)
+	}
+	wg.Wait()
+	close(errs)
+	var syncErr error
+	for err := range errs {
+		syncErr = err
 	}
 	l.mu.Lock()
 	l.syncErr = syncErr

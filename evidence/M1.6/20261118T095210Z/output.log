@@ -1,0 +1,25 @@
+C1.6.1: 200/200 generated bundles CLEAN-class in both verifiers
+  …100/1008 mutants
+  …200/1008 mutants
+  …300/1008 mutants
+  …400/1008 mutants
+  …500/1008 mutants
+  …600/1008 mutants
+  …700/1008 mutants
+  …800/1008 mutants
+  …900/1008 mutants
+  …1000/1008 mutants
+C1.6.2: 1008 mutants, 1008 rejected by both, 1008 identical error classes
+directed extras: agreement {'policy': 20, 'contract': 20, 'result-before-effect': 20} (+keys-json gap)
+C1.6: pass — 200 clean, 1008 mutants detected and agreed, median record 1416 B
+CHECK C1.6.1 PASS  200 seeded bundles CLEAN-class in both verifiers
+CHECK C1.6.2 PASS  mutants rejected, first error in-class, verifiers agree
+MM1.1: median 3239 rec/cpu-s, cal 5607 ops/cpu-s, ratio 0.58 PASS
+MM1.2: median 7505 rec/cpu-s, fsync/rec 0.033 (exact) PASS
+MM1.3: not judged: host contended — 5 runs recorded, p99s [92.9, 52.3, 36.2, 27.1, 20.5]
+MM1.4: {'command': 'run_suite.py --seed 1', 'mutants_detected': 1008, 'mutants_generated': 1008, 'agreement': 1008, 'detected_ratio': 1.0, 'agreement_ratio': 1.0, 'target': '100% / >=1000; 100%', 'pass': True}
+MM1.5: {'command': 'run_suite.py --seed 1', 'median_record_size_bytes': 1416, 'samples': 51904, 'target': 'reported', 'pass': True}
+measurements → /home/csbuild/src/cs-evidence-py/.check-work/m16/measurements.json
+C1.6.3: all measurement targets met
+CHECK C1.6.3 PASS  measurements MM1.1-MM1.5 recorded, targets met
+check-M1.6: suite PASS

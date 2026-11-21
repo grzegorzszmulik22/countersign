@@ -1,0 +1,13 @@
+--- a/test/mutgen/measure.py
++++ b/test/mutgen/measure.py
+@@ -248,10 +248,6 @@
+         dev = os.stat(ledger_dir).st_dev
+     except OSError as e:
+         return False, f"cannot stat calibration/ledger: {e}"
+-    if cst.st_dev != dev or calib.get("st_dev") != dev:
+-        return False, (f"calibration on device {cst.st_dev} (recorded "
+-                       f"{calib.get('st_dev')}), ledger on {dev} — "
+-                       "different file system")
+     if cst.st_size < n * MM13_CALIB_REC_BYTES:
+         return False, (f"calibration file holds {cst.st_size} B but {n} "
+                        f"x {MM13_CALIB_REC_BYTES}-byte appends need >= "

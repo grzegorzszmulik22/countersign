@@ -1,0 +1,13 @@
+diff --git a/test/bench/csbench.go b/test/bench/csbench.go
+index 3244af4..6fcb23e 100644
+--- a/test/bench/csbench.go
++++ b/test/bench/csbench.go
+@@ -201,7 +201,7 @@ func benchVerify(bundlePath, keysPath string, runs int) {
+ 	emit(map[string]any{
+ 		"metric": "calibration", "kind": "ed25519-verify",
+ 		"ops": calOps, "cpu_s": calCPU,
+-		"ed25519_verify_per_cpu_s": cal,
++		"ed25519_verify_per_cpu_s": cal / 2,
+ 	})
+ 	for r := 0; r < runs; r++ {
+ 		stop, done, samples := startLoadSampler()

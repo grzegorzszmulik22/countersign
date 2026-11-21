@@ -1,0 +1,13 @@
+diff --git a/test/bench/csbench.go b/test/bench/csbench.go
+index 3244af4..663f110 100644
+--- a/test/bench/csbench.go
++++ b/test/bench/csbench.go
+@@ -335,7 +335,7 @@ func benchLatency(dir, linesPath string, rate, n, workers int) {
+ 	emit(map[string]any{
+ 		"metric": "MM1.3", "rate": rate, "records": n,
+ 		"p50_ms": pick(0.50), "p99_ms": pick(0.99), "max_ms": lat[len(lat)-1],
+-		"load1_samples": *samples, "load1_max": loadMax(*samples),
++		"load1_max": loadMax(*samples),
+ 	})
+ }
+ 

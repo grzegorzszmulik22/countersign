@@ -1,0 +1,11 @@
+--- a/test/mutgen/measure.py
++++ b/test/mutgen/measure.py
+@@ -325,7 +325,7 @@
+             cp99 = max(mm13_calib_p99(pre), mm13_calib_p99(post))
+             for val in (cp.get("calib_p99_ms"), r.get("calib_p99_ms")):
+                 if (not isinstance(val, (int, float)) or
+-                        abs(val - cp99) > 1e-6):
++                        abs(val - cp99) > 0.5):
+                     problems.append(f"MM1.3 run {i}: calibration p99 "
+                                     f"{val!r} is not the larger of "
+                                     f"pre/post ({cp99:.3f})")

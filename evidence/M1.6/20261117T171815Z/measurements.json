@@ -1,0 +1,106 @@
+{
+ "machine": "kernel: 6.12.0-204.92.4.4.3.el9uek.aarch64\narch: aarch64\ncpu_model: Neoverse-N1\ncores: 4\nmemory: 22945 MB\ndocker: unavailable",
+ "seed": 1,
+ "metrics": {
+  "MM1.1": {
+   "samples": [
+    596.9211410313181,
+    516.1375687243524,
+    496.4309368860401,
+    376.93211989750444,
+    409.224639948405
+   ],
+   "runs": 5,
+   "median": 496.4309368860401,
+   "cv": 0.1834,
+   "unstable": true,
+   "target": 8000.0,
+   "pass": false,
+   "command": "/home/csbuild/src/cs-evidence-py/.check-work/m16/csbench verify /home/csbuild/src/cs-evidence-py/.check-work/m16/bench-bundle.tar /home/csbuild/src/cs-evidence-py/.check-work/m16/bench-keys.json 5"
+  },
+  "MM1.2": {
+   "samples": [
+    1820.7700844034607,
+    915.7754113175108,
+    1506.4481398136454,
+    1753.26909773923,
+    1706.4401076282354
+   ],
+   "runs": 5,
+   "median": 1706.4401076282354,
+   "cv": 0.2391,
+   "unstable": true,
+   "target": 5000.0,
+   "pass": false,
+   "command": "/home/csbuild/src/cs-evidence-py/.check-work/m16/csbench append /home/csbuild/src/cs-evidence-py/.check-work/m16/ledger-a /home/csbuild/src/cs-evidence-py/.check-work/m16/bench-records.jsonl 40000 32 5"
+  },
+  "MM1.3": {
+   "samples": [
+    33.98,
+    38.202,
+    36.352,
+    30.166,
+    35.665
+   ],
+   "runs": 5,
+   "median": 35.665,
+   "cv": 0.087,
+   "unstable": false,
+   "target": 5.0,
+   "pass": false,
+   "command": "csbench latency <ledger> <records.jsonl> 1000 20000 8 (x5)",
+   "p50_samples_ms": [
+    8.024,
+    7.713,
+    7.573,
+    7.895
+   ],
+   "max_samples_ms": [
+    196.583,
+    289.662,
+    138.603,
+    146.562
+   ]
+  },
+  "MM1.4": {
+   "command": "run_suite.py --seed 1",
+   "mutants_detected": 1008,
+   "mutants_generated": 1008,
+   "agreement": 1008,
+   "detected_ratio": 1.0,
+   "agreement_ratio": 1.0,
+   "target": "100% / >=1000; 100%",
+   "pass": true
+  },
+  "MM1.5": {
+   "command": "run_suite.py --seed 1",
+   "median_record_size_bytes": 1416,
+   "samples": 51904,
+   "target": "reported",
+   "pass": true
+  }
+ },
+ "per_core_cpu_analysis": {
+  "method": "/usr/bin/time -v user+sys seconds vs records processed, GOMAXPROCS=1 for verify",
+  "MM1.1_verify": {
+   "records": 6126,
+   "cpu_s": 1.91,
+   "rec_per_core_s": 3207,
+   "wall_s": 12.78,
+   "cpu_fraction": 0.15
+  },
+  "MM1.2_append": {
+   "records": 40000,
+   "cpu_s": 5.44,
+   "rec_per_core_s": 7353,
+   "wall_s": 20.05,
+   "cpu_fraction": 0.27
+  },
+  "ed25519_raw_verify": {
+   "ops": 20000,
+   "note": "plus 20000 decode+VerifyRecord; 9.34s cpu total"
+  },
+  "loadavg": "20-40 on 4 cores during all runs (shared lane host)",
+  "conclusion": "MM1.1 unreachable even at 100% of one Neoverse-N1 core (3207/s measured vs 8000 target; ed25519 verify alone ~4300-5000 ops/s per core). MM1.2 per-core capability ~7353/s; MM1.3 p99 is scheduler+fsync contention. Wall-clock medians depressed ~4-7x by oversubscription."
+ }
+}

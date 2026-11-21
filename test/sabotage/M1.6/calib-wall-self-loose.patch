@@ -1,0 +1,11 @@
+--- a/test/mutgen/measure.py
++++ b/test/mutgen/measure.py
+@@ -227,7 +227,7 @@
+         return False, (f"record_bytes {rb!r} — CR-003 fixes the sample "
+                        f"shape at {MM13_CALIB_REC_BYTES}-byte O_APPEND "
+                        "write+fsync, a constant, never the record's say")
+-    floor = n * pace / 1000.0
++    floor = (n - 1) * pace / 1000.0
+     wall = calib.get("wall_s")
+     if not isinstance(wall, (int, float)) or wall < floor:
+         return False, (f"reported wall {wall!r}s cannot contain {n} "
