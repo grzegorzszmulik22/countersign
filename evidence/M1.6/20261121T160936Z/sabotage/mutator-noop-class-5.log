@@ -1,0 +1,92 @@
+make[1]: Entering directory '/home/csbuild/src/cs-evidence-py/.check-work/sabotage-M1.6-mutator-noop-class-5'
+harness negative tests (19 properties):
+  hold denied: first error outside the class expected set is not detected — wrong first error rejected per class; expected/UNSEALED paths detected
+  hold agreement: full error+warning code sets, never first error only — later-error and warning divergence both disagreed
+  hold mm1.1: reported rate must be records/cpu_s, wall separate — fabricated, wall-less and impossible rows rejected
+  hold mm1.2: writer rate must be records/cpu_s, wall separate — fabricated writer rate rejected, cpu>wall allowed
+  hold mm1.3: one load sample above cores unqualifies the run — one high sample unqualifies; boundary and missing held
+  hold 06§12: run counts and per-run samples checked per metric — short runs, dropped samples and missing loads rejected
+  hold summarize: medians off target fail in both comparator modes — targets enforced in both comparator directions
+  hold mm1.2 fsync bound judges only on exact (strace) counts — estimates never judge; exact counts do
+  hold mm1.3: calibration measured in-run, never cached/supplied/estimated — missing/cached/estimated/forged calibrations rejected
+  hold mm1.3: calibration must be on the ledger's file system — foreign-device calibration rejected
+  hold mm1.3: judged bound is the measured fsync p99 + 5 ms — fixed bounds, wrong pass, missing/doctored records rejected
+  hold mm1.3: calibration runs alone, never overlapping a latency run — overlapping and bracket-less calibrations rejected; boundary alone window held
+  hold mm1.3: the larger of pre/post calibrations is the bound — smaller-of-two p99s rejected in record and bound
+  hold mm1.3: observed wall < samples x pacing is not a calibration — short observed wall rejected; boundary accepted
+  hold mm1.3: file system measured by the calib file's real device — device measured from the file, claims never trusted
+  hold mm1.3: 400 samples, 300-byte writes, 5 ms pace, wall are spec constants — spec constants enforced at the boundary
+  hold mm1.3: every sample is a strictly positive measured number — zero/negative/bool/non-numeric samples rejected
+  hold mm1.3: calib floors enforced just inside the forbidden side — tight bounds reject inside, accept at boundary
+  hold mm1.3: brackets, tolerances, flags enforced at exact edges — brackets, tolerances, flags and bound edges held
+selftest: every enforced property rejected its wrong input
+CHECK C1.6.4 PASS  every enforced property rejected its wrong input
+C1.6.1: 200/200 generated bundles CLEAN-class in both verifiers
+  …100/1008 mutants
+  …200/1008 mutants
+  …300/1008 mutants
+  …400/1008 mutants
+  …500/1008 mutants
+  …600/1008 mutants
+  …700/1008 mutants
+  …800/1008 mutants
+  …900/1008 mutants
+  …1000/1008 mutants
+C1.6.2: 1008 mutants, 896 rejected by both, 896 identical error classes
+directed extras: agreement {'policy': 20, 'result-before-effect': 20, 'contract': 20} (+keys-json gap)
+  FAIL class 5 mutant 455: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 449: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 456: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 454: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 450: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 467: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 480: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 464: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 463: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 484: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 468: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 457: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 479: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 448: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 476: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 471: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 473: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 481: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 504: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 465: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 469: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 497: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 502: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 466: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 487: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 490: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 503: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 460: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 459: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 472: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 461: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 498: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 485: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 453: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 452: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 475: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 486: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 515: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 496: mutant identical to original (no-op mutator)
+  FAIL class 5 mutant 458: mutant identical to original (no-op mutator)
+C1.6: 114 failure(s)
+CHECK C1.6.1 PASS  200 seeded bundles CLEAN-class in both verifiers
+CHECK C1.6.2 FAIL  mutation differential
+MM1.1: median 3275 rec/cpu-s, cal 5631 ops/cpu-s, ratio 0.58 PASS
+MM1.2: median 7734 rec/cpu-s, fsync/rec 0.061 (exact) PASS
+MM1.3: not judged: host contended — 5 runs recorded, p99s [8.0, 10.3, 11.1, 9.3, 10.8]
+MM1.4: {'command': 'run_suite.py --seed 1', 'mutants_detected': 896, 'mutants_generated': 1008, 'agreement': 896, 'detected_ratio': 0.8888888888888888, 'agreement_ratio': 0.8888888888888888, 'target': '100% / >=1000; 100%', 'pass': False}
+MM1.5: {'command': 'run_suite.py --seed 1', 'median_record_size_bytes': 1416, 'samples': 51904, 'target': 'reported', 'pass': True}
+measurements → /home/csbuild/src/cs-evidence-py/.check-work/sabotage-M1.6-mutator-noop-class-5/.check-work/m16/measurements.json
+  FAIL MM1.4: target missed
+C1.6.3: FAIL
+CHECK C1.6.3 FAIL  measurements MM1.1-MM1.5
+check-M1.6: suite FAIL
+check-M1.6: FAIL (exit 1, evidence: evidence/M1.6/20261121T162813Z)
+make[1]: *** [Makefile:37: check-M1.6] Error 1
+make[1]: Leaving directory '/home/csbuild/src/cs-evidence-py/.check-work/sabotage-M1.6-mutator-noop-class-5'
