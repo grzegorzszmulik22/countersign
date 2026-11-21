@@ -72,18 +72,19 @@ for c in $done_chunks; do
     fi
 done
 # Move the latency-bound chunks out of par into early (keeping discovery
-# order) so a chunk is never run twice.
+# order) so a chunk is never run twice. Only chunks discovered DONE land
+# in early_run — a reopened chunk must not be re-run here at all.
 if [ ${#early[@]} -gt 0 ]; then
-    next=(); snext=()
+    next=(); snext=(); early_run=()
     for c in ${par[@]+"${par[@]}"}; do
         keep=1
         for e in "${early[@]}"; do [ "$c" = "$e" ] && keep=0; done
-        [ "$keep" -eq 1 ] && next+=("$c")
+        if [ "$keep" -eq 1 ]; then next+=("$c"); else early_run+=("$c"); fi
     done
     for c in ${solo[@]+"${solo[@]}"}; do
         keep=1
         for e in "${early[@]}"; do [ "$c" = "$e" ] && keep=0; done
-        [ "$keep" -eq 1 ] && snext+=("$c")
+        if [ "$keep" -eq 1 ]; then snext+=("$c"); else early_run+=("$c"); fi
     done
     par=(${next[@]+"${next[@]}"}); solo=(${snext[@]+"${snext[@]}"})
 fi
@@ -94,7 +95,7 @@ tmpd=$(mktemp -d)
 host=$(hostname -s)
 env_ok() { python3 tools/env_skip_ok.py tools/env-skips.txt "$host" <"$1"; }
 
-for c in ${early[@]+"${early[@]}"}; do
+for c in ${early_run[@]+"${early_run[@]}"}; do
     [ "$c" != "${CS_CHECK_RUNNING:-}" ] || continue
     [ -f "test/checks/check-$c.sh" ] || continue
     echo "-- make check-$c"

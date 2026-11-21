@@ -58,6 +58,21 @@ const m24Grants = `  mode: enforce
       match: {hosts: [up.test], ports: [443]}
 `
 
+// m24Volume returns the spec-mandated scale for the durability proofs
+// when test/checks/check-M2.4.sh runs them (it exports
+// CS_M24_SPEC_VOLUME=1, so make check-M2.4, make sabotage-M2.4 and
+// make regress always get the full 100,000-request / 200-kill counts).
+// An un-env'd `go test -race` — e.g. the whole-package race pass — uses
+// the smaller raced volume, which still exercises every concurrent
+// path (workers, kills, replay scans) inside Go's 10-minute default
+// package timeout.
+func m24Volume(spec, raced int) int {
+	if os.Getenv("CS_M24_SPEC_VOLUME") == "1" {
+		return spec
+	}
+	return raced
+}
+
 // fastDir returns a tmpfs-backed directory for the write-heavy runs so
 // per-record fsync stays honest but cheap; falls back to t.TempDir.
 func fastDir(t *testing.T, name string) string {
@@ -243,7 +258,7 @@ func TestC241OrderingProof(t *testing.T) {
 		[]SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)},
 		map[string]string{"up.test": ln.Addr().String()}, nil, ts)
 
-	const total = 100000
+	total := m24Volume(100000, 4000)
 	cli := e.proxyClient(t, "tok-one", nil)
 
 	var wg sync.WaitGroup
@@ -432,7 +447,7 @@ func TestC242CrashProof(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	const kills = 200
+	kills := m24Volume(200, 20)
 	var nextID atomic.Int64
 	// inflightWindow accumulates, per kill, the ids that could legitimately
 	// lack a result record: the last couple issued when the kill landed
@@ -836,7 +851,7 @@ func TestC245CountEquality(t *testing.T) {
 	e := newTestEnvFull(t, dir, []SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)},
 		map[string]string{"up.test": upAddr}, nil, nil)
 
-	const total = 100000
+	total := m24Volume(100000, 4000)
 	cli := e.proxyClient(t, "tok-one", nil)
 	cliDeny := e.proxyClient(t, "tok-one", nil)
 

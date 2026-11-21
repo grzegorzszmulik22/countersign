@@ -1,0 +1,17 @@
+diff --git a/internal/proxy/connect.go b/internal/proxy/connect.go
+index 4717818..82b7493 100644
+--- a/internal/proxy/connect.go
++++ b/internal/proxy/connect.go
+@@ -211,8 +211,10 @@ func (s *Server) passthrough(w http.ResponseWriter, r *http.Request, sess *Sessi
+ 	}
+ 	defer s.untrackTunnel(cli)
+ 	up64, down64, rerr := relayTunnel(&bufConn{Conn: cli, r: buf.Reader}, up, idleTunnelMax)
+-	result.BytesUp = up64
+-	result.BytesDown = down64
++	// Sabotage: swap the direction counters — bytes_up records
++	// upstream->client traffic and bytes_down client->upstream.
++	result.BytesUp = down64
++	result.BytesDown = up64
+ 	if rerr != nil {
+ 		result.Error = rerr.Error()
+ 	}

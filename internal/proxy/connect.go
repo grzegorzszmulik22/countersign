@@ -222,7 +222,13 @@ func (s *Server) passthrough(w http.ResponseWriter, r *http.Request, sess *Sessi
 // TLS ClientHello and returns its SNI ("" for non-TLS or a deadline miss).
 // Peek never consumes bytes: everything the client sent crosses verbatim.
 func peekClientHelloSNI(br *bufio.Reader, c net.Conn, budget time.Duration) string {
-	_ = c.SetReadDeadline(time.Now().Add(budget))
+	// The deadline is what bounds the peek; if it cannot be set the
+	// Peek could block past the budget, so report no SNI.
+	if err := c.SetReadDeadline(time.Now().Add(budget)); err != nil {
+		return ""
+	}
+	// Best effort: clearing the peek deadline; the conn proceeds under
+	// the tunnel's own deadlines or is closing anyway.
 	defer func() { _ = c.SetReadDeadline(time.Time{}) }()
 	hdr, err := br.Peek(5)
 	if err != nil || hdr[0] != 0x16 {

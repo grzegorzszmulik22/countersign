@@ -173,7 +173,11 @@ func (s *Server) wsForward(w http.ResponseWriter, r *http.Request, env *forwardE
 		return
 	}
 	// The 101 head crosses verbatim, then the tunnel is opaque bytes.
-	_, _ = fmt.Fprintf(buf, "HTTP/1.1 %s\r\n", res.Status)
+	if _, err := fmt.Fprintf(buf, "HTTP/1.1 %s\r\n", res.Status); err != nil {
+		_ = cli.Close()
+		result.Error = "response-write"
+		return
+	}
 	if err := res.Header.Write(buf); err != nil {
 		_ = cli.Close()
 		result.Error = "response-write"

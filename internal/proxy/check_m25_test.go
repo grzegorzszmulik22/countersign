@@ -53,6 +53,10 @@ const m25Grants = `  mode: enforce
       action: allow
       mode: passthrough
       match: {hosts: [pass.test], ports: [443]}
+    - id: pass-raw
+      action: allow
+      mode: passthrough
+      match: {hosts: [raw.test], ports: [443]}
     - id: pass-blocked
       action: allow
       mode: passthrough
@@ -404,6 +408,124 @@ func TestC253UpstreamAddrCheck(t *testing.T) {
 			sawUp = true
 			if rb.Upstream.IP != "198.51.100.77" {
 				t.Fatalf("recorded upstream.ip %q, want dialled 198.51.100.77", rb.Upstream.IP)
+			}
+		}
+		if !sawUp {
+			t.Fatal("no effect.http.result records found")
+		}
+	})
+
+	// Multi-answer resolution: when an earlier answer is blocked or its
+	// dial fails, the conn lands on a later answer and upstream.ip is
+	// the address that actually connected — never ips[0], never the
+	// name (B2-06). Both failure shapes pin the same property.
+	t.Run("multi-first-blocked", func(t *testing.T) {
+		dir := shmTempDir(t)
+		pol := writePolicy(t, dir, "p", m25Grants)
+		upAddr, upClose := startUpstream(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(200)
+		}))
+		defer upClose()
+		blockedIP := netip.MustParseAddr("127.0.0.9")
+		goodIP := netip.MustParseAddr("198.51.100.91")
+		var dialledMu sync.Mutex
+		var dialled []string
+		e := newTestEnvMut(t, dir,
+			[]SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)},
+			nil, nil, nil, func(c *Config) {
+				c.Resolve = func(ctx context.Context, host string) ([]netip.Addr, error) {
+					return []netip.Addr{blockedIP, goodIP}, nil
+				}
+				c.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+					dialledMu.Lock()
+					dialled = append(dialled, addr)
+					dialledMu.Unlock()
+					if strings.HasPrefix(addr, goodIP.String()+":") {
+						var d net.Dialer
+						return d.DialContext(ctx, network, upAddr)
+					}
+					return nil, fmt.Errorf("must not dial blocked answer %s", addr)
+				}
+			})
+		cli := e.proxyClient(t, "tok-one", nil)
+		res, err := cli.Get("http://up.test/x")
+		if err != nil {
+			t.Fatalf("request: %v", err)
+		}
+		_ = res.Body.Close()
+		if res.StatusCode != 200 {
+			t.Fatalf("status %d, want 200", res.StatusCode)
+		}
+		if len(dialled) != 1 || !strings.HasPrefix(dialled[0], "198.51.100.91:") {
+			t.Fatalf("dials %v, want exactly [198.51.100.91:*] (blocked answer must not be dialled)", dialled)
+		}
+		recs := e.readSessionRecords(t, "s1")
+		var sawUp bool
+		for _, rb := range recordsOfType[ResultBody](t, recs, "effect.http.result") {
+			if rb.Upstream == nil {
+				t.Fatalf("effect.http.result missing upstream record")
+			}
+			sawUp = true
+			if rb.Upstream.IP != "198.51.100.91" {
+				t.Fatalf("recorded upstream.ip %q, want connected 198.51.100.91", rb.Upstream.IP)
+			}
+		}
+		if !sawUp {
+			t.Fatal("no effect.http.result records found")
+		}
+	})
+
+	t.Run("multi-first-dial-fails", func(t *testing.T) {
+		dir := shmTempDir(t)
+		pol := writePolicy(t, dir, "p", m25Grants)
+		upAddr, upClose := startUpstream(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(200)
+		}))
+		defer upClose()
+		deadIP := netip.MustParseAddr("198.51.100.98")
+		goodIP := netip.MustParseAddr("198.51.100.99")
+		var dialledMu sync.Mutex
+		var dialled []string
+		e := newTestEnvMut(t, dir,
+			[]SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)},
+			nil, nil, nil, func(c *Config) {
+				c.Resolve = func(ctx context.Context, host string) ([]netip.Addr, error) {
+					return []netip.Addr{deadIP, goodIP}, nil
+				}
+				c.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+					dialledMu.Lock()
+					dialled = append(dialled, addr)
+					dialledMu.Unlock()
+					if strings.HasPrefix(addr, deadIP.String()+":") {
+						return nil, fmt.Errorf("connection refused")
+					}
+					var d net.Dialer
+					return d.DialContext(ctx, network, upAddr)
+				}
+			})
+		cli := e.proxyClient(t, "tok-one", nil)
+		res, err := cli.Get("http://up.test/x")
+		if err != nil {
+			t.Fatalf("request: %v", err)
+		}
+		_ = res.Body.Close()
+		if res.StatusCode != 200 {
+			t.Fatalf("status %d, want 200", res.StatusCode)
+		}
+		if len(dialled) != 2 ||
+			!strings.HasPrefix(dialled[0], "198.51.100.98:") ||
+			!strings.HasPrefix(dialled[1], "198.51.100.99:") {
+			t.Fatalf("dials %v, want [198.51.100.98:* 198.51.100.99:*] in order", dialled)
+		}
+		recs := e.readSessionRecords(t, "s1")
+		var sawUp bool
+		for _, rb := range recordsOfType[ResultBody](t, recs, "effect.http.result") {
+			if rb.Upstream == nil {
+				t.Fatalf("effect.http.result missing upstream record")
+			}
+			sawUp = true
+			if rb.Upstream.IP != "198.51.100.99" {
+				t.Fatalf("recorded upstream.ip %q, want connected 198.51.100.99", rb.Upstream.IP)
 			}
 		}
 		if !sawUp {
@@ -840,8 +962,32 @@ func TestC255Passthrough(t *testing.T) {
 			_, _ = w.Write([]byte("through"))
 		}))
 	defer upClose()
+	// Cleartext upstream for the directional-count phase: reads the
+	// client's upLen payload, answers with downLen bytes, then holds the
+	// conn until the client goes away.
+	const upLen, downLen = 4000, 217
+	downPayload := bytes.Repeat([]byte("d"), downLen)
+	rawLn, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rawLn.Close() }()
+	go func() {
+		c, err := rawLn.Accept()
+		if err != nil {
+			return
+		}
+		defer func() { _ = c.Close() }()
+		if _, err := io.ReadFull(c, make([]byte, upLen)); err != nil {
+			return
+		}
+		if _, err := c.Write(downPayload); err != nil {
+			return
+		}
+		_, _ = io.Copy(io.Discard, c)
+	}()
 	e := newTestEnv(t, []SessionEntry{sessionEntry("s1", "tok-one", "127.0.0.1", pol)},
-		map[string]string{"pass.test": upAddr})
+		map[string]string{"pass.test": upAddr, "raw.test": rawLn.Addr().String()})
 
 	// CONNECT, then speak TLS through the tunnel ourselves.
 	conn, err := net.DialTimeout("tcp", e.proxyURL.Host, 5*time.Second)
@@ -899,6 +1045,51 @@ func TestC255Passthrough(t *testing.T) {
 	// No leaf minted: the session CA has no cert for pass.test.
 	if got := e.broker.Session("s1").LeafCacheLen(); got != 0 {
 		t.Fatalf("passthrough minted %d leaf certs, want 0", got)
+	}
+
+	// Directional byte counts: a cleartext tunnel with deliberately
+	// asymmetric payloads — bytes_up counts client->upstream, bytes_down
+	// upstream->client. Symmetric traffic cannot detect swapped
+	// directions; exact unequal counts can.
+	conn2, err := net.DialTimeout("tcp", e.proxyURL.Host, 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = conn2.Write([]byte("CONNECT raw.test:443 HTTP/1.1\r\nHost: raw.test\r\n" + auth + "\r\n"))
+	code, head, err = readResponseHead(conn2)
+	if err != nil || code != 200 {
+		t.Fatalf("raw CONNECT: code %d err %v\n%s", code, err, head)
+	}
+	upPayload := bytes.Repeat([]byte("U"), upLen)
+	if _, err := conn2.Write(upPayload); err != nil {
+		t.Fatalf("tunnel up-write: %v", err)
+	}
+	got := make([]byte, downLen)
+	_ = conn2.SetReadDeadline(time.Now().Add(10 * time.Second))
+	if _, err := io.ReadFull(conn2, got); err != nil {
+		t.Fatalf("tunnel down-read: %v", err)
+	}
+	if !bytes.Equal(got, downPayload) {
+		t.Fatal("downstream payload corrupted in relay")
+	}
+	_ = conn2.Close()
+	var trs2 []TunnelResultBody
+	for deadline := time.Now().Add(10 * time.Second); ; {
+		recs = e.readSessionRecords(t, "s1")
+		trs2 = recordsOfType[TunnelResultBody](t, recs, "effect.tunnel.result")
+		if len(trs2) >= 2 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if len(trs2) != 2 {
+		t.Fatalf("tunnel result count %d, want 2", len(trs2))
+	}
+	if trs2[1].BytesUp != upLen {
+		t.Fatalf("bytes_up %d, want exactly %d (client->upstream)", trs2[1].BytesUp, upLen)
+	}
+	if trs2[1].BytesDown != downLen {
+		t.Fatalf("bytes_down %d, want exactly %d (upstream->client)", trs2[1].BytesDown, downLen)
 	}
 }
 

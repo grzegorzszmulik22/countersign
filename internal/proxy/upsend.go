@@ -45,6 +45,8 @@ func (s *spliceRW) Close() error {
 			raw = tc.NetConn()
 		}
 		if tcp, ok := raw.(*net.TCPConn); ok {
+			// Best effort: the conn is closing regardless; a failed
+			// linger set only changes FIN to the default close.
 			_ = tcp.SetLinger(0)
 		}
 	})
@@ -118,17 +120,25 @@ func h1Attempt(ctx context.Context, conn net.Conn, req *http.Request, hdrTimeout
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	splice := &spliceRW{Reader: bufio.NewReader(conn), conn: conn, stop: stop}
 	if hdrTimeout > 0 {
-		_ = conn.SetWriteDeadline(time.Now().Add(hdrTimeout))
+		if err := conn.SetWriteDeadline(time.Now().Add(hdrTimeout)); err != nil {
+			_ = splice.Close()
+			return nil, nil, err
+		}
 	}
 	if err := req.Write(conn); err != nil {
 		_ = splice.Close()
 		return nil, nil, err
 	}
+	// Best effort: clearing the write deadline; a stale one only bounds
+	// later writes on the 101-splice path, never blocks them early.
 	_ = conn.SetWriteDeadline(time.Time{})
 	var res *http.Response
 	for {
 		if hdrTimeout > 0 {
-			_ = conn.SetReadDeadline(time.Now().Add(hdrTimeout))
+			if err := conn.SetReadDeadline(time.Now().Add(hdrTimeout)); err != nil {
+				_ = splice.Close()
+				return nil, nil, err
+			}
 		}
 		r, err := http.ReadResponse(splice.Reader, req)
 		if err != nil {
@@ -140,6 +150,8 @@ func h1Attempt(ctx context.Context, conn net.Conn, req *http.Request, hdrTimeout
 			break
 		}
 	}
+	// Best effort: clearing the read deadline; a stale one would only
+	// bound reads on the 101-splice path the caller manages anyway.
 	_ = conn.SetReadDeadline(time.Time{})
 	return res, splice, nil
 }

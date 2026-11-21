@@ -1,0 +1,15 @@
+diff --git a/internal/proxy/upstream.go b/internal/proxy/upstream.go
+index e743b1d..35cd282 100644
+--- a/internal/proxy/upstream.go
++++ b/internal/proxy/upstream.go
+@@ -128,7 +128,9 @@ func (s *Server) dialUpstream(ctx context.Context, sess *Session, grant *policy.
+ 			lastErr = err
+ 			continue
+ 		}
+-		info := UpstreamRecord{IP: ip.String(), Port: port}
++		// Sabotage: record the first DNS answer, not the address that
++		// actually connected (B2-06 violation under multi-answer).
++		info := UpstreamRecord{IP: ips[0].String(), Port: port}
+ 		return &dialledConn{Conn: c, addr: &net.TCPAddr{IP: net.ParseIP(ip.String()), Port: port}}, info, nil
+ 	}
+ 	if !allowed && len(ips) > 0 {

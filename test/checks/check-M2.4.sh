@@ -13,6 +13,15 @@ export PATH="$ROOT/.tools/bin:$PATH"
 GO="$ROOT/.tools/bin/go"
 fail=0
 
+# Full spec volume for the durability proofs: C2.4.1's 100k-request
+# ordering proof, C2.4.2's 200 SIGKILLs, C2.4.5's 100k-request count
+# equality. The tests read this env var; an un-env'd `go test -race`
+# (e.g. a whole-package race pass under Go's default 10m timeout) runs
+# a smaller volume that still exercises every concurrent path. Since
+# check-M2.4, sabotage-M2.4 and regress all reach the tests through
+# this script, the spec counts always apply there.
+export CS_M24_SPEC_VOLUME=1
+
 mkdir -p "$ROOT/.check-work"
 WORK=$(mktemp -d "$ROOT/.check-work/M2.4.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
