@@ -1,0 +1,11 @@
+--- a/test/mutgen/measure.py
++++ b/test/mutgen/measure.py
+@@ -257,7 +257,7 @@
+         return False, (f"calibration file holds {cst.st_size} B but {n} "
+                        f"x {MM13_CALIB_REC_BYTES}-byte appends need >= "
+                        f"{n * MM13_CALIB_REC_BYTES} — samples not written")
+-    if since is not None and cst.st_mtime < since - 1.0:
++    if since is not None and cst.st_mtime < since - 60.0:
+         return False, ("calibration file predates this run — a cached "
+                        "result was supplied")
+     claimed = calib.get("fsync_p99_ms")

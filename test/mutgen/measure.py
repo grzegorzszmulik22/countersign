@@ -217,8 +217,9 @@ def fsync_calib_ok(calib, ledger_dir, observed_wall_s=None, since=None):
         return False, f"{n} samples, need >= {MM13_CALIB_MIN}"
     if calib.get("n") != n:
         return False, f"recorded n {calib.get('n')} != {n} samples"
-    if not all(isinstance(x, (int, float)) and x > 0 for x in samples):
-        return False, "non-numeric or non-positive sample"
+    if not all(isinstance(x, (int, float)) and
+               not isinstance(x, bool) and x > 0 for x in samples):
+        return False, "non-numeric, boolean or non-positive sample"
     pace = calib.get("pace_ms")
     if not isinstance(pace, (int, float)) or pace < MM13_CALIB_PACE_MS:
         return False, f"pace {pace!r} ms < {MM13_CALIB_PACE_MS} ms"

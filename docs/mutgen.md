@@ -81,7 +81,18 @@ running every mutant through **both** verifiers (`csverify` and
   >= samples x pacing, and a calibration file holding at least n x 300
   bytes — a harness configured to take 100 samples fails the same as a
   fabricated one (`calib-floor-100`, `calib-shape-any`,
-  `calib-wall-self-loose`, `calib-size-unmeasured` sabotages). The judged
+  `calib-wall-self-loose`, `calib-size-unmeasured` sabotages). Every
+  recorded sample must be a strictly positive number — zero, negative,
+  boolean (True is an int in Python) or non-numeric is rejected — and
+  every floor is defended at its tight edge: the file one byte short
+  of n x 300, mtime a hair outside the freshness horizon, pace just
+  under 5 ms, claimed p99 one epsilon outside its samples-derived
+  value, brackets overlapping the run by 1 ms, recorded p99 and target
+  2e-6 over their 1e-6 tolerances, and a load sample a hair above
+  cores (`calib-size-half`, `calib-samples-any`, `calib-mtime-loose`,
+  `calib-p99-tol`, `calib-bracket-loose`, `calib-cp99-tol`,
+  `load-gate-edge`, `calib-target-tol`, `calib-pass-loose` sabotages).
+  The judged
   bound must be exactly the median qualified calibration p99 + 5 ms —
   a fixed bound, a swapped-in calibration, or a qualified flag that
   contradicts the run's own load samples all fail

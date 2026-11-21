@@ -1,0 +1,11 @@
+--- a/test/mutgen/measure.py
++++ b/test/mutgen/measure.py
+@@ -349,7 +349,7 @@
+                         f"measured fsync p99 + {MM13_SLACK_MS} ms "
+                         f"({bound:.3f})")
+     expect = isinstance(res.get("median"), (int, float)) and \
+-        res["median"] <= bound
++        res["median"] <= bound + 1.0
+     if res.get("pass") != expect:
+         problems.append("MM1.3: pass flag does not follow the "
+                         "calibrated bound")

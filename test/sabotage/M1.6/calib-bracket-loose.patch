@@ -1,0 +1,11 @@
+--- a/test/mutgen/measure.py
++++ b/test/mutgen/measure.py
+@@ -318,7 +318,7 @@
+                 problems.append(f"MM1.3 run {i}: timing brackets missing "
+                                 "— cannot prove the calibration ran "
+                                 "with no latency run in progress")
+-            elif not (pre["t_end"] <= rs <= re_ <= post["t_start"]):
++            elif not (pre["t_end"] <= rs + 1.0 <= re_ <= post["t_start"] + 1.0):
+                 problems.append(f"MM1.3 run {i}: calibration overlaps "
+                                 "the latency run — the disk must be "
+                                 "measured alone")

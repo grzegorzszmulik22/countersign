@@ -241,14 +241,16 @@ def _calib(tmpdir, samples=400, pace=5.0, wall=4.0, dev_off=0,
     return rec
 
 
-def _pair(tmpdir, pre_p99=8.0, post_p99=8.0, rs=100.0, re_=200.0):
+def _pair(tmpdir, pre_p99=8.0, post_p99=8.0, rs=100.0, re_=200.0,
+          pre_end=20.0, post_start=210.0):
     """An honest pre/post calibration pair bracketing a latency run:
-    pre ends at 20, the run spans [rs, re_]=[100, 200], post starts at
-    210 — the disk measured alone, larger leg p99 recorded."""
+    pre ends at pre_end, the run spans [rs, re_], post starts at
+    post_start — the disk measured alone, larger leg p99 recorded."""
     pre = _calib(tmpdir, samples=[pre_p99] * 400, name="pre.dat")
-    pre.update(t_start=10.0, t_end=20.0, observed_wall_s=10.0)
+    pre.update(t_start=10.0, t_end=pre_end, observed_wall_s=10.0)
     post = _calib(tmpdir, samples=[post_p99] * 400, name="post.dat")
-    post.update(t_start=210.0, t_end=220.0, observed_wall_s=10.0)
+    post.update(t_start=post_start, t_end=post_start + 10.0,
+                observed_wall_s=10.0)
     return ({"pre": pre, "post": post,
              "calib_p99_ms": max(pre_p99, post_p99)},
             {"run_t_start": rs, "run_t_end": re_})
@@ -345,6 +347,146 @@ def t_mm13_calib_spec_constants():
         if not ok:
             return False, f"wall == samples x pacing rejected: {why}"
         return True, "spec constants enforced at the boundary"
+
+
+def t_mm13_samples_positive():
+    """CR-003: every recorded write+fsync latency sample is a strictly
+    positive number — a zero, negative, boolean or non-numeric entry
+    was never measured (bool is an int in Python: True > 0 must not
+    slip the check)."""
+    with tempfile.TemporaryDirectory() as d:
+        for bad in (0, 0.0, -0.5, True, False, "8.0", None, [8.0]):
+            c = _calib(d)
+            c["samples"][7] = bad
+            if ME.fsync_calib_ok(c, d)[0]:
+                return False, f"sample {bad!r} accepted"
+        c = _calib(d)
+        c["samples"][7] = 0.001   # boundary: the smallest real latency
+        ok, why = ME.fsync_calib_ok(c, d)
+        if not ok:
+            return False, f"positive-but-tiny sample rejected: {why}"
+        return True, "zero/negative/bool/non-numeric samples rejected"
+
+
+def t_mm13_calib_tight_bounds():
+    """CR-003: every floor in the calibration record is enforced just
+    inside its forbidden side — pace under 5.0 by a hair, file one
+    byte short of n x 300, mtime a hair before the run started, and
+    the claimed p99 one epsilon outside its samples-derived value;
+    each exact boundary accepts."""
+    with tempfile.TemporaryDirectory() as d:
+        c = _calib(d, pace=4.9999)      # pace a hair under 5.0 ms
+        if ME.fsync_calib_ok(c, d)[0]:
+            return False, "pace just under 5 ms accepted"
+        c = _calib(d)                    # file one byte short of n x 300
+        sz = 400 * 300
+        with open(c["path"], "r+b") as f:
+            f.truncate(sz - 1)
+        if ME.fsync_calib_ok(c, d)[0]:
+            return False, "file n x 300 - 1 bytes accepted"
+        c = _calib(d)                    # file exactly n x 300 bytes
+        ok, why = ME.fsync_calib_ok(c, d)
+        if not ok:
+            return False, f"file n x 300 boundary rejected: {why}"
+        # mtime just before the freshness horizon (since - 1.0 s)
+        now = time.time()
+        c = _calib(d, mtime_age=1.05)
+        if ME.fsync_calib_ok(c, d, since=now)[0]:
+            return False, "mtime just past the horizon accepted"
+        c = _calib(d, mtime_age=0.5)    # boundary: mtime inside horizon
+        ok, why = ME.fsync_calib_ok(c, d, since=now)
+        if not ok:
+            return False, f"mtime inside the horizon rejected: {why}"
+        # claimed p99 one epsilon outside the 1% tolerance (8.0*0.01=0.08)
+        c = _calib(d, claimed=8.081)
+        if ME.fsync_calib_ok(c, d)[0]:
+            return False, "claimed p99 just outside tolerance accepted"
+        c = _calib(d, claimed=8.079)     # just inside the 0.08 tolerance
+        ok, why = ME.fsync_calib_ok(c, d)
+        if not ok:
+            return False, f"claimed p99 inside tolerance rejected: {why}"
+        return True, "tight bounds reject inside, accept at boundary"
+
+
+def t_mm13_res_tight_bounds():
+    """CR-003 + clarification: the bracket inequalities, the recorded
+    p99-vs-larger-leg tolerance, the qualified flag boundary and the
+    target/median bounds are enforced at their exact edges, not only
+    with gross violations."""
+    with tempfile.TemporaryDirectory() as d:
+        ctx = {"ledger_dir": d}
+
+        def res_for(cpair, times, run=None, **kw):
+            r = {"p99_ms": 12.0, "load1_samples": [1.0, 2.0],
+                 "qualified": True, "calib_p99_ms": 8.0, **(run or {})}
+            r.update(times)
+            base = {"runs": 1, "samples": [12.0], "cores": 4,
+                    "judgment": "judged", "calibration": [cpair],
+                    "all_samples": [r], "median": 12.0, "pass": True,
+                    "target": 13.0, "absolute_p99_ms": 12.0}
+            base.update(kw)
+            return base
+
+        # pre leg ending a hair into the run vs ending exactly at start
+        cpair, times = _pair(d, rs=100.0, re_=200.0, pre_end=100.001)
+        if not ME.mm13_res_ok(res_for(cpair, times), ctx):
+            return False, "pre ending 1 ms into the run accepted"
+        cpair, times = _pair(d, rs=100.0, re_=200.0, pre_end=100.0)
+        if ME.mm13_res_ok(res_for(cpair, times), ctx):
+            return False, "pre ending exactly at run start rejected"
+        # post leg starting a hair before run end vs exactly at end
+        cpair, times = _pair(d, rs=100.0, re_=200.0, post_start=199.999)
+        if not ME.mm13_res_ok(res_for(cpair, times), ctx):
+            return False, "post starting 1 ms before run end accepted"
+        cpair, times = _pair(d, rs=100.0, re_=200.0, post_start=200.0)
+        honest = res_for(cpair, times)
+        if ME.mm13_res_ok(honest, ctx):
+            return False, "post starting exactly at run end rejected"
+        # one calibration record short of one per run
+        short = {**honest, "calibration": [], "runs": 1}
+        if not ME.mm13_res_ok(short, ctx):
+            return False, "calibration count != runs accepted"
+        # recorded calib p99 vs the larger leg: 1e-6 tolerance edges —
+        # target doctored consistently so only the p99 check can fire
+        cpair, times = _pair(d)
+        for off in (2e-6, 0.1):  # just over the 1e-6 edge, then gross
+            c2 = {**cpair, "calib_p99_ms": cpair["calib_p99_ms"] + off}
+            bad = res_for(c2, times, target=13.0 + off)
+            bad["all_samples"] = [{**bad["all_samples"][0],
+                                   "calib_p99_ms":
+                                       cpair["calib_p99_ms"] + off}]
+            if not ME.mm13_res_ok(bad, ctx):
+                return False, f"recorded p99 off by {off} accepted"
+        c2 = {**cpair, "calib_p99_ms": cpair["calib_p99_ms"] + 1e-6}
+        okb = res_for(c2, times)
+        okb["all_samples"] = [{**okb["all_samples"][0],
+                               "calib_p99_ms": cpair["calib_p99_ms"] + 1e-6}]
+        if ME.mm13_res_ok(okb, ctx):
+            return False, "recorded p99 at 1e-6 boundary rejected"
+        # qualified-flag edge: a sample a hair above cores is unqualified
+        cpair, times = _pair(d)
+        over = res_for(cpair, times,
+                       run={"load1_samples": [4.001], "qualified": True})
+        if not ME.mm13_res_ok(over, ctx):
+            return False, "flag claiming qualified over a 4.001 sample accepted"
+        edge = res_for(cpair, times,
+                       run={"load1_samples": [4.0], "qualified": True})
+        if ME.mm13_res_ok(edge, ctx):
+            return False, "sample exactly at cores not qualified rejected"
+        # target one epsilon off the computed bound (8.0 + 5.0 = 13.0)
+        for tgt in (13.000002, 13.1):
+            t2 = res_for(cpair, times, target=tgt)
+            if not ME.mm13_res_ok(t2, ctx):
+                return False, f"target {tgt} off the bound accepted"
+        t2 = res_for(cpair, times, target=13.000001)
+        if ME.mm13_res_ok(t2, ctx):
+            return False, "target at 1e-6 boundary rejected"
+        # pass flag follows median <= bound: median just over with pass
+        p2 = res_for(cpair, times, median=13.1, samples=[13.1],
+                     absolute_p99_ms=13.1)
+        if not ME.mm13_res_ok(p2, ctx):
+            return False, "pass=True with median over bound accepted"
+        return True, "brackets, tolerances, flags and bound edges held"
 
 
 def t_mm13_calib_device_is_measured():
@@ -522,7 +664,7 @@ def t_calib_wall_floor():
     samples — violating rejected, exact boundary accepted."""
     with tempfile.TemporaryDirectory() as d:
         c = _calib(d)  # 400 samples x 5 ms -> observed must be >= 2.0 s
-        if ME.fsync_calib_ok(c, d, observed_wall_s=1.99)[0]:
+        if ME.fsync_calib_ok(c, d, observed_wall_s=1.999)[0]:
             return False, "observed wall under samples x pacing accepted"
         ok, why = ME.fsync_calib_ok(c, d, observed_wall_s=2.0)
         if not ok:
@@ -563,12 +705,18 @@ CASES = [
      t_mm13_calib_device_is_measured),
     ("mm1.3: 400 samples, 300-byte writes, 5 ms pace, wall are spec constants",
      t_mm13_calib_spec_constants),
+    ("mm1.3: every sample is a strictly positive measured number",
+     t_mm13_samples_positive),
+    ("mm1.3: calib floors enforced just inside the forbidden side",
+     t_mm13_calib_tight_bounds),
+    ("mm1.3: brackets, tolerances, flags enforced at exact edges",
+     t_mm13_res_tight_bounds),
 ]
 
 
 def main():
-    if len(CASES) != 16:
-        print(f"selftest: {len(CASES)} cases registered, need 16 — the "
+    if len(CASES) != 19:
+        print(f"selftest: {len(CASES)} cases registered, need 19 — the "
               "negative-test set itself was tampered with")
         return 1
     print(f"harness negative tests ({len(CASES)} properties):")
