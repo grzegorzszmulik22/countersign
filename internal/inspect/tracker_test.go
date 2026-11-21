@@ -74,13 +74,16 @@ func TestTrackerTimeout(t *testing.T) {
 	now = now.Add(30 * time.Second)
 	tr.Declare(intent("new", "Bash", ExecutorSandbox), "exec", "e2")
 	now = now.Add(31 * time.Second) // old is 61s, new is 31s
-	out := tr.Timeouts()
-	if len(out) != 1 || out[0].ID != "old" {
-		t.Fatalf("timeouts = %v", out)
+	out := tr.NextTimeout()
+	if out == nil || out.ID != "old" {
+		t.Fatalf("timeout = %v", out)
+	}
+	if tr.NextTimeout() != nil {
+		t.Fatal("only the expired window may drain")
 	}
 	now = now.Add(60 * time.Second)
-	out = tr.Timeouts()
-	if len(out) != 1 || out[0].ID != "new" {
+	out = tr.NextTimeout()
+	if out == nil || out.ID != "new" {
 		t.Fatalf("second timeout sweep = %v", out)
 	}
 	if tr.Declared("new").Open {
@@ -162,5 +165,44 @@ func TestTrackerRollback(t *testing.T) {
 	}
 	if sha2 != sha256Hex([]byte(`["d00"]`)) {
 		t.Fatalf("rolled-back context sha = %s", sha2)
+	}
+}
+
+// TestTrackerContextInterleaveRollback: when request A's context.observed
+// append fails after request B folded its own blocks, A's rollback removes
+// exactly A's digests — B's blocks stay observed and in order, and A's
+// blocks report fresh on the retry.
+func TestTrackerContextInterleaveRollback(t *testing.T) {
+	tr := NewTracker(0)
+	mk := func(i int) RequestBlock {
+		return RequestBlock{Index: i, SHA256: fmt.Sprintf("d%02x", i), digest: fmt.Sprintf("d%02x", i)}
+	}
+	freshA, _, _ := tr.Observe([]RequestBlock{mk(0), mk(1)})
+	if len(freshA) != 2 {
+		t.Fatalf("A fresh = %d", len(freshA))
+	}
+	freshB, countB, shaB := tr.Observe([]RequestBlock{mk(2)})
+	if len(freshB) != 1 || countB != 3 {
+		t.Fatalf("B fresh = %d count = %d", len(freshB), countB)
+	}
+	if shaB != sha256Hex([]byte(`["d00","d01","d02"]`)) {
+		t.Fatalf("B sha = %s", shaB)
+	}
+
+	// A's append fails mid-interleave: exactly [d00 d01] leave, B's d02
+	// stays — never a positional truncation over another request's blocks.
+	tr.Unobserve(freshA)
+	freshC, countC, shaC := tr.Observe([]RequestBlock{mk(3)})
+	if len(freshC) != 1 || countC != 2 {
+		t.Fatalf("post-rollback state: fresh=%d count=%d — B's block was lost", len(freshC), countC)
+	}
+	if shaC != sha256Hex([]byte(`["d02","d03"]`)) {
+		t.Fatalf("post-rollback sha = %s, want d02,d03", shaC)
+	}
+
+	// A's retry observes its own blocks again as new.
+	freshA2, countA2, _ := tr.Observe([]RequestBlock{mk(0), mk(1)})
+	if len(freshA2) != 2 || countA2 != 4 {
+		t.Fatalf("A retry: fresh=%d count=%d", len(freshA2), countA2)
 	}
 }

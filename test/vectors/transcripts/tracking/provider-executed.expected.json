@@ -1,0 +1,165 @@
+{
+  "declared": [
+    {
+      "step": 0,
+      "intent_id": "srv_prv_S1",
+      "tool": "WebSearch",
+      "executor": "provider",
+      "input_sha256": "3251c5cddf3b961065848f8c66661907a36a881cd2758699a2881513a2b7591f",
+      "input_len": 14
+    },
+    {
+      "step": 0,
+      "intent_id": "toolu_prv_A",
+      "tool": "Bash",
+      "executor": "sandbox",
+      "input_sha256": "e50e5a32d073f447861d50221b154fd327abf9f59018a003734300292500c2c2",
+      "input_len": 15
+    },
+    {
+      "step": 0,
+      "intent_id": "srv_prv_S2",
+      "tool": "WebSearch",
+      "executor": "provider",
+      "input_sha256": "d17d2d696f62edaa020e2e4618c12196c9711b7e60476a679df7d018bfc47261",
+      "input_len": 14
+    },
+    {
+      "step": 0,
+      "intent_id": "toolu_prv_B",
+      "tool": "Read",
+      "executor": "sandbox",
+      "input_sha256": "012f63c7c9f93f394fc46c3bbcf1f811d924ca2bb79accfa441205c314996b86",
+      "input_len": 18
+    },
+    {
+      "step": 0,
+      "intent_id": "toolu_prv_C",
+      "tool": "Bash",
+      "executor": "sandbox",
+      "input_sha256": "5e1d45b64a6a0db1a556894e6be0f1a47c432856031453d04acd76ae3f16f058",
+      "input_len": 15
+    }
+  ],
+  "results": [
+    {
+      "step": 1,
+      "intent_id": "toolu_prv_A",
+      "closed_by": "timeout"
+    },
+    {
+      "step": 1,
+      "intent_id": "toolu_prv_B",
+      "closed_by": "timeout"
+    },
+    {
+      "step": 1,
+      "intent_id": "toolu_prv_C",
+      "closed_by": "timeout"
+    }
+  ],
+  "context": [
+    {
+      "step": 0,
+      "new_blocks": [
+        {
+          "index": 0,
+          "role": "user",
+          "kind": "text",
+          "sha256": "a830ee8f76f73b930c49ec17339aa2516f8b5c292e26cbaa7f3dc7df975bdaaa",
+          "len": 32,
+          "intent_id": ""
+        }
+      ],
+      "block_count": 1,
+      "context_sha256": "d982947d42d0e0b0340f413730a3c5a88bced81cf73c614c9e8faeeeb359258e"
+    },
+    {
+      "step": 1,
+      "new_blocks": [
+        {
+          "index": 1,
+          "role": "assistant",
+          "kind": "server_tool_use",
+          "sha256": "cd601dc157cd94d0bd86594fc3d9030b50e252fb483b84c91f2795ef8d92bb79",
+          "len": 86,
+          "intent_id": "srv_prv_S1"
+        },
+        {
+          "index": 2,
+          "role": "assistant",
+          "kind": "tool_use",
+          "sha256": "c8f34b4f48f1b70f419fa527d0411061e939304ae9b853ba2418a2ad69ec32bf",
+          "len": 76,
+          "intent_id": "toolu_prv_A"
+        },
+        {
+          "index": 3,
+          "role": "assistant",
+          "kind": "server_tool_use",
+          "sha256": "b5cc038e6223e66184863d6836aaff7a5bf9900e840de46af934878bbf11d23f",
+          "len": 86,
+          "intent_id": "srv_prv_S2"
+        },
+        {
+          "index": 4,
+          "role": "assistant",
+          "kind": "tool_use",
+          "sha256": "7712521b4bde591e391081fb2a40e23dfb7c9f362ba2a4d304b5c3fef195c3e7",
+          "len": 79,
+          "intent_id": "toolu_prv_B"
+        },
+        {
+          "index": 5,
+          "role": "assistant",
+          "kind": "tool_use",
+          "sha256": "bb5342685f9a322a61324aeac9cc79312d192ec2c2c97e616ae9ce98ef877489",
+          "len": 76,
+          "intent_id": "toolu_prv_C"
+        },
+        {
+          "index": 6,
+          "role": "user",
+          "kind": "tool_result",
+          "sha256": "c2eec229784421a9043566823e3759b49621148a661941057a9c11b8e8378719",
+          "len": 86,
+          "intent_id": "srv_prv_S1"
+        },
+        {
+          "index": 7,
+          "role": "user",
+          "kind": "tool_result",
+          "sha256": "2d67943755d07e13e0b8d535da18eaefb2d94088c739026ac9b755867b8a078d",
+          "len": 67,
+          "intent_id": "toolu_prv_A"
+        }
+      ],
+      "block_count": 8,
+      "context_sha256": "86838b4af690f1647cda8d2d1075bda9c4fb345960bbdb0e180d678c7dcc9011"
+    },
+    {
+      "step": 2,
+      "new_blocks": [
+        {
+          "index": 6,
+          "role": "user",
+          "kind": "tool_result",
+          "sha256": "33ab1a5b97e89b31c912c202e96545334569b1028fc2dba4ae0dd5b7c14857c8",
+          "len": 85,
+          "intent_id": "srv_prv_S2"
+        },
+        {
+          "index": 7,
+          "role": "user",
+          "kind": "text",
+          "sha256": "e865f31ec9f6f6b547af5da3d468c16806619a4687c1472af5eed0970002a56e",
+          "len": 24,
+          "intent_id": ""
+        }
+      ],
+      "block_count": 10,
+      "context_sha256": "1bee4ccf59b6f939ba597a882043f6a82ac4f8e025d454c0bdaa7fa5259597d3"
+    }
+  ],
+  "unparsed": []
+}

@@ -100,6 +100,12 @@ type inspectState struct {
 	classes      map[string]string // exact tool names
 	patterns     []classPattern    // glob tool patterns, literal-first
 	commandField string
+	// obsMu serializes the context fold, its context.observed append and
+	// the commit-or-rollback: concurrent requests of one session observe
+	// and record as an atomic step, so a failed request removes exactly
+	// its own blocks and every recorded context_sha256 chains the blocks
+	// recorded before it (spec/04 §5.3 running digest).
+	obsMu sync.Mutex
 }
 
 // inspectStateFor returns the session's inspection state when the grant
@@ -213,8 +219,14 @@ func (s *Server) sealIntents() {
 // intent.unparsed and the request still crosses (spec/04 §5.4).
 func (s *Server) inspectRequest(sess *Session, st *inspectState, ep inspect.Endpoint, effectID string, body []byte) error {
 	// Timeout sweep first: windows that expired since the last inspected
-	// traffic close before this request's results are evaluated.
-	for _, d := range st.tracker.Timeouts() {
+	// traffic close before this request's results are evaluated — one at
+	// a time, so a failed append leaves every later window still open
+	// for the next sweep (exactly one intent.result each, in the end).
+	for {
+		d := st.tracker.NextTimeout()
+		if d == nil {
+			break
+		}
 		body := IntentResultBody{IntentID: d.ID, ViaEffect: effectID, ClosedBy: "timeout"}
 		if err := s.appendRecord(sess, "intent.result", body); err != nil {
 			// The record never landed: the window is still open.
@@ -258,6 +270,11 @@ func (s *Server) inspectRequest(sess *Session, st *inspectState, ep inspect.Endp
 		}
 	}
 
+	// The fold and its append are one atomic step: another request of
+	// this session observes only before this fold or after its commit —
+	// never between an Observe and its record or rollback.
+	st.obsMu.Lock()
+	defer st.obsMu.Unlock()
 	fresh, count, sha := st.tracker.Observe(info.Blocks)
 	nb := make([]ContextBlockBody, len(fresh))
 	for i, b := range fresh {

@@ -90,23 +90,23 @@ func (t *Tracker) CloseForResult(intentID string) (*Declared, bool) {
 	return d, true
 }
 
-// Timeouts closes every open window older than MaxOpenSeconds, in
-// declaration order, and returns the intents to record as
-// closed_by:timeout.
-func (t *Tracker) Timeouts() []*Declared {
+// NextTimeout closes the oldest expired open window and returns it for
+// its intent.result append — one window per call, in declaration order.
+// A failed append reopens that window and leaves the rest unmarked, so
+// the next request's sweep records each expired window exactly once.
+func (t *Tracker) NextTimeout() *Declared {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	var out []*Declared
 	for _, d := range t.order {
 		if !d.Open {
 			continue
 		}
 		if t.Now().Sub(d.DeclaredAt).Seconds() >= float64(t.MaxOpenSeconds) {
 			d.Open = false
-			out = append(out, d)
+			return d
 		}
 	}
-	return out
+	return nil
 }
 
 // Seal closes every still-open window (session.seal semantics) and
@@ -180,17 +180,24 @@ func (t *Tracker) Observe(blocks []RequestBlock) (fresh []RequestBlock, count in
 
 // Unobserve rolls back the fresh blocks of an Observe whose record's
 // append failed — they were never observed upstream, so the next
-// request reports them as new again. fresh must be the Observe result.
+// request reports them as new again. fresh must be the Observe result;
+// exactly its own digests are removed, wherever they sit in the order —
+// never another request's blocks.
 func (t *Tracker) Unobserve(fresh []RequestBlock) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if len(fresh) > len(t.ctxOrder) {
-		return // inconsistent: leave state rather than corrupt it
-	}
+	drop := make(map[string]bool, len(fresh))
 	for _, b := range fresh {
+		drop[b.digest] = true
 		delete(t.ctxSeen, b.digest)
 	}
-	t.ctxOrder = t.ctxOrder[:len(t.ctxOrder)-len(fresh)]
+	keep := t.ctxOrder[:0]
+	for _, d := range t.ctxOrder {
+		if !drop[d] {
+			keep = append(keep, d)
+		}
+	}
+	t.ctxOrder = keep
 }
 
 // contextSHA is the running context digest: SHA-256 of the canonical

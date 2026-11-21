@@ -719,8 +719,74 @@ func TestM8E2E_TrackingCorpus(t *testing.T) {
 					t.Fatalf("marker %q leaked into ledger", m)
 				}
 			}
+
+			// C8.3.1 (04 §5.2): provider-executed intents are recorded
+			// but never open a window — tool_result, timeout and seal
+			// never produce an intent.result for them. The corpus above
+			// already replayed tool_result attempts and a timeout sweep;
+			// seal is the last close point and must skip them too.
+			providerIDs := map[string]bool{}
+			sandboxIDs := map[string]bool{}
+			for _, d := range exp.Declared {
+				switch d.Executor {
+				case "provider":
+					providerIDs[d.IntentID] = true
+				default:
+					sandboxIDs[d.IntentID] = true
+				}
+			}
+			if len(providerIDs) > 0 {
+				for _, rb := range results {
+					if providerIDs[rb.IntentID] {
+						t.Fatalf("provider intent %s produced intent.result during steps", rb.IntentID)
+					}
+				}
+				st := m8InspectState(t, sessID)
+				for id := range providerIDs {
+					if d := st.tracker.Declared(id); d == nil {
+						t.Fatalf("provider intent %s not registered", id)
+					} else if d.Open {
+						t.Fatalf("provider intent %s holds an open window", id)
+					}
+				}
+				e.broker.sealIntents()
+				after := recordsOfType[IntentResultBody](t, m8Records(t, e, sessID), "intent.result")
+				for _, rb := range after[len(results):] {
+					if rb.ClosedBy != "seal" {
+						t.Fatalf("post-step result %+v is not a seal", rb)
+					}
+					if providerIDs[rb.IntentID] {
+						t.Fatalf("seal produced an intent.result for provider intent %s", rb.IntentID)
+					}
+					if !sandboxIDs[rb.IntentID] {
+						t.Fatalf("seal wrote a result for unknown intent %s", rb.IntentID)
+					}
+				}
+				// Exactly one intent.result per closed sandbox window,
+				// ever — seal included.
+				total := map[string]int{}
+				for _, rb := range after {
+					total[rb.IntentID]++
+				}
+				for id, n := range total {
+					if n != 1 {
+						t.Fatalf("intent %s has %d intent.result records, want exactly one", id, n)
+					}
+				}
+			}
 		})
 	}
+}
+
+// m8InspectState returns the session's live inspect state (the test
+// package shares the broker's session map).
+func m8InspectState(t *testing.T, sessID string) *inspectState {
+	t.Helper()
+	v, ok := inspectStates.Load(sessID)
+	if !ok {
+		t.Fatalf("no inspect state for session %s", sessID)
+	}
+	return v.(*inspectState)
 }
 
 // TestM8E2E_LimitBody is C8.3.4: an inspected inference request over
@@ -1944,5 +2010,567 @@ func TestM8E2E_PrivacyDigestOriginal(t *testing.T) {
 				t.Fatalf("credential leaked in preview: %q", d.InputPreview)
 			}
 		})
+	}
+}
+
+// ------------------------------------------------------------------
+// C8.1.2 / C8.2.3 at full width: the completing unit is held from its
+// FIRST byte. The hold offsets below come from an independent scan of
+// the wire itself — never from the parser under test — so a hold that
+// starts at the end of the completing event instead of its start is
+// caught, not passed.
+// ------------------------------------------------------------------
+
+// m8WireEvent is one SSE event from the independent wire scan.
+type m8WireEvent struct {
+	start, end int64
+	name       string
+	data       []byte
+}
+
+// m8ScanEvents splits an SSE wire at blank lines into events with their
+// absolute byte offsets, independently of the production splitter.
+func m8ScanEvents(wire []byte) []m8WireEvent {
+	var evs []m8WireEvent
+	off := 0
+	for off < len(wire) {
+		j := bytes.Index(wire[off:], []byte("\n\n"))
+		if j < 0 {
+			break // trailing partial event (cut vectors are not used here)
+		}
+		end := off + j + 2
+		var name string
+		var data []byte
+		for _, ln := range bytes.Split(wire[off:end-2], []byte("\n")) {
+			ln = bytes.TrimSuffix(ln, []byte("\r"))
+			if bytes.HasPrefix(ln, []byte("event:")) {
+				name = string(bytes.TrimSpace(ln[len("event:"):]))
+			} else if bytes.HasPrefix(ln, []byte("data:")) {
+				v := ln[len("data:"):]
+				if len(v) > 0 && v[0] == ' ' {
+					v = v[1:]
+				}
+				if data != nil {
+					data = append(data, '\n')
+				}
+				data = append(data, v...)
+			}
+		}
+		evs = append(evs, m8WireEvent{int64(off), int64(end), name, data})
+		off = end
+	}
+	return evs
+}
+
+// m8RespExecTypes mirrors the Responses executor table (spec/04 §5.1):
+// every output-item type a response.output_item.done may complete.
+var m8RespExecTypes = map[string]bool{
+	"function_call": true, "custom_tool_call": true,
+	"web_search_call": true, "file_search_call": true, "computer_call": true,
+	"code_interpreter_call": true, "mcp_call": true, "local_shell_call": true,
+	"shell_call": true, "image_generation_call": true,
+}
+
+// m8CompletingHolds independently scans an SSE wire for the events that
+// complete a call and returns — per intent in wire order — the absolute
+// offset of the completing event's FIRST byte.
+func m8CompletingHolds(ep string, wire []byte) []int64 {
+	var holds []int64
+	switch ep {
+	case "anthropic":
+		blocks := map[int]string{}
+		for _, ev := range m8ScanEvents(wire) {
+			switch ev.name {
+			case "content_block_start":
+				var d struct {
+					Index int `json:"index"`
+					Block struct {
+						Type string `json:"type"`
+					} `json:"content_block"`
+				}
+				if json.Unmarshal(ev.data, &d) == nil {
+					blocks[d.Index] = d.Block.Type
+				}
+			case "content_block_stop":
+				var d struct {
+					Index int `json:"index"`
+				}
+				if json.Unmarshal(ev.data, &d) != nil {
+					continue
+				}
+				if k := blocks[d.Index]; k == "tool_use" || k == "server_tool_use" {
+					holds = append(holds, ev.start)
+				}
+				delete(blocks, d.Index)
+			}
+		}
+	case "responses":
+		for _, ev := range m8ScanEvents(wire) {
+			if ev.name != "response.output_item.done" {
+				continue
+			}
+			var d struct {
+				Item struct {
+					Type string `json:"type"`
+				} `json:"item"`
+			}
+			if json.Unmarshal(ev.data, &d) != nil {
+				continue
+			}
+			if m8RespExecTypes[d.Item.Type] {
+				holds = append(holds, ev.start)
+			}
+		}
+	case "chat":
+		// A chunk carrying a non-null finish_reason completes every
+		// tool_call index accumulated for that choice so far.
+		open := map[int]map[int]bool{}
+		for _, ev := range m8ScanEvents(wire) {
+			var d struct {
+				Choices []struct {
+					Index int `json:"index"`
+					Delta struct {
+						ToolCalls []struct {
+							Index int `json:"index"`
+						} `json:"tool_calls"`
+					} `json:"delta"`
+					FinishReason *string `json:"finish_reason"`
+				} `json:"choices"`
+			}
+			if json.Unmarshal(ev.data, &d) != nil {
+				continue // [DONE] and noise carry no choices
+			}
+			for _, ch := range d.Choices {
+				for _, tc := range ch.Delta.ToolCalls {
+					if open[ch.Index] == nil {
+						open[ch.Index] = map[int]bool{}
+					}
+					open[ch.Index][tc.Index] = true
+				}
+				if ch.FinishReason != nil {
+					for range open[ch.Index] {
+						holds = append(holds, ev.start)
+					}
+					delete(open, ch.Index)
+				}
+			}
+		}
+	}
+	return holds
+}
+
+// m8ValueEnd returns the offset just past the JSON value starting at
+// wire[i] — a tiny structural scanner independent of the production
+// jsonScanner.
+func m8ValueEnd(wire []byte, i int) int {
+	for i < len(wire) && (wire[i] == ' ' || wire[i] == '\t' || wire[i] == '\n' || wire[i] == '\r') {
+		i++
+	}
+	if i >= len(wire) {
+		return -1
+	}
+	switch wire[i] {
+	case '"':
+		for j := i + 1; j < len(wire); j++ {
+			if wire[j] == '\\' {
+				j++
+				continue
+			}
+			if wire[j] == '"' {
+				return j + 1
+			}
+		}
+	case '{', '[':
+		depth, instr, esc := 0, false, false
+		for j := i; j < len(wire); j++ {
+			c := wire[j]
+			if esc {
+				esc = false
+				continue
+			}
+			if instr {
+				switch c {
+				case '\\':
+					esc = true
+				case '"':
+					instr = false
+				}
+				continue
+			}
+			switch c {
+			case '"':
+				instr = true
+			case '{', '[':
+				depth++
+			case '}', ']':
+				depth--
+				if depth == 0 {
+					return j + 1
+				}
+			}
+		}
+	default:
+		j := i
+		for j < len(wire) && !bytes.ContainsRune([]byte(",}] \t\n\r"), rune(wire[j])) {
+			j++
+		}
+		return j
+	}
+	return -1
+}
+
+// m8ArrayStart finds `"key": [` and returns the offset just past the '['.
+func m8ArrayStart(wire []byte, key string) int {
+	needle := []byte(`"` + key + `"`)
+	for off := 0; ; {
+		i := bytes.Index(wire[off:], needle)
+		if i < 0 {
+			return -1
+		}
+		j := off + i + len(needle)
+		for j < len(wire) && (wire[j] == ' ' || wire[j] == '\t' || wire[j] == '\n' || wire[j] == '\r' || wire[j] == ':') {
+			j++
+		}
+		if j < len(wire) && wire[j] == '[' {
+			return j + 1
+		}
+		off = j
+	}
+}
+
+// m8JSONHolds independently scans a non-streaming JSON body for the
+// intent-bearing array elements and returns each one's completing byte:
+// the offset of its closing '}'.
+func m8JSONHolds(ep string, wire []byte) []int64 {
+	key := map[string]string{
+		"anthropic": "content", "responses": "output", "chat": "tool_calls",
+	}[ep]
+	i := m8ArrayStart(wire, key)
+	if i < 0 {
+		return nil
+	}
+	var holds []int64
+	for i < len(wire) {
+		for i < len(wire) && (wire[i] == ' ' || wire[i] == '\t' || wire[i] == '\n' || wire[i] == '\r' || wire[i] == ',') {
+			i++
+		}
+		if i >= len(wire) || wire[i] == ']' {
+			break
+		}
+		end := m8ValueEnd(wire, i)
+		if end < 0 {
+			break
+		}
+		var el struct {
+			Type string `json:"type"`
+		}
+		if json.Unmarshal(wire[i:end], &el) == nil {
+			bearing := map[string]bool{
+				"anthropic": el.Type == "tool_use" || el.Type == "server_tool_use",
+				"responses": m8RespExecTypes[el.Type],
+				"chat":      true, // every tool_calls element is a call
+			}[ep]
+			if bearing {
+				holds = append(holds, int64(end-1)) // the closing '}'
+			}
+		}
+		i = end
+	}
+	return holds
+}
+
+// TestM8E2E_WriteAheadEverySplit is C8.1.2/C8.2.3 at every split point:
+// for every possible two-part feed of the wire, the completing unit's
+// first byte (an SSE event's first byte, a JSON element's closing '}')
+// has not reached the client at the moment intent.declared is written —
+// asserted byte-exactly against hold offsets scanned independently of
+// the parser under test.
+func TestM8E2E_WriteAheadEverySplit(t *testing.T) {
+	for _, sh := range m8HoldShapes {
+		wire, exp := m8Wire(t, sh.dir, sh.name)
+		var holds []int64
+		if sh.ctype == "application/json" {
+			holds = m8JSONHolds(sh.ep, wire)
+		} else {
+			holds = m8CompletingHolds(sh.ep, wire)
+		}
+		if len(holds) != len(exp.Intents) {
+			t.Fatalf("%s: independent scan found %d completing units, want %d intents",
+				sh.name, len(holds), len(exp.Intents))
+		}
+		t.Run(sh.name, func(t *testing.T) {
+			for s := 1; s < len(wire); s++ {
+				var pipe *inspectPipe
+				var relAt []int64
+				pipe = newInspectPipe(nil, m8Parser(t, sh.ep, sh.ctype),
+					func(*inspect.Intent) error {
+						relAt = append(relAt, pipe.relAbs)
+						return nil
+					},
+					func(string) error { return nil })
+				pipe.feed(wire[:s])
+				if pipe.err != nil {
+					t.Fatalf("split %d: feed1: %v", s, pipe.err)
+				}
+				// No byte at or past the next undeclared intent's hold
+				// may be out: the released prefix stays below it.
+				next := int64(len(wire))
+				if len(relAt) < len(holds) {
+					next = holds[len(relAt)]
+				}
+				if pipe.relAbs > next {
+					t.Fatalf("split %d: released prefix %d passed undeclared hold %d — completing bytes escaped early",
+						s, pipe.relAbs, next)
+				}
+				pipe.feed(wire[s:])
+				if pipe.err != nil {
+					t.Fatalf("split %d: feed2: %v", s, pipe.err)
+				}
+				pipe.finish("")
+				if pipe.err != nil {
+					t.Fatalf("split %d: finish: %v", s, pipe.err)
+				}
+				if len(relAt) != len(holds) {
+					t.Fatalf("split %d: %d declares, want %d", s, len(relAt), len(holds))
+				}
+				for i := range relAt {
+					if relAt[i] != holds[i] {
+						t.Fatalf("split %d intent %d: %d bytes released at declare, hold is byte %d — the completing unit escaped before the record",
+							s, i, relAt[i], holds[i])
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestM8E2E_TimeoutSweepFailClosed is C8.3.2's failure half: when the
+// intent.result append for a swept window fails, the request fails
+// closed and every expired window — not only the one whose append
+// failed — is still open afterwards, so the next request's sweep
+// records each exactly once.
+func TestM8E2E_TimeoutSweepFailClosed(t *testing.T) {
+	sessID := "s8ts"
+	dir := t.TempDir()
+	routes := map[string]string{}
+	e, fs := m8FailEnv(t, dir, sessID, "tok-8ts",
+		m8Policy(t, dir, "p8ts", nil, nil, ""), routes, "intent.result")
+	wire, exp := m8Wire(t, "anthropic", "multi-call-sse")
+	var hits atomic.Int64
+	addr, closeUp := startTLSUpstream(t, e.ca, []string{"llm.example"}, nil,
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hits.Add(1)
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(200)
+			if hits.Load() == 1 {
+				_, _ = w.Write(wire)
+				return
+			}
+			_, _ = w.Write([]byte("event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"))
+		}))
+	defer closeUp()
+	routes["llm.example"] = addr
+	cli := e.proxyClient(t, "tok-8ts", e.combinedPool(t, sessID), "http/1.1")
+
+	// Step 1: three windows open (result appends are the refused type;
+	// declarations land normally).
+	res, err := cli.Post("https://llm.example/v1/messages",
+		"application/json", bytes.NewReader(m8Request("anthropic")))
+	if err != nil {
+		t.Fatalf("declare request: %v", err)
+	}
+	_, _ = io.Copy(io.Discard, res.Body)
+	_ = res.Body.Close()
+	ids := make([]string, 0, len(exp.Intents))
+	for _, it := range exp.Intents {
+		ids = append(ids, it.ID)
+	}
+
+	// Every window is instantly expired.
+	m8InspectState(t, sessID).tracker.MaxOpenSeconds = 0
+
+	// Step 2: the sweep's first append fails — the request is denied,
+	// and ALL expired windows must still be open for the next sweep.
+	res2, err := cli.Post("https://llm.example/v1/messages",
+		"application/json", bytes.NewReader(m8Request("anthropic")))
+	if err != nil {
+		t.Fatalf("sweep request: %v", err)
+	}
+	_ = res2.Body.Close()
+	if res2.StatusCode != http.StatusBadGateway {
+		t.Fatalf("sweep request not denied on failed append: %d", res2.StatusCode)
+	}
+	if hits.Load() != 1 {
+		t.Fatalf("sweep request forwarded despite failed append (%d hits)", hits.Load())
+	}
+	st := m8InspectState(t, sessID)
+	for _, id := range ids {
+		if d := st.tracker.Declared(id); d == nil || !d.Open {
+			t.Fatalf("window %s not open after failed sweep append", id)
+		}
+	}
+	for _, r := range m8Records(t, e, sessID) {
+		if r.Type == "intent.result" {
+			t.Fatal("intent.result landed despite sink failure")
+		}
+	}
+
+	// Step 3: sink healthy — one sweep closes every window, each
+	// exactly once.
+	fs.on.Store(false)
+	res3, err := cli.Post("https://llm.example/v1/messages",
+		"application/json", bytes.NewReader(m8Request("anthropic")))
+	if err != nil {
+		t.Fatalf("retry: %v", err)
+	}
+	_, _ = io.Copy(io.Discard, res3.Body)
+	_ = res3.Body.Close()
+	closed := map[string]int{}
+	for _, rb := range recordsOfType[IntentResultBody](t, m8Records(t, e, sessID), "intent.result") {
+		if rb.ClosedBy != "timeout" {
+			t.Fatalf("swept result %+v not closed_by timeout", rb)
+		}
+		closed[rb.IntentID]++
+	}
+	for _, id := range ids {
+		if closed[id] != 1 {
+			t.Fatalf("intent %s closed %d times, want exactly one", id, closed[id])
+		}
+	}
+}
+
+// m8CtxGateSink fails the first context.observed append after a delay —
+// holding the observe-append step open long enough for a concurrent
+// request to attempt its own fold.
+type m8CtxGateSink struct {
+	inner RecordSink
+	delay time.Duration
+	done  atomic.Bool
+}
+
+func (s *m8CtxGateSink) Append(session string, rec *Record) error {
+	if rec.Type == "context.observed" && !s.done.Swap(true) {
+		time.Sleep(s.delay)
+		return errors.New("record sink injected failure")
+	}
+	return s.inner.Append(session, rec)
+}
+
+func (s *m8CtxGateSink) Close() error { return s.inner.Close() }
+
+// TestM8E2E_ContextConcurrentRollback is the C8.3.3 concurrency half:
+// two requests of one session overlap, the first context.observed
+// append fails, and the failed request's rollback must remove exactly
+// its own blocks — the ledger's context_sha256 chain equals a
+// recomputation from the recorded new_blocks in record order.
+func TestM8E2E_ContextConcurrentRollback(t *testing.T) {
+	sessID := "s8cc"
+	dir := t.TempDir()
+	routes := map[string]string{}
+	inner, err := NewFileRecordSink(filepath.Join(dir, "records"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	gs := &m8CtxGateSink{inner: inner, delay: 150 * time.Millisecond}
+	e := newTestEnvFull(t, dir, []SessionEntry{
+		sessionEntry(sessID, "tok-8cc", "127.0.0.1",
+			m8Policy(t, dir, "p8cc", nil, nil, "")),
+	}, routes, nil, gs)
+	var hits atomic.Int64
+	addr, closeUp := startTLSUpstream(t, e.ca, []string{"llm.example"}, nil,
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hits.Add(1)
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(200)
+			_, _ = w.Write([]byte("event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"))
+		}))
+	defer closeUp()
+	routes["llm.example"] = addr
+	cli := e.proxyClient(t, "tok-8cc", e.combinedPool(t, sessID), "http/1.1")
+
+	reqBody := func(text string) []byte {
+		return []byte(`{"model":"m","messages":[{"role":"user","content":"` + text + `"}]}`)
+	}
+	post := func(text string) *http.Response {
+		res, err := cli.Post("https://llm.example/v1/messages",
+			"application/json", bytes.NewReader(reqBody(text)))
+		if err != nil {
+			t.Fatalf("post %q: %v", text, err)
+		}
+		return res
+	}
+
+	// A's context.observed append sleeps 150ms under the fold lock and
+	// fails; B arrives mid-way and must still observe only its own
+	// blocks — never folded into A's, never lost to A's rollback.
+	resCh := make(chan *http.Response, 2)
+	go func() { resCh <- post("ctx-A-one") }()
+	go func() {
+		time.Sleep(40 * time.Millisecond)
+		resCh <- post("ctx-B-one")
+	}()
+	resA, resB := <-resCh, <-resCh
+	_ = resA.Body.Close()
+	_ = resB.Body.Close()
+	codeA, codeB := resA.StatusCode, resB.StatusCode
+	failed := ""
+	switch {
+	case codeA == http.StatusBadGateway && codeB == 200:
+		failed = "ctx-A-one" // A failed, B committed after its rollback
+	case codeA == 200 && codeB == http.StatusBadGateway:
+		failed = "ctx-B-one" // scheduler ran B's section first
+	default:
+		t.Fatalf("unexpected status pair: A=%d B=%d", codeA, codeB)
+	}
+	if hits.Load() != 1 {
+		t.Fatalf("denied request still reached upstream: %d hits", hits.Load())
+	}
+	// The failed request's retry re-reports its blocks.
+	res3 := post(failed)
+	_, _ = io.Copy(io.Discard, res3.Body)
+	_ = res3.Body.Close()
+	if res3.StatusCode != 200 {
+		t.Fatalf("retry status %d", res3.StatusCode)
+	}
+
+	// The recomputation invariant: fold every context.observed record's
+	// new_blocks in ledger order and the running unique-digest digest
+	// must equal each record's context_sha256 — a rolled-back request
+	// can never have bent another record's chain.
+	var seen []string
+	inSeen := map[string]bool{}
+	ctxs := recordsOfType[ContextObservedBody](t, m8Records(t, e, sessID), "context.observed")
+	if len(ctxs) != 2 {
+		t.Fatalf("%d context.observed, want 2 (failed request + retry... or B + retry)", len(ctxs))
+	}
+	for i, cb := range ctxs {
+		for _, nb := range cb.NewBlocks {
+			if !inSeen[nb.SHA256] {
+				inSeen[nb.SHA256] = true
+				seen = append(seen, nb.SHA256)
+			}
+		}
+		var sb strings.Builder
+		sb.WriteByte('[')
+		for j, d := range seen {
+			if j > 0 {
+				sb.WriteByte(',')
+			}
+			sb.WriteString(`"` + d + `"`)
+		}
+		sb.WriteByte(']')
+		sum := sha256.Sum256([]byte(sb.String()))
+		if got := hex.EncodeToString(sum[:]); got != cb.ContextSHA256 {
+			t.Fatalf("record %d context_sha256 %s != recomputation %s over %v",
+				i, cb.ContextSHA256, got, seen)
+		}
+		if cb.BlockCount != len(seen) {
+			t.Fatalf("record %d block_count %d, want %d", i, cb.BlockCount, len(seen))
+		}
+	}
+	// Exactly the union of both requests' blocks is observed — the
+	// failed request lost none of B's and duplicated none of its own.
+	if len(seen) != 2 {
+		t.Fatalf("%d unique blocks seen, want 2 (A's and B's)", len(seen))
 	}
 }

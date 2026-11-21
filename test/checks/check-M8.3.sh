@@ -13,6 +13,7 @@ export PATH="$HOME/.local/bin:$HOME/.local/usr/bin:$PATH"
 cd "$(dirname "$0")/../.."
 ROOT=$PWD
 GO=$ROOT/.tools/bin/go
+TIMEOUT=-timeout=30m
 fail=0
 
 say() { printf 'CHECK %s %s%s\n' "$1" "$2" "${3:+ — $3}"; }
@@ -45,13 +46,29 @@ run C8.3.1 -tags fixtures ./internal/proxy/ -count=1 \
 # context.observed — denies rather than forwards (the ledger fail-closed
 # run).
 run C8.3.2 -tags fixtures ./internal/proxy/ -count=1 \
-    -run '^(TestM8E2E_TrackingCorpus|TestM8E2E_LedgerFailClosed)$' -v
+    -run '^(TestM8E2E_TrackingCorpus|TestM8E2E_LedgerFailClosed|TestM8E2E_TimeoutSweepFailClosed)$' -v
 
 # C8.3.3: new_blocks once per digest per session; running count and
 # context_sha256 match a recomputation (inside the tracking corpus plus
-# the tracker unit tests), and malformed content-part types fail the
-# request parse rather than degrading silently.
-run C8.3.3 ./internal/inspect/ -count=1 -run '^(TestTracker|TestParsePartKind)$' -v
+# the tracker unit tests); two interleaved requests with a failing
+# append keep the sha chain recomputable; malformed content-part types
+# fail the request parse rather than degrading silently. The
+# concurrency half also runs under -race where a C compiler exists.
+out=$(mktemp)
+if "$GO" test "$TIMEOUT" ./internal/inspect/ -count=1 \
+    -run '^(TestTracker|TestParsePartKind)$' -v >"$out" 2>&1 \
+    && "$GO" test "$TIMEOUT" -tags fixtures ./internal/proxy/ -count=1 \
+    -run '^TestM8E2E_ContextConcurrentRollback$' -v >>"$out" 2>&1 \
+    && { ! command -v cc >/dev/null 2>&1 \
+        && ! command -v gcc >/dev/null 2>&1 \
+        && ! command -v clang >/dev/null 2>&1 \
+        || "$GO" test "$TIMEOUT" -tags fixtures -race \
+        ./internal/proxy/ -count=1 \
+        -run '^TestM8E2E_ContextConcurrentRollback$' >>"$out" 2>&1; }; then
+    tail -15 "$out"; rm -f "$out"; pass C8.3.3
+else
+    tail -15 "$out"; rm -f "$out"; bad C8.3.3 "go test failed"
+fi
 
 # C8.3.4: over-limit inspected requests are denied LIMIT_BODY; grant
 # bufferLimit raises it; the inference default is 32 MiB.

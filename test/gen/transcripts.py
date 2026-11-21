@@ -1024,6 +1024,59 @@ def gen_tracking():
         track_step("t4", req3, anth_resp_text_sse("again")),
     ], exp, markers=[MARK + "-s0", MARK + "-s1", MARK + "-s2"])
 
+    # --- provider-executed calls: recorded, never windowed (04 §5.2).
+    #     tool_result/timeout/seal never write an intent.result for
+    #     them; the still-open sandbox call C is what seal closes. -----
+    exp = expected_records()
+    srv_inp1, srv_inp2 = {"query": "q1"}, {"query": "q2"}
+    calls = [
+        ("srv_prv_S1", "WebSearch", srv_inp1, "provider", "server_tool_use", 0),
+        ("toolu_prv_A", "Bash", {"command": "a"}, "sandbox", "tool_use", 1),
+        ("srv_prv_S2", "WebSearch", srv_inp2, "provider", "server_tool_use", 2),
+        ("toolu_prv_B", "Read", {"file_path": "/b"}, "sandbox", "tool_use", 3),
+        ("toolu_prv_C", "Bash", {"command": "c"}, "sandbox", "tool_use", 4),
+    ]
+    req0 = anth_req(mdl, [anth_msg("user", "hosted tools " + MARK + "-h0")])
+    resp = a_msg_start()
+    for iid, tool, inp, ex, kind, idx in calls:
+        resp += a_tool_stream(iid, tool, inp, idx=idx, kind=kind)
+        exp["declared"].append({"step": 0, "intent_id": iid, "tool": tool,
+                                "executor": ex,
+                                "input_sha256": canon_sha256(inp),
+                                "input_len": len(J(inp))})
+    resp += a_msg_end()
+    hist = [anth_msg("user", "hosted tools " + MARK + "-h0"),
+            anth_msg("assistant", [
+                {"type": "server_tool_use", "id": "srv_prv_S1",
+                 "name": "WebSearch", "input": srv_inp1},
+                anth_tool_use("toolu_prv_A", "Bash", {"command": "a"}),
+                {"type": "server_tool_use", "id": "srv_prv_S2",
+                 "name": "WebSearch", "input": srv_inp2},
+                anth_tool_use("toolu_prv_B", "Read", {"file_path": "/b"}),
+                anth_tool_use("toolu_prv_C", "Bash", {"command": "c"}),
+            ])]
+    # t2 (after the timeout sleep): the sweep closes A, B and C in
+    # declaration order — the provider intents are not windows, so the
+    # sweep skips them. Its tool_results then hit a provider intent and
+    # an already-swept window: neither produces a record.
+    req1 = anth_req(mdl, hist + [
+        anth_msg("user", [anth_tool_result("srv_prv_S1", "hosted " + MARK + "-h1"),
+                          anth_tool_result("toolu_prv_A", "outA")])])
+    for iid in ("toolu_prv_A", "toolu_prv_B", "toolu_prv_C"):
+        exp["results"].append({"step": 1, "intent_id": iid,
+                               "closed_by": "timeout"})
+    # t3: another attempt to close a provider intent — still nothing.
+    req2 = anth_req(mdl, hist + [
+        anth_msg("user", [anth_tool_result("srv_prv_S2", "again " + MARK + "-h3")]),
+        anth_msg("user", "ping " + MARK + "-h4")])
+    write_scenario("provider-executed", "anthropic", [
+        track_step("t1", req0, {"sse": resp}),
+        track_step("t2", req1, anth_resp_text_sse("swept " + MARK + "-h5")),
+        track_step("t3", req2, anth_resp_text_sse("end " + MARK + "-h6")),
+    ], exp, max_open=1,
+        markers=[MARK + x for x in ("-h0", "-h1", "-h2", "-h3",
+                                    "-h4", "-h5", "-h6")])
+
     # --- compaction: a 50-turn conversation; after turn 25 the client
     #     truncates the earliest blocks. context.observed keeps
     #     first-seen digests; resent old blocks never re-emit; the

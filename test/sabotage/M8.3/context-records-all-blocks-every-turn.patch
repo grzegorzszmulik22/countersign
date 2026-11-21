@@ -1,11 +1,9 @@
-diff --git a/internal/proxy/inspect_hook.go b/internal/proxy/inspect_hook.go
-index f437233..81c8b43 100644
 --- a/internal/proxy/inspect_hook.go
 +++ b/internal/proxy/inspect_hook.go
-@@ -252,9 +252,9 @@ func (s *Server) inspectRequest(sess *Session, st *inspectState, ep inspect.Endp
- 		}
- 	}
- 
+@@ -275,9 +275,9 @@
+ 	// never between an Observe and its record or rollback.
+ 	st.obsMu.Lock()
+ 	defer st.obsMu.Unlock()
 -	fresh, count, sha := st.tracker.Observe(info.Blocks)
 -	nb := make([]ContextBlockBody, len(fresh))
 -	for i, b := range fresh {
@@ -15,3 +13,12 @@ index f437233..81c8b43 100644
  		nb[i] = ContextBlockBody{
  			Index: b.Index, Role: b.Role, Kind: b.Kind,
  			SHA256: b.SHA256, Len: b.Len, IntentID: b.IntentID,
+@@ -288,7 +288,7 @@
+ 		BlockCount: count, ContextSHA256: sha, NewBlocks: nb,
+ 	}); err != nil {
+ 		// No record, no observation: refold these blocks on the retry.
+-		st.tracker.Unobserve(fresh)
++		st.tracker.Unobserve(info.Blocks)
+ 		return err
+ 	}
+ 	return nil

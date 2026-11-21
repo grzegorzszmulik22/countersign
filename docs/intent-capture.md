@@ -54,14 +54,20 @@ still applies):
 - `intent.result` — a tool result naming a declared, still-open
   sandbox intent closes its window (`closed_by: tool_result`).
   Unknown IDs are logged and ignored; a resent result does not close
-  twice. Timeouts sweep on each inspected request and `seal` closes the
-  remainder at broker shutdown. A failed append re-opens the window and
-  the request is denied `LEDGER_UNAVAILABLE` — nothing is forwarded
-  without the record.
+  twice. Timeouts sweep on each inspected request one window at a
+  time — a failed `intent.result` append re-opens that window, leaves
+  every later window still open for the next request's sweep, and
+  denies the request `LEDGER_UNAVAILABLE`. `seal` closes the
+  remainder at broker shutdown. Nothing is forwarded without the
+  record.
 - `context.observed` — one per request: `new_blocks` (each block's
   digest appears at most once per session), `block_count`, and
-  `context_sha256`, the running context digest. A failed append folds
-  the blocks back as unseen and the request is denied:
+  `context_sha256`, the running context digest. The fold and its
+  append are one atomic step per session (`obsMu`): a concurrent
+  request observes only before this fold or after its commit. A
+  failed append removes exactly this request's digests — blocks a
+  concurrent request folded meanwhile stay observed — and the
+  request is denied:
 
 ```
 context_sha256 = SHA-256( canonical-json( [digest1, digest2, …] ) )
