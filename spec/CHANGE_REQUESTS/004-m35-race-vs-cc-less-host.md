@@ -1,6 +1,6 @@
 # Change request 004 — C3.5.3 `-race` vs a host with no C compiler
 
-**Status:** RAISED 2026-11-20 by lane `intent`, for supervisor disposition.
+**Status:** ACCEPTED 2026-11-21 by supervisor (C3.5.3 `-race` requires a C compiler; SKIP on `free-a1` listed in `tools/env-skips.txt`, runs on `agent-vpc`).
 **Raised with:** `make regress` inside `.lane/verify.sh` on oci-free-a1,
 plus a direct probe reproducing both arms.
 
